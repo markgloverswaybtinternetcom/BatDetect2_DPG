@@ -1,0 +1,9 @@
+id,det_prob,start_time,end_time,high_freq,low_freq,class,class_prob,event
+0,0.552,0.0095,0.0145,48327,19453,Plecotus auritus,0.499,Echolocation
+1,0.665,0.1495,0.1545,47190,22031,Plecotus auritus,0.625,Echolocation
+2,0.664,0.3425,0.3478,49986,21171,Plecotus auritus,0.633,Echolocation
+3,0.695,0.5295,0.5343,48128,21171,Plecotus auritus,0.649,Echolocation
+4,0.681,0.6525,0.6577,50971,21171,Plecotus auritus,0.646,Echolocation
+5,0.72,0.7285,0.7326,47449,23750,Plecotus auritus,0.648,Echolocation
+6,0.704,0.8125,0.8171,49150,21171,Plecotus auritus,0.656,Echolocation
+7,0.692,0.9135,0.9183,49344,22031,Plecotus auritus,0.655,Echolocation

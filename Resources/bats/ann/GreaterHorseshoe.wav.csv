@@ -1,0 +1,7 @@
+id,det_prob,start_time,end_time,high_freq,low_freq,class,class_prob,event
+0,0.692,0.2305,0.2896,83951,68437,Rhinolophus ferrumequinum,0.691,Echolocation
+1,0.504,0.3535,0.4032,83556,68437,Rhinolophus ferrumequinum,0.504,Echolocation
+2,0.686,0.4815,0.5318,83157,68437,Rhinolophus ferrumequinum,0.686,Echolocation
+3,0.622,0.6015,0.6541,83472,68437,Rhinolophus ferrumequinum,0.622,Echolocation
+4,0.602,0.7165,0.768,83416,68437,Rhinolophus ferrumequinum,0.602,Echolocation
+5,0.527,0.9585,1.0031,82613,68437,Rhinolophus ferrumequinum,0.526,Echolocation

@@ -1,0 +1,15 @@
+id,det_prob,start_time,end_time,high_freq,low_freq,class,class_prob,event
+0,0.673,0.1045,0.1102,38170,28906,Barbastellus barbastellus,0.668,Echolocation
+1,0.723,0.2175,0.2224,37737,29765,Barbastellus barbastellus,0.714,Echolocation
+2,0.646,0.3285,0.3343,38462,29765,Barbastellus barbastellus,0.637,Echolocation
+3,0.559,0.3825,0.3891,43850,34921,Barbastellus barbastellus,0.554,Echolocation
+4,0.679,0.4325,0.4382,38048,29765,Barbastellus barbastellus,0.67,Echolocation
+5,0.69,0.5455,0.5511,38842,29765,Barbastellus barbastellus,0.68,Echolocation
+6,0.753,0.5975,0.6044,46950,34062,Barbastellus barbastellus,0.743,Echolocation
+7,0.755,0.6575,0.6629,38678,28906,Barbastellus barbastellus,0.748,Echolocation
+8,0.797,0.7065,0.7129,50018,34062,Barbastellus barbastellus,0.782,Echolocation
+9,0.753,0.7605,0.7665,38944,28906,Barbastellus barbastellus,0.742,Echolocation
+10,0.545,0.8155,0.8216,45075,35781,Barbastellus barbastellus,0.54,Echolocation
+11,0.799,0.8665,0.8724,40660,28046,Barbastellus barbastellus,0.785,Echolocation
+12,0.684,0.9155,0.9216,45631,34921,Barbastellus barbastellus,0.675,Echolocation
+13,0.844,0.9635,0.9687,39588,28046,Barbastellus barbastellus,0.83,Echolocation

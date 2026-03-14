@@ -1,0 +1,7 @@
+id,det_prob,start_time,end_time,high_freq,low_freq,class,class_prob,event
+0,0.716,0.0795,0.0925,44495,23750,Eptesicus serotinus,0.611,Echolocation
+1,0.752,0.2495,0.2615,42903,24609,Eptesicus serotinus,0.598,Echolocation
+2,0.791,0.4145,0.4258,44745,24609,Eptesicus serotinus,0.655,Echolocation
+3,0.758,0.5765,0.5882,41686,24609,Eptesicus serotinus,0.595,Echolocation
+4,0.785,0.7805,0.7915,47860,24609,Eptesicus serotinus,0.617,Echolocation
+5,0.726,0.9435,0.9538,40655,24609,Eptesicus serotinus,0.554,Echolocation

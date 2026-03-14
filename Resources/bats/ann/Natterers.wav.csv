@@ -1,0 +1,13 @@
+id,det_prob,start_time,end_time,high_freq,low_freq,class,class_prob,event
+0,0.561,0.0265,0.0321,88968,18593,Myotis nattereri,0.466,Echolocation
+1,0.563,0.0785,0.0838,91190,18593,Myotis nattereri,0.435,Echolocation
+2,0.565,0.2025,0.2075,96869,18593,Myotis nattereri,0.452,Echolocation
+3,0.509,0.2735,0.2789,98186,17734,Myotis nattereri,0.414,Echolocation
+4,0.552,0.4055,0.4108,93180,18593,Myotis nattereri,0.404,Echolocation
+5,0.555,0.4765,0.4814,87811,18593,Myotis nattereri,0.45,Echolocation
+6,0.589,0.6145,0.6203,86609,22890,Myotis nattereri,0.378,Echolocation
+7,0.545,0.6745,0.6798,89746,21171,Myotis nattereri,0.412,Echolocation
+8,0.52,0.7405,0.7462,97519,20312,Myotis nattereri,0.418,Echolocation
+9,0.601,0.8175,0.8229,80741,21171,Myotis nattereri,0.279,Echolocation
+10,0.588,0.8855,0.89,77863,19453,Myotis nattereri,0.347,Echolocation
+11,0.589,0.9575,0.9621,85198,20312,Myotis nattereri,0.363,Echolocation

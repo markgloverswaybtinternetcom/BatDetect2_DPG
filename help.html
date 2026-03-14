@@ -1,0 +1,150 @@
+﻿<html><head><title></title></head><body> <h1>Bat Detect GUI</h1>
+<h2>Use</h2>
+<h3>Load a single wav file</h3>
+<ul>
+<li>Drag the file onto ‘Bat Detect GUI’ window</li>
+<li>Or press ‘Open Dir/File…’
+<ul>
+<li>Add top level folders that contain bat recordings (these are remembered)</li>
+<li>Select file (via single click) and press ‘Load WAV / Dir in main’
+The wav file will be classified for bat echolocation call, <br/>this will be displayed as annotations on the spectrograph and are retained in the ‘ann’ subdirectory.</li>
+</ul>
+</li>
+<img src="Resources/web_Images/FileDialogue.png" alt/>
+</ul>
+<h3>Load a directory of wav files</h3>
+<ul>
+<li>Drag the directory onto ‘Bat Detect GUI’ window</li>
+<li>Or press ‘Open Dir/File…’
+<ul>
+<li>Add top level folders that contain bat recordings (these are remembered and a Classify.bat file is created, see below)P</li>
+<li>Press ‘Select Dir’ button at end of directory line and press ‘Load WAV / Dir in main’.
+* &nbsp; Or in Windows File Explorer drag directory into Classify.bat file. <br/>This is quicker as it does not need to display GUI. This file can be copied to be nearer the directory, This file is created in all added top level folders.</li>
+</ul>
+</li>
+</ul>
+<p>All the wav files will be classified for bat echolocation calls, this may take some time and are retained in the ‘ann’ subdirectory. <br/>The files will be listed in a table at the bottom of the GUI. It will scroll to the first consecutive calls.
+</p>
+	<p><img src="Resources/web_Images/CornerDisplay.png" alt/></p>
+<h4>Display coordinates on any graph</h4>
+<ul>
+<li>Click on graph</li>
+</ul>
+<p>The time, frequency or power values will display in the bottom right hand corner of the spectrogram</p>
+<img alt="cursor" title="cursor" src="file://C:/Users/Mark%20Glover/Desktop/BatDetect2%20DPG/Resources/web_Images/cursor.png"/>
+<h4>Display frequency of maximum energy</h4>
+<p>This is shown at the bottom of the power spectrogram.
+Zoom in on call(s) to get a more accurate values. <br/>Filtering out strong noise with the ‘Filter’ combo-box will help.</p>
+<h4>Zoom in on spectrogram area</h4>
+<ul>
+<li>Normal left click and drag to define area to be zoomed</li>
+<li>Or use scroll wheel on mouse</li>
+<li>Or alter the ‘Range’ combo-box, this will be retained</li>
+</ul>
+<p>The amplitude and power graphs will alter to also display the zoomed area.</p>
+<h4>Play Bat Call Sound</h4>
+<ul>
+<li>Select ‘Speed’ combo-box,</li>
+<li>Press ‘Play Sound’ button
+<br/>Some sounds are easier to recognise as sounds than spectrograms. Bat sounds are normally played at 1/10 speed to be audible. <br/>When this button is pressed a vertical cursor will show the sound being played on the spectrogram. <br/>The default sound replay on spectrogram movement does not show a cursor for reliability. <br/>Crickets may be better at 1/2 or very high frequency bats at 1/20 speed.</li>
+</ul>
+<h4>Alter area in spectrogram</h4>
+<ul>
+<li>Left and right arrow keys move spectrogram window one windows worth in time</li>
+<li>Or click on scroll bar</li>
+<li>Up and down arrow keys move spectrogram one file</li>
+<li>Or click on table row</li>
+<li>‘Range’ combo-box alters size of spectrogram window</li>
+<li>‘Filter’ combo-box filters displayed graphs and played sound. <br/>This can removed audible noise, but may hide the fact that a bat call is in fact an audible noise harmonic.<br/><img alt="RangeFilter" title="RangeFilter" src="file://C:/Users/Mark%20Glover/Desktop/BatDetect2%20DPG/Resources/web_Images/RangeFilter.png"/><br/> </li>
+</ul>
+<p>The new area will have its time expanded sound play automatically, this will stop short if the spectrogram area is changed.</p>
+<h4>Save Bat Call Sound</h4>
+<ul>
+<li>Select ‘Speed’ combo-box,</li>
+<li>Press ‘Save Sound’ button</li>
+</ul>
+<p>Saves only the displayed sound, file-name based on originating file and in the same directory.<br/>Time expanded recordings names end with 'TE.wav'<br/> </p>
+<h4>Save current settings</h4>
+<ul>
+<li>If you exit by closing the GUI the current settings will be retained</li>
+<li>If you exit by closing the console the current settings will not be retained.</li>
+</ul>
+<h3>Mobile Echo Meter Touch Use</h3>
+<ul>
+<li>Save one or more Echo Meter sessions in a separate directory (from Android Documents&gt;EchoMeter&gt;Recordings)</li>
+<li>Drag the directory onto ‘Bat Detect GUI’ window</li>
+<li>Go into the directory and press ‘
+Load WAV / Dir in main’. <br/>A table of the all session contents will be displayed with an Echo Meter and a BatDetect2 classification per WAV file</li>
+<li>Check recording classification for most notable species in file, ‘Assign species’ to any incorrect</li>
+<li>Press ‘Save Map’ to generate HTML map of species locations with hyper-links to time expanded files</li>
+</ul>
+<h2>Expert Use</h2>
+<h4>Display time interval on Spectrograph</h4>
+<ul>
+<li>Click on start,</li>
+<li>Click on end</li>
+</ul>
+<p>A horizontal annotation will display ending in the time in milliseconds<br/> </p>
+
+	<p><img alt="Interval" title="Interval" src="file://C:/Users/Mark%20Glover/Desktop/BatDetect2%20DPG/Resources/web_Images/Interval.png"/></p><h4>Manually compare calls with reference material</h4>
+<ul>
+<li>Press ‘Ctrl’ and drag reference call into GUI window</li>
+<li>Or use ‘Open Dir/File..’ select reference file and press ‘Load comparison WAV’</li>
+</ul>
+<p>Two spectrograms will be displayed.
+You can play or zoom in or measure on either window.
+<br/>The arrow keys will work with the ‘Active Display’ press the ‘Press to activate’ button to change the active display.</p>
+<h4>Alter colour thresholds in spectrogram</h4>
+<ul>
+<li>Drag blue slider to alter min level (black to blue threshold)</li>
+<li>Drag red slider to alter max level (all above is red)</li>
+</ul>
+<p>This can result in weak signals becoming clearer.
+The min is automatically adjusted when the spectrogram moves.</p>
+<h4>Change or add classification of a call</h4>
+<ul>
+<li>Select 'Source' in the ‘Edit’ &nbsp;combo-box,</li>
+<li>Select species in ‘Assign Species’ combo-box,</li>
+<li>Select type in ‘Call Type’ combo-box,</li>
+<li>Right click drag to select area of call. Unfortunately you will not get the same feedback as when zooming.</li>
+</ul>
+<p>The annotation should be added and any included calls deleted. The new classification will be retained in the ‘ann’ directory.<br/><img alt="Assign" title="Assign" src="file://C:/Users/Mark%20Glover/Desktop/BatDetect2%20DPG/Resources/web_Images/Assign.png"/><br/> </p>
+<h4>Display of wav file metadata</h4>
+<ul>
+<li>Select file in ‘Open Dir/File …’ dialogue.</li>
+<li>Press ‘WAV Metadata in console’ button
+Meta data is manufacturer / firmware version dependant, so just displaying as text. <br/>DearPyGui popup windows are very performance sensitive, so displaying in console.</li>
+</ul>
+<h2>Problems</h2>
+<h3>User errors or warnings</h3>
+<ul>
+<li>The status line at the bottom the GUI is used to display any problems detected in red and will usually be announced by a howl sound.</li>
+<li>The console window will contain any debugging output including any exceptions. This also displays the extra meta data in audio moth wav files.</li>
+</ul>
+<h3>Classifier</h3>
+<ul>
+<li>
+<p>The BatDetect2 classifier used only knows UK echolocations calls, so social calls, feeding buzzes and some noise will be misidentified or missed.</p>
+</li>
+<li>
+<p>Reported Noctules are quite often harmonics of audible noise, so may need to reduce low pass filter to check this. <br/>However audible noise is often loader than higher frequencies so needs to be low pass filtered to give useful power spectrum.</p>
+</li>
+<li>
+<p>Rare species reported are often common species with slightly unusual frequencies.</p>
+</li>
+</ul>
+<h3>Recordings</h3>
+<ul>
+<li>Distant or cluttered calls often miss upper, occasionally lower frequencies. and merge with echo’s,</li>
+<li>Calls that are too strong for the gain setting can cause aliasing of higher frequencies (this looks likes a rectangle on the ‘Amplitude’ graph).</li>
+</ul>
+<p>Strong calls are best for ID, so keep recorder gain down to see these, at the expense of not seeing more distant calls.</p>
+<h3>Graphical User Interface (GUI)</h3>
+<p>The GUI is DearPyGui, created mainly for gaming it is very fast, but refreshes the display continuously when nothing has changed. <br/>If the GUI has any unchecked problems it will crash later in its c++ main loop, making debugging very difficult.
+<br/>The popup window for the file dialogue is a bad part of DearPyGui and is slow for a large directory.</p>
+<h3>Spectrograms</h3>
+<ul>
+<li>Use DearPyGui Heat-maps for display, which defaults to showing the value of each square - resulting in a white screen consisting of dense text. <br/>Only zooming and annotation show above the heat-map, so everything else is invisible. <br/>Hence the heatmap itself crudely used for the selection rectangle and annotation is used for the audio replay cursor and intervals.</li>
+<li>Use PyTorch for processing, which is fast but is sensitive to the sampling rate, BatDetect2 does not use PyTorch for this (though it is used for machine learning).</li>
+</ul>
+</body></html>
