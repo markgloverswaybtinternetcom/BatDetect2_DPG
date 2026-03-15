@@ -2,6 +2,19 @@ import os, struct
 from typing import Union, BinaryIO, Dict, Optional
 from dataclasses import dataclass, field
 
+def WavDetails(filepath):
+    with open(filepath, "rb") as wav:
+        riff = parse_into_chunks(wav) # Resource Interchange File Format 
+        fmt_chunk = riff.subchunks["fmt "]
+        data_chunk = riff.subchunks["data"]    
+        wav.seek(fmt_chunk.position + 8)
+        wav.read(2)  # audio format
+        channels = int.from_bytes(wav.read(2), "little")
+        sample_rate = int.from_bytes(wav.read(4), "little")
+        samples = data_chunk.size // (channels * 2)
+        duration = samples / sample_rate
+    return duration, sample_rate
+        
 def parse_metadata(path):
     with open(path, "rb") as wav:
         riff = parse_into_chunks(wav) # Resource Interchange File Format 

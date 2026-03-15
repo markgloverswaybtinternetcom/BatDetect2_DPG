@@ -1,9 +1,8 @@
 import dearpygui.dearpygui as dpg
-import sys, os, time, datetime, torchaudio, torch, torchaudio_filters, psutil, textwrap, soundfile, colorama
+import sys, os, time, datetime, psutil, textwrap, soundfile, colorama, WavUtil
 if sys.platform.startswith("win"): 
     import win32api
 from torchcodec.decoders import AudioDecoder
-from WavUtil import parse_metadata
 
 LastRowSelected = None #fixes bug 
 
@@ -98,13 +97,6 @@ class FileDialog():
     
     def Shown(self):
         return dpg.is_item_shown(self.window)
-        
-    def WavDetails(self, filepath):
-        decoder = AudioDecoder(filepath)
-        sample_rate = decoder.metadata.sample_rate / 1000
-        if decoder.metadata.begin_stream_seconds_from_header is None: duration = decoder.metadata.duration_seconds_from_header
-        else: duration = decoder.metadata.duration_seconds_from_header - decoder.metadata.begin_stream_seconds_from_header
-        return duration, sample_rate
     
     def _get_all_drives(self):
         all_drives = psutil.disk_partitions()
@@ -170,7 +162,7 @@ class FileDialog():
         dpg.delete_item(self.table, children_only=True, slot=1) # remove rows
         LastRowSelected = None
         nRow = 0
-        for entry in paths:
+        for entry in paths:           
             if entry[-1] == "/": # linux dirs
                 entry = entry[:-1]
             name = os.path.basename(entry);
@@ -197,17 +189,16 @@ class FileDialog():
                 nRow += 1
             elif os.path.isfile(entry) and entry.lower().endswith(".wav") or entry.lower().endswith(".mp3"):
                 tRow = dpg.add_table_row(parent=self.table)
-                #dpg.add_text(label="", parent=tRow)
                 dpg.add_selectable(label="", parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
                 file_selectable = dpg.add_selectable(label=name, parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
                 creation_time = datetime.datetime.fromtimestamp(os.path.getmtime(entry))
                 dpg.add_selectable(label=creation_time.strftime("%d/%m/%Y %H:%M"), parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
                 try:
-                    duration, sample_rate = self.WavDetails(entry)
+                    duration, sample_rate = WavUtil.WavDetails(entry)
                     cell_length = dpg.add_selectable(label=f"{duration:.1f} sec", parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
                     cell_sr = dpg.add_selectable(label=f"{sample_rate} kHz", parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
                     dpg.bind_item_theme(cell_length, self.size_alignt)
-                    dpg.bind_item_theme(cell_sr, self.size_alignt)
+                    dpg.bind_item_theme(cell_sr, self.size_alignt)                  
                 except Exception as exception:
                     print(colorama.Fore.RED + f"DisplayFiles {exception=}" + colorama.Fore.RESET)
                     dpg.bind_item_theme(file_selectable, self.redText_theme)
@@ -266,7 +257,7 @@ class FileDialog():
     
     def WavMetadata_callback(self):
         if self.selectedFile is not None:
-            metadata = parse_metadata(self.selectedFile)
+            metadata = WavUtil.parse_metadata(self.selectedFile)
             metadata = metadata.splitlines()
             print(f"\n===== {self.selectedFile} == Metadata =====")
             for line in metadata:
