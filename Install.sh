@@ -30,3 +30,4 @@ echo 'Terminal=true' >> ~/Desktop/dpg.desktop
 chmod u+x ~/Desktop/dpg.desktop
 echo "Need to Allow Launching on Desktop shortcut file dpg.desktop"
 uv run gui.py
+/bin/bash

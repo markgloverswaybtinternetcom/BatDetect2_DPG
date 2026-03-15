@@ -14,14 +14,16 @@ The wav file will be classified for bat echolocation call, <br/>this will be dis
 </ul>
 <h3>Load a directory of wav files</h3>
 <ul>
-<li>Drag the directory onto ‘Bat Detect GUI’ window</li>
-<li>Or press ‘Open Dir/File…’
-<ul>
-<li>Add top level folders that contain bat recordings (these are remembered and a Classify.bat file is created, see below)P</li>
-<li>Press ‘Select Dir’ button at end of directory line and press ‘Load WAV / Dir in main’.
-* &nbsp; Or in Windows File Explorer drag directory into Classify.bat file. <br/>This is quicker as it does not need to display GUI. This file can be copied to be nearer the directory, This file is created in all added top level folders.</li>
-</ul>
-</li>
+    <li>Drag the directory onto ‘Bat Detect GUI’ window</li>
+    <li>Or press ‘Open Dir/File…’
+    <ul>
+        <li>Add top level folders that contain bat recordings (these are remembered and a Classify.bat file is created, see below)P</li>
+        <li>Press ‘Select Dir’ button at end of directory line and press ‘Load WAV / Dir in main’.</li>
+    </ul>
+    <li>Or in Windows File Explorer drag directory into Classify.bat file. 
+        <br/>This is quicker as it does not need to display GUI. This file can be copied to be nearer the directory, This file is created in all added top level folders.
+    </li>
+    <li>Or in Linux terminal type ./Classify.sh and drag the folder in to provide the path.</li>
 </ul>
 <p>All the wav files will be classified for bat echolocation calls, this may take some time and are retained in the ‘ann’ subdirectory. <br/>The files will be listed in a table at the bottom of the GUI. It will scroll to the first consecutive calls.
 </p>
@@ -106,9 +108,11 @@ The min is automatically adjusted when the spectrogram moves.</p>
 <li>Select 'Source' in the ‘Edit’ &nbsp;combo-box,</li>
 <li>Select species in ‘Assign Species’ combo-box,</li>
 <li>Select type in ‘Call Type’ combo-box,</li>
+<br/><img alt="Assign" title="Assign" src="file://C:/Users/Mark%20Glover/Desktop/BatDetect2%20DPG/Resources/web_Images/Assign.png"/><br/>
 <li>Right click drag to select area of call. Unfortunately you will not get the same feedback as when zooming.</li>
 </ul>
-<p>The annotation should be added and any included calls deleted. The new classification will be retained in the ‘ann’ directory.<br/><img alt="Assign" title="Assign" src="file://C:/Users/Mark%20Glover/Desktop/BatDetect2%20DPG/Resources/web_Images/Assign.png"/><br/> </p>
+<p>The annotation should be added and any included calls deleted. ><br/>
+The new classification will be retained in the ‘ann’ directory.</p>
 <h4>Display of wav file metadata</h4>
 <ul>
 <li>Select file in ‘Open Dir/File …’ dialogue.</li>

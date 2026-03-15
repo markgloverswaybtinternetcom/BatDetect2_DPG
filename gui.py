@@ -133,7 +133,7 @@ class MainWindow():
             dpg.add_key_press_handler(key=dpg.mvKey_Up, callback=self.UpKey_pressed)
             dpg.add_key_press_handler(key=dpg.mvKey_Down, callback=self.DownKey_pressed)
             dpg.add_key_press_handler(key=dpg.mvKey_Left, callback=self.LeftKey_pressed)
-            dpg.add_key_press_handler(key=dpg.mvKey_Right, callback=self.RightKey_pressed)            
+            dpg.add_key_press_handler(key=dpg.mvKey_Right, callback=self.RightKey_pressed)          
 
         self.classify = Classify()
         if sys.platform.startswith("win"): DragAndDrop.set_drop(self.FileDrop)

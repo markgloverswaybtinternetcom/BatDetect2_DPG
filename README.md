@@ -34,6 +34,7 @@ The wav file will be classified for bat echolocation call, this will be displaye
         *   Add top level folders that contain bat recordings (these are remembered and a Classify.bat file is created, see below)P
         *    Press 'Select Dir' button at end of directory line and press 'Load WAV / Dir in main'.
     *   Or in Windows File Explorer drag directory into Classify.bat file. This is quicker as it does not need to display GUI. This file can be copied to be nearer the directory, This file is created in all added top level folders.
+    *   Or in Linux terminal type ./Classify.sh and drag the folder in to provide the path.
 
 All the wav files will be classified for bat echolocation calls, this may take some time and are retained in the 'ann' subdirectory. The files will be listed in a table at the bottom of the GUI. It will scroll to the first consecutive calls.
 ![](Resources/web_Images/CornerDisplay.png)
@@ -130,10 +131,11 @@ The new area will have its time expanded sound play automatically, this will sto
  *   Select species in 'Assign Species' combo-box,
  *   Select type in 'Call Type' combo-box,  
     ![](Resources/web_Images/Assign.png)
- *   Right click drag to select area of call. Unfortunately you will not get the same feedback as when zooming.
+ *   Right click drag to select area of call. Unfortunately you will not get the same feedback as when zooming. 
+ 
+The annotation should be added and any included calls deleted. 
+The new classification will be retained in the 'ann' directory. 
 
-
-The annotation should be added and any included calls deleted. The new classification will be retained in the 'ann' directory.
 
 #### Display of wav file metadata
 * Select file in 'Open Dir/File ...' dialogue. 

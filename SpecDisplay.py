@@ -240,12 +240,12 @@ class SpecDisplay():
         self.decoder = AudioDecoder(filepath)
         self.sample_rate = self.decoder.metadata.sample_rate
         if filename.endswith("TE"):
-            self.te = True            
+            self.timeExpand = True            
             self.sample_rate *= 10
             c = f"Time expanded file increasing sampling rate to {self.sample_rate}"
             print(f"LoadFile {c}")
             self.Status(c)
-        else:  self.te = False
+        else:  self.timeExpand = False
         if self.decoder.metadata.begin_stream_seconds_from_header is None: self.duration = self.decoder.metadata.duration_seconds_from_header
         else: self.duration = self.decoder.metadata.duration_seconds_from_header - self.decoder.metadata.begin_stream_seconds_from_header
         print(f"LoadFile {filepath=}  {self.duration=} {titleExtra=}")
@@ -290,7 +290,7 @@ class SpecDisplay():
         
     def LoadFileSegment(self):
         print(f"LoadFileSegment {self.minT=} {self.maxT=} {self.SpecBlankKfreq=} {self.HighPassFreq=}")
-        if self.te: waveformTensor = self.decoder.get_samples_played_in_range(start_seconds=self.minT*10, stop_seconds=self.maxT*10)
+        if self.timeExpand: waveformTensor = self.decoder.get_samples_played_in_range(start_seconds=self.minT*10, stop_seconds=self.maxT*10)
         else: waveformTensor = self.decoder.get_samples_played_in_range(start_seconds=self.minT, stop_seconds=self.maxT)
         waveformTensor = waveformTensor.data
         if self.sample_rate <= STD_SAMPLING: nfft=NFFT
