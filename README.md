@@ -7,9 +7,14 @@ It incorporates many of the features recommended for professional bat ecologists
 ## Install
 
    -   Unzip 'BatDetect2 DPG' directory in preferred location
+   -   Windows: right click 'install.bat', select 'Properties',  tick 'Unblock' box and press 'OK'
+   -   Linux: chmod u+x Install.sh
    -   run 'Install.bat' in windows or 'Install.sh' on Linux
-
-The UV package manager creates a virtual environment and installs Python, all latest modules used and  a desktop short cut is created.
+   -   Windows: right click 'run.bat', select 'Properties',  tick 'Unblock' box and press 'OK'
+   -   Linux: chmod u+x run.sh
+ ![](Resources/web_Images/Unblock.png)
+The UV package manager creates a virtual environment and installs Python, all latest modules used 
+and  a desktop short cut is created.
  
 ## Use
 

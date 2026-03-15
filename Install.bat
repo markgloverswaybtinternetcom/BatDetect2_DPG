@@ -17,6 +17,7 @@ uv add chime
 uv add wakepy
 uv add psutil
 uv add sounddevice
+tar -xf ffmpeg.zip
 Resources\create-shortcut --work-dir "%CD%" --icon-file "%CD%\Resources\bat_128px.ico" "%CD%\run.bat" "%USERPROFILE%\Desktop\BatDetect2 DPG.lnk"
 uv run gui.py
 pause
