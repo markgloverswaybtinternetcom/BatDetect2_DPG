@@ -486,11 +486,14 @@ class MainWindow():
 
     def FileDrop(self, data, keys):
         print(f"FileDrop {data=}, {keys=}")
-        display = self.WhichDisplay()
-        if display is not None:
-            f = data[0]
-            self.LoadFileOrDir(f, display)
-            self.SetActiveDisplay(display)
+        displayN = 1
+        if len(keys) > 0: 
+            print(f"FileDrop self.SpecDisplay2")
+            displayN = 2;
+            self.SetActiveDisplayN(2)
+        elif self.ActiveDisplay == self.SpecDisplay2: displayN = 2;
+        f = data[0]
+        self.LoadFileOrDir(f, displayN)
     
     def SetActiveDisplay(self, display):
         self.ActiveDisplay = display

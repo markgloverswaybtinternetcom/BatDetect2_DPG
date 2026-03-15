@@ -104,7 +104,7 @@ The new area will have its time expanded sound play automatically, this will sto
  
  #### Manually compare calls with reference material
  
-  *   Press a key while drag and dropping reference file onto GUI window
+  *   Press 'Ctrl' and drag reference call into GUI window
   *   Or use 'Open Dir/File..' select reference file and press 'Load comparison WAV'
  
  Two spectrograms will be displayed. 
