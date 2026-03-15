@@ -542,23 +542,7 @@ class SpecDisplay():
             loud = Recording * loudness
         sounddevice.stop()
         sounddevice.play(loud, SampleRate * speed)
-
-    """def PlaySound(self, Recording, SampleRate, loudness, speed): 
-        MAX_SEC = 30
-        duration = len(Recording) / SampleRate / speed
-        maxLength = round(SampleRate * MAX_SEC * speed)
-        print(f"SpecDisplay PlaySound {len(Recording)=}, {SampleRate=}, {loudness=}, {speed=}, {duration=:.1f}, {Recording[0]=}")
-        if duration > MAX_SEC:
-            loud = Recording[:maxLength] * loudness
-            duration = MAX_SEC
-        else:   
-            loud = Recording * loudness
-
-        if self.PlayObject is not None: self.PlayObject.stop()
-        WaveObject = simpleaudio.WaveObject(loud, num_channels=1, bytes_per_sample=2, sample_rate=int(SampleRate*speed))
-        self.PlayObject = WaveObject.play()"""
-
-
+        
     def PlaySoundAndProgress(self, filename, SampleRate, loudness, speed):
         sounddevice.stop()
         if self.soundLine is not None:

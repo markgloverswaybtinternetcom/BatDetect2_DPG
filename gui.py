@@ -230,6 +230,7 @@ class MainWindow():
             dpg.configure_item(self.SpecDisplay1.topGroup, height=specHeight) 
         
     def UpKey_pressed(self, sender, app_data, user_data):
+        print(f"UpKey_pressed {self.MultiFile=} {self.lastRow=} {self.ActiveDisplay.dirIndex=}")
         if self.ActiveDisplay == self.SpecDisplay1 and self.MultiFile:
             print(f"UpKey_pressed TableRow")
             if self.lastRow is None or self.lastRow == 0: row = 0
@@ -243,6 +244,7 @@ class MainWindow():
             self.LoadClassifiedFile(self.ActiveDisplay.dirFiles[self.ActiveDisplay.dirIndex], self.ActiveDisplay)
                 
     def DownKey_pressed(self, sender, app_data, user_data):
+        print(f"UpKey_pressed {self.MultiFile=} {self.lastRow=} {self.ActiveDisplay.dirIndex=}")
         if self.ActiveDisplay == self.SpecDisplay1 and self.MultiFile:
             print(f"DownKey_pressed TableRow")
             if self.lastRow is None: row = 1
@@ -556,10 +558,10 @@ class MainWindow():
                 self.Status(f"Classified directory {f}")
             self.resize_handler(0, None, None)
         elif os.path.isfile(f):
+            if display == self.SpecDisplay1: self.MultiFile = False; 
             self.LoadClassifiedFile(f, display)
             dpg.configure_item(self.saveMapButton, show=False)  
             config["echoMeterDir"] = ""
-            if display == self.SpecDisplay1: self.MultiFile = False; 
             self.resize_handler(0, None, None)
         else: self.Status("NO FILE OR DIRECTOY", error=True)
  

@@ -6,6 +6,7 @@ dist/
 wheels/
 *.egg-info
 ffmpeg/
+Resources/temp.wav
 
 # Virtual environments
 .venv
