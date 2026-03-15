@@ -9,6 +9,8 @@ ffmpeg/
 Resources/temp.wav
 README.md.backup
 gui_Config.json
+Resources/SciTE.session
+Resources/dearpygui-readthedocs-io-en-latest.pdf
 
 # Virtual environments
 .venv
