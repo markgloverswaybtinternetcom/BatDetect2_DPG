@@ -156,7 +156,6 @@ class FileDialog():
             dpg.configure_item(self.RoostAddDirInputText, show=False)
             dpg.configure_item(self.UpDirButton, show=True)
             dpg.configure_item(self.loadFileButton, show=True)
-            #dpg.configure_item(self.loadDirButton, show=True)
             dpg.configure_item(self.loadCompareButton, show=True) 
             dpg.configure_item(self.WavMetadataButton, show=True)
             self.IsRoostDir = False
