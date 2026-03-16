@@ -76,7 +76,7 @@ class SpecDisplay():
                 self.sliderWidth = config["width"] - 40 - PSD_WIDTH
                 with dpg.group(horizontal=True, height=SCROLL_HT * config["scale"]):
                     PlaySoundbutton = dpg.add_button(label="Play Sound", callback=self.PlaySound_click)
-                    self.PlaySpeedCombo = dpg.add_combo(label="Speed", items=("normal", "1/2", "1/5", "1/10", "1/20"), width=66*config["scale"], default_value=f"1/10")
+                    self.PlaySpeedCombo = dpg.add_combo(label="Speed", items=("1", "1/2", "1/5", "1/10", "1/20"), width=66*config["scale"], default_value=f"1/10")
                     saveSoundbutton = dpg.add_button(label="Save Sound",  callback=self.saveSound_click)
                     self.Annotate = True
                     self.AnnotateCheckbox = dpg.add_checkbox(label="Annotate", default_value=self.Annotate, callback=self.Annotate_changed)
@@ -500,18 +500,23 @@ class SpecDisplay():
             json.dump(thisdict, jsonfile, indent=2, sort_keys=True)
 
     def PlaySound_click(self):
+        speed = eval(dpg.get_value(self.PlaySpeedCombo))
+        xLim = dpg.get_axis_limits(self.specXaxis)
+        range = xLim[1] - xLim[0]
+        timelength = range / speed
+        
         if self.ZoomRecording is None:
-            if dpg.get_value(self.PlaySpeedCombo) == "1/10":
+            if timelength > 3.0:
                 temp = os.path.join(os.getcwd(), "Resources", "temp.wav") # needs full path
                 soundfile.write(temp, self.Recording, self.sample_rate) 
-                self.PlaySoundAndProgress(temp, self.sample_rate, 10, 0.1)
+                self.PlaySoundAndProgress(temp, self.sample_rate, 10, speed)
             else:
-                self.PlaySound(self.Recording, self.sample_rate, 10, 1.0)
+                self.PlaySound(self.Recording, self.sample_rate, 10, speed)
         else:
             if dpg.get_value(self.PlaySpeedCombo) == "1/10":
-                self.PlaySound(self.ZoomRecording, self.sample_rate, 10, 0.1) 
+                self.PlaySound(self.ZoomRecording, self.sample_rate, 10, speed) 
             else:
-                self.PlaySound(self.ZoomRecording, self.sample_rate, 10, 1.0)
+                self.PlaySound(self.ZoomRecording, self.sample_rate, 10, speed)
 
     def saveSound_click(self):
         file,_ = os.path.splitext(self.file)
@@ -555,6 +560,7 @@ class SpecDisplay():
         rect = dpg.get_item_rect_size(self.specPlot)
         self.xLim = dpg.get_axis_limits(self.specXaxis)
         self.yLim = dpg.get_axis_limits(self.specYaxis)
+        self.speed = speed
 
         if sys.platform.startswith("win"):
             self.SoundProcess = subprocess.Popen(['wavplayer/wavplay.exe', filename,  str(self.xLim[0]*SampleRate),  str(self.xLim[1]*SampleRate), str(int(SampleRate * speed)), str(loudness)] )  
@@ -573,9 +579,10 @@ class SpecDisplay():
                 dpg.delete_item(self.soundLine) 
             except Exception as error:
                 print(colorama.Fore.RED + f"dearpygui An exception occurred: {error}" + colorama.Fore.RESET)
-            self.SoundTime = self.minT + (time.perf_counter() - self.SoundStartTime) / 10
+            self.SoundTime = self.xLim[0] + (time.perf_counter() - self.SoundStartTime) * self.speed
             if self.SoundTime > self.xLim[1]:
                 self.soundLine = None
+                print(f"UpdateSoundLine {time.perf_counter() - self.SoundStartTime}")
             else:
                 self.soundLine = dpg.add_plot_annotation(parent=self.specPlot, label="^", default_value=(self.SoundTime, self.yLim[1]), offset=(0, 750), color=[255, 255, 255, 255])
         

@@ -194,21 +194,18 @@ class FileDialog():
                         dpg.bind_item_theme(selectDir, self.greenText_theme)
                 tRow = None
                 nRow += 1
-            elif os.path.isfile(entry) and entry.lower().endswith(".wav") or entry.lower().endswith(".mp3"):
+            elif os.path.isfile(entry) and (entry.lower().endswith(".wav") or entry.lower().endswith(".mp3")):
                 tRow = dpg.add_table_row(parent=self.table)
                 dpg.add_selectable(label="", parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
                 file_selectable = dpg.add_selectable(label=name, parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
                 creation_time = datetime.datetime.fromtimestamp(os.path.getmtime(entry))
                 dpg.add_selectable(label=creation_time.strftime("%d/%m/%Y %H:%M"), parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
-                try:
+                if entry.lower().endswith(".wav"):
                     duration, sample_rate = WavUtil.WavDetails(entry)
                     cell_length = dpg.add_selectable(label=f"{duration:.1f} sec", parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
                     cell_sr = dpg.add_selectable(label=f"{sample_rate} kHz", parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
                     dpg.bind_item_theme(cell_length, self.size_alignt)
                     dpg.bind_item_theme(cell_sr, self.size_alignt)                  
-                except Exception as exception:
-                    print(colorama.Fore.RED + f"DisplayFiles {exception=}" + colorama.Fore.RESET)
-                    dpg.bind_item_theme(file_selectable, self.redText_theme)
                 tRow = None
                 nRow += 1
         #print(f"DisplayFiles {nRow=} {LastRowSelected = }")

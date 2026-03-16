@@ -36,7 +36,8 @@ The wav file will be classified for bat echolocation call, this will be displaye
     *   Or in Windows File Explorer drag directory into Classify.bat file. This is quicker as it does not need to display GUI. This file can be copied to be nearer the directory, This file is created in all added top level folders.
     *   Or in Linux terminal type ./classify.sh and drag the folder in to provide the path.
 
-All the wav files will be classified for bat echolocation calls, this may take some time and are retained in the 'ann' subdirectory. The files will be listed in a table at the bottom of the GUI. It will scroll to the first consecutive calls.
+All the wav files will be classified for bat echolocation calls, this may take some time and are retained in the 'ann' subdirectory. Wakepy should stop the PC sleeping while the files are classified
+The files will be listed in a table at the bottom of the GUI. It will scroll to the first consecutive calls.
 ![](Resources/web_Images/CornerDisplay.png)
 
  #### Display coordinates on any graph
