@@ -1,4 +1,5 @@
 powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+setx /M path "%path%;%USERPROFILE%\.local\bin\"
 uv init
 uv add dearpygui
 uv add numpy

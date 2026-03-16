@@ -295,11 +295,8 @@ class MainWindow():
         display = None
         if mousePos[1] > plotPos1[1] and mousePos[1] < plotPos1[1] + plotRect1[1] and mousePos[0] > plotPos1[0]: # click on spectrogram1
             display = self.SpecDisplay1
-            print(f"WhichDisplay SpecDisplay1 {mousePos=} {plotPos1=} {plotRect1=}")
         elif mousePos[1] > plotPos1 [1] and mousePos[1] < plotPos2[1] + plotRect2[1] and mousePos[0] > plotPos2[0]: # click on spectrogram2
             display = self.SpecDisplay2
-            #print(f"WhichDisplay SpecDisplay2 {plotPos=} {plotPos2=} {plotRect2=}")
-        #else: print(f"WhichDisplay no SpecDisplay {mousePos=} {plotPos2=} {plotRect2=}")
         return display
         
     
@@ -689,11 +686,9 @@ class MainWindow():
             self.SpecDisplay1.dir = os.path.join(self.echoMeterDir, self.FilesDF.loc[dfRow]["SessionName"])
         try:
             if self.lastRow is not None:
-                print("unhighlight_table_row ", self.lastRow)
                 dpg.unhighlight_table_row(table, self.lastRow)
         except: print(colorama.Fore.RED + "TableRow_selected dpg bug" + colorama.Fore.RESET)
         dpg.highlight_table_row(table, gRow, color=[0,100,0])
-        print("highlight_table_row ", gRow)
         file = df.loc[dfRow]["Filename"] 
         self.lastRow = gRow
         self.LoadClassifiedFile(os.path.join(self.SpecDisplay1.dir,file), self.SpecDisplay1)

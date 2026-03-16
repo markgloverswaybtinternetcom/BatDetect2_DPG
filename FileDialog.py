@@ -12,12 +12,22 @@ class FileDialog():
         
     def __init__(self, loadCallback):
         self.loadCallback = loadCallback
-        f = os.path.join('Resources', 'BatRecordingDirectories.txt')
-        if not os.path.exists(f):
-            f = open(f, 'w')
-            f.write(os.path.join(os.path.expanduser("~"), "Downloads", ""))
-            f.write("\n" + os.path.join(os.path.expanduser("~"), "Documents", ""))
-            f.close()            
+        dirsTxtFile = os.path.join('Resources', 'BatRecordingDirectories.txt')
+        if not os.path.exists(dirsTxtFile):
+            f = open(dirsTxtFile, 'w')
+            if sys.platform.startswith("win"):             
+                f.write(os.path.join(os.path.expanduser("~"), "Downloads"))
+                f.write("\n" + os.path.join(os.path.expanduser("~"), "Documents"))
+            else:
+                f.write(os.path.join(os.path.expanduser("~"), "Downloads", "")) # Linux needs separator on end
+                f.write("\n" + os.path.join(os.path.expanduser("~"), "Documents", ""))
+            f.close()
+        with open(dirsTxtFile, 'r') as file:
+            self.RoostDirs = file.read().splitlines()
+        drives = self._get_all_drives()
+        #print(f"FileDialog {drives=}")
+        self.RoostDirs.extend(drives)
+        
         self.history = []
         hwidth, hheight, _, hdata = dpg.load_image( "Resources/home.png")
         mfwidth, mfheight, _, mfdata = dpg.load_image("Resources/mini_folder.png")
@@ -80,11 +90,6 @@ class FileDialog():
         dpg.bind_item_theme(self.RoostDirButton, navButton_theme)
         dpg.bind_item_theme(self.RoostAddDirButton, navButton_theme)
         dpg.bind_item_theme(self.UpDirButton, navButton_theme)
-        with open('Resources/BatRecordingDirectories.txt', 'r') as file:
-            self.RoostDirs = file.read().splitlines()
-        drives = self._get_all_drives()
-        #print(f"FileDialog {drives=}")
-        self.RoostDirs.extend(drives)
  
     def Show(self):
         global LastRowSelected
@@ -136,7 +141,8 @@ class FileDialog():
             if sys.platform.startswith("win"): 
                 cwd = os.getcwd()
                 f = open(f"{newDir}/Classify.bat", 'w')
-                f.write(f'uv run "{cwd}\\cli.py" %1')
+                f.write(f'call "{cwd}\\.venv\\Scripts\\activate.bat"')
+                f.write(f'\npython "{cwd}\\cli.py" %1')
                 f.write("\npause")
                 f.close()
         
