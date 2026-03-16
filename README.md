@@ -8,8 +8,8 @@ It incorporates many of the features recommended for professional bat ecologists
 
    -   Unzip 'BatDetect2 DPG' directory in preferred location
    -   Windows: right click 'install.bat', select 'Properties',  tick 'Unblock' box and press 'OK'
-   -   Linux: chmod u+x Install.sh
-   -   run 'Install.bat' in windows or 'Install.sh' on Linux
+   -   Linux: chmod u+x install.sh
+   -   run 'Install.bat' in windows or 'install.sh' on Linux
    -   Windows: right click 'run.bat', select 'Properties',  tick 'Unblock' box and press 'OK'
    -   Linux: chmod u+x run.sh
  ![](Resources/web_Images/Unblock.png)
@@ -34,7 +34,7 @@ The wav file will be classified for bat echolocation call, this will be displaye
         *   Add top level folders that contain bat recordings (these are remembered and a Classify.bat file is created, see below)P
         *    Press 'Select Dir' button at end of directory line and press 'Load WAV / Dir in main'.
     *   Or in Windows File Explorer drag directory into Classify.bat file. This is quicker as it does not need to display GUI. This file can be copied to be nearer the directory, This file is created in all added top level folders.
-    *   Or in Linux terminal type ./Classify.sh and drag the folder in to provide the path.
+    *   Or in Linux terminal type ./classify.sh and drag the folder in to provide the path.
 
 All the wav files will be classified for bat echolocation calls, this may take some time and are retained in the 'ann' subdirectory. The files will be listed in a table at the bottom of the GUI. It will scroll to the first consecutive calls.
 ![](Resources/web_Images/CornerDisplay.png)
