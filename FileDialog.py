@@ -1,5 +1,6 @@
 import dearpygui.dearpygui as dpg
 import sys, os, time, datetime, psutil, textwrap, soundfile, colorama, WavUtil
+from mutagen.mp3 import MP3
 if sys.platform.startswith("win"): 
     import win32api
 from torchcodec.decoders import AudioDecoder
@@ -202,10 +203,14 @@ class FileDialog():
                 dpg.add_selectable(label=creation_time.strftime("%d/%m/%Y %H:%M"), parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
                 if entry.lower().endswith(".wav"):
                     duration, sample_rate = WavUtil.WavDetails(entry)
-                    cell_length = dpg.add_selectable(label=f"{duration:.1f} sec", parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
-                    cell_sr = dpg.add_selectable(label=f"{sample_rate} kHz", parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
-                    dpg.bind_item_theme(cell_length, self.size_alignt)
-                    dpg.bind_item_theme(cell_sr, self.size_alignt)                  
+                else:
+                    audio = MP3(entry)
+                    duration = audio.info.length
+                    sample_rate = audio.info.bitrate
+                cell_length = dpg.add_selectable(label=f"{duration:.1f} sec", parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
+                cell_sr = dpg.add_selectable(label=f"{sample_rate / 1000} kHz", parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
+                dpg.bind_item_theme(cell_length, self.size_alignt)
+                dpg.bind_item_theme(cell_sr, self.size_alignt)                  
                 tRow = None
                 nRow += 1
         #print(f"DisplayFiles {nRow=} {LastRowSelected = }")
