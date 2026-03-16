@@ -23,13 +23,14 @@ def ClassifyDir(dir_path):
         classify = Classify()
         files = utils.ListAudioFiles(dir_path)
         FilesDF = pandas.DataFrame(columns =["Filename", "Bat Calls"])
+        length = len(files)
         for index, audio_file in enumerate(files): 
             result = classify.File(audio_file)
             file = os.path.basename(audio_file)
             if len(result) > 0: 
                 r = len(FilesDF)
                 FilesDF.loc[r] = [file, result]			
-            print(f"file {index +1} of {len(files)} Classified: {file}", end='\r') 
+            print(f"file {index +1} of {length} Classified", end='\r') 
         dirResults_file = os.path.join(dir_path, "BatDetect2 Results.csv")
         FilesDF.to_csv(dirResults_file, index=False)
         print(colorama.Back.GREEN + f"'{dir_path}' files are all Classified" + colorama.Back.RESET) 

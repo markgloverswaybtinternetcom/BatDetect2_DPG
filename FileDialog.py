@@ -141,7 +141,8 @@ class FileDialog():
             if sys.platform.startswith("win"): 
                 cwd = os.getcwd()
                 f = open(f"{newDir}/Classify.bat", 'w')
-                f.write(f'call "{cwd}\\.venv\\Scripts\\activate.bat"')
+                f.write('title Classify Bat Console')
+                f.write(f'\ncall "{cwd}\\.venv\\Scripts\\activate.bat"')
                 f.write(f'\npython "{cwd}\\cli.py" %1')
                 f.write("\npause")
                 f.close()
