@@ -33,7 +33,7 @@ def ClassifyDir(dir_path):
             print(f"file {index +1} of {length} Classified", end='\r') 
         dirResults_file = os.path.join(dir_path, "BatDetect2 Results.csv")
         FilesDF.to_csv(dirResults_file, index=False)
-        print(colorama.Back.GREEN + f"'{dir_path}' files are all Classified" + colorama.Back.RESET) 
+        print(colorama.Back.GREEN + colorama.Fore.BLACK + f"'{dir_path}' files are all Classified" + colorama.Style.RESET_ALL) 
 
 parser = argparse.ArgumentParser(description="Bat call classifier")
 parser.add_argument("Pathname", help="The directory or filename that needs clasifying.")

@@ -18,6 +18,7 @@ uv add DearPyGui_DragAndDrop
 uv add chime
 uv add wakepy
 uv add psutil
+uv add mutagen
 sudo apt-get install ffmpeg
 sudo apt-get install libasound-dev portaudio19-dev libportaudio2 libportaudiocpp0
 chmod u+x ./run.sh
