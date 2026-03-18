@@ -53,7 +53,7 @@ The time, frequency or power values will display in the bottom right hand corner
 
  #### Zoom in on spectrogram area
 
-  *   Normal left click and drag to define area to be zoomed
+  *   Normal left click and drag to define area to be zoomed. Double click to unzoom.
   *   Or use scroll wheel on mouse
   *   Or alter the 'Range' combo-box, this will be retained
 

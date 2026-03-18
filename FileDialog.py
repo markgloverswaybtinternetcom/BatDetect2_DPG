@@ -19,9 +19,11 @@ class FileDialog():
             if sys.platform.startswith("win"):             
                 f.write(os.path.join(os.path.expanduser("~"), "Downloads"))
                 f.write("\n" + os.path.join(os.path.expanduser("~"), "Documents"))
+                f.write("\n" + os.path.join(os.path.expanduser("~"), "Desktop"))
             else:
                 f.write(os.path.join(os.path.expanduser("~"), "Downloads", "")) # Linux needs separator on end
                 f.write("\n" + os.path.join(os.path.expanduser("~"), "Documents", ""))
+                f.write("\n" + os.path.join(os.path.expanduser("~"), "Desktop", ""))
             f.close()
         with open(dirsTxtFile, 'r') as file:
             self.RoostDirs = file.read().splitlines()
@@ -165,12 +167,13 @@ class FileDialog():
         self.DisplayFiles(files)
         dpg.set_value(self.CurrentDirectoryText, dir)
         
-    def DisplayFiles(self, paths):
+    def DisplayFiles(self, paths):        
         global LastRowSelected
         dpg.delete_item(self.table, children_only=True, slot=1) # remove rows
         LastRowSelected = None
         nRow = 0
-        for entry in paths:           
+        for entry in paths:
+            #print(f"DisplayFiles {entry=}")            
             if entry[-1] == "/": # linux dirs
                 entry = entry[:-1]
             name = os.path.basename(entry);
@@ -181,7 +184,6 @@ class FileDialog():
                 dpg.add_image_button(self.img_mini_folder, parent=tRow, height=12, callback=self.TableRow_selected, user_data=[self.table, nRow, entry]) 
                 if entry.endswith("\\"): 
                     vInfo = win32api.GetVolumeInformation(entry)
-                    #print(f"DisplayFiles {vInfo=}")
                     name = entry.replace("\\","") 
                     if vInfo[4] == "exFAT" or vInfo[4] == "FAT32": name += " " + vInfo[0] # exchangable drive
                     dpg.add_selectable(label=name, parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
@@ -193,12 +195,12 @@ class FileDialog():
                     if len(self.history) > 0: 
                         selectDir = dpg.add_selectable(label="Select Dir", parent=tRow, callback=self.Dir_selected, user_data=[self.table, nRow, entry])
                         dpg.bind_item_theme(selectDir, self.greenText_theme)
-                tRow = None
                 nRow += 1
             elif os.path.isfile(entry) and (entry.lower().endswith(".wav") or entry.lower().endswith(".mp3")):
                 tRow = dpg.add_table_row(parent=self.table)
                 dpg.add_selectable(label="", parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
                 file_selectable = dpg.add_selectable(label=name, parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
+                #print(f"DisplayFiles {name=} {nRow=}")
                 creation_time = datetime.datetime.fromtimestamp(os.path.getmtime(entry))
                 dpg.add_selectable(label=creation_time.strftime("%d/%m/%Y %H:%M"), parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
                 if entry.lower().endswith(".wav"):
@@ -207,18 +209,18 @@ class FileDialog():
                     audio = MP3(entry)
                     duration = audio.info.length
                     sample_rate = audio.info.bitrate
-                cell_length = dpg.add_selectable(label=f"{duration:.1f} sec", parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
-                cell_sr = dpg.add_selectable(label=f"{sample_rate / 1000} kHz", parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
-                dpg.bind_item_theme(cell_length, self.size_alignt)
-                dpg.bind_item_theme(cell_sr, self.size_alignt)                  
-                tRow = None
+                    print(f"DisplayFiles MP3 {name=} {nRow=} {duration=} {sample_rate=}")
+                if sample_rate > 0:
+                    cell_length = dpg.add_selectable(label=f"{duration:.1f} sec", parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
+                    cell_sr = dpg.add_selectable(label=f"{sample_rate / 1000} kHz", parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
+                    dpg.bind_item_theme(cell_length, self.size_alignt)
+                    dpg.bind_item_theme(cell_sr, self.size_alignt)                  
                 nRow += 1
-        #print(f"DisplayFiles {nRow=} {LastRowSelected = }")
                 
     def TableRow_selected(self, sender, app_data, user_data):
         global LastRowSelected # fixes bug getting old value of self
-        print(f"TableRow_selected {app_data=} {user_data=}")
         table = user_data[0]; nRow = user_data[1]; filepath = user_data[2]
+        print(f"TableRow_selected {table=} {nRow=} {filepath=}")
         if LastRowSelected is not None: 
             dpg.unhighlight_table_row(table, LastRowSelected)
         if os.path.isdir(filepath):

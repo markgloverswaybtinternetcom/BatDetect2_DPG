@@ -3,16 +3,21 @@ from typing import Union, BinaryIO, Dict, Optional
 from dataclasses import dataclass, field
 
 def WavDetails(filepath):
+    #print(f"WavDetails {filepath=}")
     with open(filepath, "rb") as wav:
         riff = parse_into_chunks(wav) # Resource Interchange File Format 
-        fmt_chunk = riff.subchunks["fmt "]
-        data_chunk = riff.subchunks["data"]    
-        wav.seek(fmt_chunk.position + 8)
-        wav.read(2)  # audio format
-        channels = int.from_bytes(wav.read(2), "little")
-        sample_rate = int.from_bytes(wav.read(4), "little")
-        samples = data_chunk.size // (channels * 2)
-        duration = samples / sample_rate
+        #print(f"WavDetails {riff=} ")
+        try:
+            fmt_chunk = riff.subchunks["fmt "]
+            data_chunk = riff.subchunks["data"]    
+            wav.seek(fmt_chunk.position + 8)
+            wav.read(2)  # audio format
+            channels = int.from_bytes(wav.read(2), "little")
+            sample_rate = int.from_bytes(wav.read(4), "little")
+            samples = data_chunk.size // (channels * 2)
+            duration = samples / sample_rate
+        except KeyError:
+            return 0, 0
     return duration, sample_rate
         
 def parse_metadata(path):
@@ -38,26 +43,32 @@ def _get_subchunks(riff: BinaryIO, size: int) -> Dict[str, Chunk]:
     subchunks = {}
     while riff.tell() < start_position + size - 1:
         subchunk = _read_chunk(riff)
-        subchunks[subchunk.chunk_id] = subchunk
+        if subchunk is not None: 
+            subchunks[subchunk.chunk_id] = subchunk
+        else: return subchunks
     return subchunks
     
 def parse_into_chunks(riff: BinaryIO):
     riff.seek(0)
-    return _read_chunk(riff)
+    chunk = _read_chunk(riff)
+    return chunk
 
 def _read_chunk(riff: BinaryIO):
     position = riff.tell()
     chunk_id = riff.read(4).decode("ascii")
     size = int.from_bytes(riff.read(4), "little")
+    #print(f"_read_chunk {chunk_id=} {size=}")
     identifier = None
-    if chunk_id in CHUNKS_WITH_SUBCHUNKS:
-        identifier = riff.read(4).decode("ascii")
-    chunk = Chunk( chunk_id=chunk_id, size=size, position=position, identifier=identifier)
-    if chunk_id in CHUNKS_WITH_SUBCHUNKS:
-        chunk.subchunks = _get_subchunks(riff, size - 4)
-    else:
-        riff.seek(size, os.SEEK_CUR)  
-    return chunk
+    if size > 0:
+        if chunk_id in CHUNKS_WITH_SUBCHUNKS:
+            identifier = riff.read(4).decode("ascii")
+        chunk = Chunk( chunk_id=chunk_id, size=size, position=position, identifier=identifier)
+        if chunk_id in CHUNKS_WITH_SUBCHUNKS:
+            chunk.subchunks = _get_subchunks(riff, size - 4)
+        else:
+            riff.seek(size, os.SEEK_CUR)  
+        return chunk
+    else: return None
 
 def get_media_info(wav: BinaryIO, chunk: Chunk):
     fmt_chunk = chunk.subchunks["fmt "]

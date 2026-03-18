@@ -305,14 +305,14 @@ class MainWindow():
         if self.ZoomStart is not None and display is not None:
             plotPos = dpg.get_plot_mouse_pos()
             if plotPos != self.ZoomStart:
-                print(f"zoom_release_handler drag on plot {self.ZoomStart=} {plotPos=}")
+                print(f"zoom_release_handler drag on plot {self.ZoomStart=} {plotPos=}")              
                 xLim = dpg.get_axis_limits(display.specXaxis)
                 yLim = dpg.get_axis_limits(display.specYaxis)
-                dpg.set_axis_limits(display.psdYaxis, yLim[0], yLim[1])
-                dpg.set_axis_limits(display.ampXaxis, xLim[0], xLim[1])
-                print(f"zoom_release_handler on plot {xLim=} {yLim=}")                
                 a = int(yLim[0] / display.maxF * (display.freqBins-1)); b = int(yLim[1] / display.maxF * (display.freqBins-1))
+                print(f"zoom_release_handler on plot {xLim=} {yLim=} {a=} {b=} {display.npPsd.shape=}") 
                 peak = (numpy.argmax(display.npPsd[a:b]) + a) / (display.freqBins-1) * display.maxF
+                dpg.set_axis_limits(display.psdYaxis, yLim[0], yLim[1])
+                dpg.set_axis_limits(display.ampXaxis, xLim[0], xLim[1])               
                 dpg.set_item_label(display.psdXaxis, f"Peak {peak:.1f} kHz")
                 minPsd =  display.npPsd[a:b].min(); maxPsd = display.npPsd[a:b].max()
                 dpg.set_axis_limits(display.psdXaxis, minPsd, maxPsd)
@@ -321,6 +321,7 @@ class MainWindow():
                 a = int(display.sample_rate * (xLim[0] - display.minT))
                 b = int(display.sample_rate * (xLim[1] - display.minT))
                 display.ZoomRecording = display.Recording[a:b]
+                print(f"zoom_release_handler on plot {xLim=} {yLim=} {display.minT=} {a=} {b=} {display.Recording.shape=} {display.ZoomRecording.shape=}") 
                 display.zoomed = True
             self.ZoomStart = None
         elif display is not None:

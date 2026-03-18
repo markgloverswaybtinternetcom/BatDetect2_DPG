@@ -12,7 +12,7 @@ from torchcodec.decoders import AudioDecoder
 numpy.set_printoptions(precision=3, suppress=True)
 numpy.set_printoptions(threshold=sys.maxsize)
 
-MIN_FREQ_KHZ = 0; MAX_FREQ_KHZ = 125; STD_SAMPLING = 250000;
+MIN_FREQ_KHZ = 0; MAX_FREQ_KHZ = 125; STD_SAMPLING = 250000; MAX_PLAY_RATE = 40000
 NFFT = 512; RELATIVE_HOP_LENGTH = 0.5 # spectogram settings
 PSD_WIDTH = 80;  SLIDER_W = 17; AMP_HT=80; SCROLL_HT=19; BUTTON_HT=19; STATUS_HT=24; SPACING=7; HEADER=30; COLOR_SCALE_W=55
 DISPLAY_ROWS=7; ROW_PXL = 17 # table scrolling
@@ -504,17 +504,14 @@ class SpecDisplay():
         xLim = dpg.get_axis_limits(self.specXaxis)
         range = xLim[1] - xLim[0]
         timelength = range / speed
-        
         if self.ZoomRecording is None:
-            if timelength > 3.0:
-                temp = os.path.join(os.getcwd(), "Resources", "temp.wav") # needs full path
-                soundfile.write(temp, self.Recording, self.sample_rate) 
-                self.PlaySoundAndProgress(temp, self.sample_rate, 10, speed)
+            if timelength > 1.0:
+                self.PlaySoundAndProgress(os.path.join(self.dir, self.file), self.sample_rate, 10, speed)
             else:
                 self.PlaySound(self.Recording, self.sample_rate, 10, speed)
         else:
-            if dpg.get_value(self.PlaySpeedCombo) == "1/10":
-                self.PlaySound(self.ZoomRecording, self.sample_rate, 10, speed) 
+            if timelength > 1.0:
+                self.PlaySoundAndProgress(os.path.join(self.dir, self.file), self.sample_rate, 10, speed)
             else:
                 self.PlaySound(self.ZoomRecording, self.sample_rate, 10, speed)
 
@@ -531,6 +528,18 @@ class SpecDisplay():
             soundfile.write(filepath, self.Recording, self.sample_rate) 
             self.Status(f"Normal speed audio saved as '{filepath}'") 
         
+    def DownSample(self, arr, downscale_factor):
+        total_elements = arr.shape[0]
+        odd_elements = total_elements % downscale_factor
+        #remove odd elements so no numpy reshaping error
+        if odd_elements > 0: arr = arr[:-odd_elements]
+        print(f"DownSample {total_elements=} after {arr.shape=} {odd_elements=}")
+        reshaped_arr = arr.reshape(-1, downscale_factor)
+        # Downsample the array by taking the mean of each block
+        downsampled_arr = reshaped_arr.mean(axis=1)
+        print(f"DownSample {reshaped_arr.shape=} after {downsampled_arr.shape=}")
+        return downsampled_arr
+        
     def PlaySound(self, Recording, SampleRate, loudness, speed): 
         devices = sounddevice.query_devices()
         if len(devices) == 0:
@@ -539,7 +548,14 @@ class SpecDisplay():
         MAX_SEC = 30
         duration = len(Recording) / SampleRate / speed
         maxLength = round(SampleRate * MAX_SEC * speed)
-        print(f"SpecDisplay PlaySound {len(Recording)=}, {SampleRate=}, {loudness=}, {speed=}, {duration=:.1f}, {Recording[0]=}")
+        
+        replayRate = SampleRate * speed
+        if replayRate > MAX_PLAY_RATE:
+            # too fast to play
+            downscale_factor = math.ceil(replayRate / MAX_PLAY_RATE)
+            Recording = self.DownSample(Recording, downscale_factor)
+            
+        print(f"SpecDisplay PlaySound {len(Recording)=}, {SampleRate=}, {loudness=}, {speed=}, {duration=:.1f}")
         if duration > MAX_SEC:
             loud = Recording[:maxLength] * loudness
             duration = MAX_SEC
@@ -584,7 +600,8 @@ class SpecDisplay():
                 self.soundLine = None
                 print(f"UpdateSoundLine {time.perf_counter() - self.SoundStartTime}")
             else:
-                self.soundLine = dpg.add_plot_annotation(parent=self.specPlot, label="^", default_value=(self.SoundTime, self.yLim[1]), offset=(0, 750), color=[255, 255, 255, 255])
+                rect = dpg.get_item_rect_size(self.specPlot)
+                self.soundLine = dpg.add_plot_annotation(parent=self.specPlot, label="^", default_value=(self.SoundTime, self.yLim[1]), offset=(0, rect[1]), color=[255, 255, 255, 255])
         
     def SetClassifyLabel(self, result):
         if len(result) > 0:
