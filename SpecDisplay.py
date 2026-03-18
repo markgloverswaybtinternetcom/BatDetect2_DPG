@@ -12,10 +12,10 @@ from torchcodec.decoders import AudioDecoder
 numpy.set_printoptions(precision=3, suppress=True)
 numpy.set_printoptions(threshold=sys.maxsize)
 
-MIN_FREQ_KHZ = 0; MAX_FREQ_KHZ = 125; STD_SAMPLING = 250000; MAX_PLAY_RATE = 40000
+MIN_FREQ_KHZ = 0; MAX_FREQ_KHZ = 125; STD_SAMPLING = 250000; MAX_PLAY_RATE = 40000; MAX_PLAY_SEC = 30; LOUDNESS = 10
 NFFT = 512; RELATIVE_HOP_LENGTH = 0.5 # spectogram settings
 PSD_WIDTH = 80;  SLIDER_W = 17; AMP_HT=80; SCROLL_HT=19; BUTTON_HT=19; STATUS_HT=24; SPACING=7; HEADER=30; COLOR_SCALE_W=55
-DISPLAY_ROWS=7; ROW_PXL = 17 # table scrolling
+ROW_PXL = 17 # table scrolling
 
 class SpecDisplay(): 
     def __new__(cls, *args, **kwargs):
@@ -29,7 +29,7 @@ class SpecDisplay():
         self.Status = parentSelf.Status
         self.classifyEnabled = True
         sys.excepthook = self.notify_exception
-        self.lastRow = self.FileTableRow = self.CallsNP = self.lastMousePlotPos = self.lastMousePos = self.soundLine = self.duration = self.dirIndex = self.FilesDF = self.PlayObject = None 
+        self.FileTableRow = self.CallsNP = self.lastMousePlotPos = self.lastMousePos = self.soundLine = self.duration = self.dirIndex = self.FilesDF = self.PlayObject = None 
         self.activeButtonCallback = activeButtonCallback        
         self.minF = MIN_FREQ_KHZ; self.maxF = MAX_FREQ_KHZ
         self.colours = self.GenerateSpectrum()
@@ -75,7 +75,7 @@ class SpecDisplay():
                     self.ScrollBar = dpg.add_slider_float(width=-1, callback=self.ScrollBar_callback, default_value=self.minT, vertical=False, clamped=True, min_value=0, max_value=1)
                 self.sliderWidth = config["width"] - 40 - PSD_WIDTH
                 with dpg.group(horizontal=True, height=SCROLL_HT * config["scale"]):
-                    PlaySoundbutton = dpg.add_button(label="Play Sound", callback=self.PlaySound_click)
+                    PlaySoundbutton = dpg.add_button(label="Play Sound", callback=self.PlaySound)
                     self.PlaySpeedCombo = dpg.add_combo(label="Speed", items=("1", "1/2", "1/5", "1/10", "1/20"), width=66*config["scale"], default_value=f"1/10")
                     saveSoundbutton = dpg.add_button(label="Save Sound",  callback=self.saveSound_click)
                     self.Annotate = True
@@ -223,7 +223,6 @@ class SpecDisplay():
         else: 
             self.minT = 0; self.maxT = t1 + self.Range
         self.DisplaySpectogram()
-        if self.FilesDF is not None: self.FilesDF.loc[self.lastRow, 'minT'] = str(self.minT)
         dpg.set_value(self.ScrollBar, self.minT) 
    
     def Annotate_changed(self, sender, app_data, user_data):
@@ -264,19 +263,15 @@ class SpecDisplay():
         dpg.bind_item_theme(self.ScrollBar, slider_theme)
         self.dir = os.path.dirname(filepath)
         self.file = os.path.basename(filepath)
-        if self.duration > 0:
-            if self.FilesDF is not None and isinstance(self.FilesDF.loc[self.lastRow, 'minT'], (numpy.floating, float)): 
-                self.minT = self.FilesDF.loc[self.lastRow, 'minT']
-            else:
-                self.minT = 0
-                if self.CallsNP is not None: 
-                    n = 0
-                    while n +1 < len(self.CallsNP) and self.CallsNP[n+1, 0] != self.CallsNP[n, 0] and (self.CallsNP[n+1, 1] - self.CallsNP[n, 1]) > 0.3: 
-                        n += 1 #more calls and not same species and too far apart
-                    if self.CallsNP.shape[0] > 0: 
-                        firstConsecutiveCallx = self.CallsNP[n, 1]
-                        if firstConsecutiveCallx > 0.01: self.minT =  firstConsecutiveCallx - 0.01
-                    dpg.set_value(self.ScrollBar, self.minT) 
+        self.minT = 0
+        if self.CallsNP is not None: 
+            n = 0
+            while n +1 < len(self.CallsNP) and self.CallsNP[n+1, 0] != self.CallsNP[n, 0] and (self.CallsNP[n+1, 1] - self.CallsNP[n, 1]) > 0.3: 
+                n += 1 #more calls and not same species and too far apart
+            if self.CallsNP.shape[0] > 0: 
+                firstConsecutiveCallx = self.CallsNP[n, 1]
+                if firstConsecutiveCallx > 0.01: self.minT =  firstConsecutiveCallx - 0.01
+            dpg.set_value(self.ScrollBar, self.minT) 
             if self.minT + self.Range > self.duration: 
                 self.maxT = self.duration
                 if self.minT > self.Range: self.minT = self.duration - self.Range
@@ -284,7 +279,6 @@ class SpecDisplay():
             else: self.maxT = self.minT + self.Range
         dpg.set_value(self.ScrollBar, self.minT)
         self.DisplaySpectogram()
-        if self.FilesDF is not None: self.FilesDF.loc[self.lastRow, 'minT'] = self.minT
         if self.sample_rate < 45000:
             self.Status(f"Sample rate = {self.sample_rate / 1000:.1f}kHz FILE NOT ULTRASONIC")
         
@@ -400,7 +394,7 @@ class SpecDisplay():
         
         dpg.bind_item_theme(self.psdSeries, self.line_theme)
         if self.Annotate: self.DisplayAnnotations(self.specPlot)
-        if sound: self.PlaySound(self.Recording, self.sample_rate, 10, 0.1)
+        if sound: self.PlaySound(cursor=None)
     
     def Range_changed(self, range):
         oldRange = self.Range
@@ -499,21 +493,36 @@ class SpecDisplay():
         with open(callsJsonPath, "w", encoding="utf-8") as jsonfile:
             json.dump(thisdict, jsonfile, indent=2, sort_keys=True)
 
-    def PlaySound_click(self):
+    def PlaySound(self, cursor=True):
+        devices = sounddevice.query_devices()
+        if len(devices) == 0:
+            print("NO SOUND DEVICES")
+            return
+        sounddevice.stop()
         speed = eval(dpg.get_value(self.PlaySpeedCombo))
-        xLim = dpg.get_axis_limits(self.specXaxis)
-        range = xLim[1] - xLim[0]
-        timelength = range / speed
-        if self.ZoomRecording is None:
-            if timelength > 1.0:
-                self.PlaySoundAndProgress(os.path.join(self.dir, self.file), self.sample_rate, 10, speed)
-            else:
-                self.PlaySound(self.Recording, self.sample_rate, 10, speed)
+        if self.ZoomRecording is None: Recording = self.Recording
+        else: Recording = self.ZoomRecording
+        replayRate = self.sample_rate * speed
+        duration = len(Recording) / replayRate
+        maxLength = round(self.sample_rate * MAX_PLAY_SEC * speed)
+        
+        if replayRate > MAX_PLAY_RATE:
+            # too fast to play
+            downscale_factor = math.ceil(replayRate / MAX_PLAY_RATE)
+            Recording = self.DownSample(Recording, downscale_factor)
+            replayRate = int(replayRate / downscale_factor)
+            
+        print(f"SpecDisplay PlaySound {cursor=} {len(Recording)=}, {self.sample_rate=}, {speed=} {replayRate=}, {duration=:.1f}")
+        if duration > MAX_PLAY_SEC:
+            Recording = Recording[:maxLength] * LOUDNESS
+            duration = MAX_PLAY_SEC
+        else:   
+            Recording *= LOUDNESS
+            
+        if duration > 1.0 and cursor is not None:
+            self.PlaySoundAndProgress(Recording, replayRate, speed)
         else:
-            if timelength > 1.0:
-                self.PlaySoundAndProgress(os.path.join(self.dir, self.file), self.sample_rate, 10, speed)
-            else:
-                self.PlaySound(self.ZoomRecording, self.sample_rate, 10, speed)
+            sounddevice.play(Recording, replayRate)
 
     def saveSound_click(self):
         file,_ = os.path.splitext(self.file)
@@ -540,32 +549,8 @@ class SpecDisplay():
         print(f"DownSample {reshaped_arr.shape=} after {downsampled_arr.shape=}")
         return downsampled_arr
         
-    def PlaySound(self, Recording, SampleRate, loudness, speed): 
-        devices = sounddevice.query_devices()
-        if len(devices) == 0:
-            print("NO SOUND DEVICES")
-            return
-        MAX_SEC = 30
-        duration = len(Recording) / SampleRate / speed
-        maxLength = round(SampleRate * MAX_SEC * speed)
-        
-        replayRate = SampleRate * speed
-        if replayRate > MAX_PLAY_RATE:
-            # too fast to play
-            downscale_factor = math.ceil(replayRate / MAX_PLAY_RATE)
-            Recording = self.DownSample(Recording, downscale_factor)
-            
-        print(f"SpecDisplay PlaySound {len(Recording)=}, {SampleRate=}, {loudness=}, {speed=}, {duration=:.1f}")
-        if duration > MAX_SEC:
-            loud = Recording[:maxLength] * loudness
-            duration = MAX_SEC
-        else:   
-            loud = Recording * loudness
-        sounddevice.stop()
-        sounddevice.play(loud, SampleRate * speed)
-        
-    def PlaySoundAndProgress(self, filename, SampleRate, loudness, speed):
-        sounddevice.stop()
+    def PlaySoundAndProgress(self, recording, SampleRate, speed):
+        print(f"PlaySoundAndProgress {len(recording)=] {SampleRate=} {speed=]")
         if self.soundLine is not None:
             self.soundLine = None
             self.SoundProcess.terminate()
@@ -573,22 +558,26 @@ class SpecDisplay():
                 dpg.delete_item(main.soundLine) 
             except Exception as error:
                 print(colorama.Fore.RED + f"PlaySoundAndProgress An exception occurred: {error}" + colorama.Fore.RESET)
+        
+        temp = os.path.join(os.getcwd(), "Resources", "temp.wav") # needs full path
+        soundfile.write(temp, recording, int(SampleRate)) 
+            
+        if sys.platform.startswith("win"):        
+            self.SoundProcess = subprocess.Popen(['./wavplayer/sounder.exe', temp] )  
+        elif sys.platform.startswith("linux"):
+            self.SoundProcess = subprocess.Popen(['./wavplayer/wavplay', temp] )  
+        else:
+            raise ImportError("wavplay doesn't support this system")
+            
         rect = dpg.get_item_rect_size(self.specPlot)
         self.xLim = dpg.get_axis_limits(self.specXaxis)
         self.yLim = dpg.get_axis_limits(self.specYaxis)
         self.speed = speed
-
-        if sys.platform.startswith("win"):
-            self.SoundProcess = subprocess.Popen(['wavplayer/wavplay.exe', filename,  str(self.xLim[0]*SampleRate),  str(self.xLim[1]*SampleRate), str(int(SampleRate * speed)), str(loudness)] )  
-        elif sys.platform.startswith("linux"):
-           self.SoundProcess = subprocess.Popen(['./wavplayer/wavplay', filename,  str(self.xLim[0]*SampleRate),  str(self.xLim[1]*SampleRate), str(int(SampleRate * speed)), str(loudness)] )  
-        else:
-            raise ImportError("wavplay doesn't support this system")
         self.SoundTime = self.xLim[0]
         self.SoundFactor = 1/ speed
         self.soundLine = dpg.add_plot_annotation(parent=self.specPlot, label="^", default_value=(self.SoundTime, self.yLim[1]), offset=(0, rect[1]),color=[255, 255, 255, 255])
-        self.SoundStartTime = float(time.perf_counter()) + 0.35 # fudge factor
-
+        self.SoundStartTime = float(time.perf_counter()) + 0.2 # fudge factor
+        
     def UpdateSoundLine(self):
         if self.soundLine is not None:
             try:

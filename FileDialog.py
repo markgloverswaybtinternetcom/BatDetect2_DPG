@@ -209,7 +209,6 @@ class FileDialog():
                     audio = MP3(entry)
                     duration = audio.info.length
                     sample_rate = audio.info.bitrate
-                    print(f"DisplayFiles MP3 {name=} {nRow=} {duration=} {sample_rate=}")
                 if sample_rate > 0:
                     cell_length = dpg.add_selectable(label=f"{duration:.1f} sec", parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
                     cell_sr = dpg.add_selectable(label=f"{sample_rate / 1000} kHz", parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
@@ -240,15 +239,17 @@ class FileDialog():
                 self.loadCallback(self.selectedFile, 1)
             elif self.selectedDir is not None:
                 self.loadCallback(self.selectedDir, 1)
+            self.selectedDir = self.selectedFile = None
     
     def LoadFileComparison_callback(self):
         print(f"LoadFileSelected_callback ")
         if self.loadCallback is not None:
+            dpg.configure_item(self.window, show=False)
             if self.selectedFile is not None:
                 self.loadCallback(self.selectedFile, 2)
             elif self.selectedDir is not None:
                 self.loadCallback(self.selectedDir, 2)
-            dpg.configure_item(self.window, show=False)
+            self.selectedDir = self.selectedFile = None
                 
     def Dir_selected(self, sender, app_data, user_data):
         global LastRowSelected # fixes bug getting old value of self
