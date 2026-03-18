@@ -193,12 +193,15 @@ class MainWindow():
         
     def HelpButton_pressed(self):
         webbrowser.open_new_tab(os.path.join("file:", os.getcwd(), "help.html"))
-
+        
     def ScrollToRow(self, row): 
-        if row > DISPLAY_ROWS: 
-            pxl = (row + 1 - DISPLAY_ROWS) * ROW_PXL * config["scale"]
-            dpg.set_y_scroll(self.FileTable, pxl)
-            print(f"set_y_scroll {row=}, {pxl=}, max={dpg.get_y_scroll_max(self.FileTable)}")
+        y = dpg.get_y_scroll(self.FileTable)
+        yMax = dpg.get_y_scroll_max(self.FileTable)
+        rowSize = yMax/len(self.FilesDF)
+        print(f"ScrollToRow {y=} {yMax=} {row=} {len(self.FilesDF)} {rowSize=}")
+        if yMax > 0: pxl = row * rowSize
+        else: pxl = row * ROW_PXL
+        dpg.set_y_scroll(self.FileTable, pxl)
 
     def resize_handler(self, sender, app_data, user_data):
         config["height"] = dpg.get_viewport_height()
@@ -538,6 +541,7 @@ class MainWindow():
                 self.Status("Single files only on second display", error=True)
                 return
             self.MultiFile = True;
+            dpg.configure_item(self.SpecDisplay2.topGroup, show=False)
             if os.path.basename(f).startswith("Session_"):
                 print(f"FileDrop single echometer directory {f} found")
                 self.Status(f"Classifying single echo meter session at {f}")
@@ -547,6 +551,7 @@ class MainWindow():
                 self.LoadBatDetectTable(self.FileTable, f)
                 user_data = [self.FileTable,  self.FilesDF, 0, 0]
                 self.TableRow_selected(0, [], user_data)
+                self.ScrollToRow(0)
                 config["echoMeterDir"] = ""
                 self.Status(f"{f} files already Classified")
             elif any(x.startswith("Session_") for x in os.listdir(f)):
