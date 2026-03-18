@@ -550,7 +550,7 @@ class SpecDisplay():
         return downsampled_arr
         
     def PlaySoundAndProgress(self, recording, SampleRate, speed):
-        print(f"PlaySoundAndProgress {len(recording)=] {SampleRate=} {speed=]")
+        print(f"PlaySoundAndProgress {len(recording)=} {SampleRate=} {speed=}")
         if self.soundLine is not None:
             self.soundLine = None
             self.SoundProcess.terminate()

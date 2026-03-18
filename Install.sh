@@ -14,7 +14,6 @@ uv add torchcodec
 uv add librosa
 uv add folium
 uv add screeninfo
-uv add DearPyGui_DragAndDrop
 uv add chime
 uv add wakepy
 uv add psutil
