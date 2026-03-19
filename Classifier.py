@@ -1,4 +1,4 @@
-import pandas, os, sys, torch, librosa, colorama
+import pandas, os, sys, torch, librosa, colorama, json
 from batdetect2.detector.parameters import DEFAULT_MODEL_PATH
 from batdetect2.api import load_model, get_config
 import batdetect2.utils.detector_utils as du
@@ -19,7 +19,15 @@ class Classify():
         self.config = get_config(**{**params, **args, "time_expansion": time_expansion_factor, "spec_slices": False, "chunk_size": chunk_size, "detection_threshold": detection_threshold})
         code_dir = os.path.dirname(os.path.abspath(__file__))
         speciesNames = pandas.read_csv(os.path.join(code_dir, "Resources", "SpeciesNames.csv"))
-        self.LatinToEnglish = pandas.Series(speciesNames.English.values, index=speciesNames.Latin).to_dict()
+        config = None
+        configFile = os.path.join(code_dir, "gui_Config.json")
+        if os.path.exists(configFile):
+            with open(configFile, "r") as jsonfile:
+                config = json.load(jsonfile)
+                speciesLanguage = config["SpeciesLanguage"] 
+        else: speciesLanguage = "EnglishAbbrev"
+        if speciesLanguage != 'Latin': self.latinToLangDict = speciesNames.set_index('Latin')[speciesLanguage].to_dict()
+        else: self.latinToLangDict = None
 
     def save_results_to_file(self, results, op_path: str) -> None:
         if len(results) > 0:
@@ -67,7 +75,8 @@ class Classify():
             for i in range(len(result[0])):
                 if result[2][i] > config["detection_threshold"]:
                     latin_name = config["class_names"][result[0][i]]
-                    species = self.LatinToEnglish[latin_name]
+                    if self.latinToLangDict is None: species = latin_name
+                    else: species = self.latinToLangDict[latin_name]
                     if result[1][i] > 1: # ignore isolated single calls
                         if len(summary) > 0:
                             summary = summary + f"; {species} {result[1][i]} calls {round(result[2][i]*100)}%-{round(result[3][i]*100)}%"
