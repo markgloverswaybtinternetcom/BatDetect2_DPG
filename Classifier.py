@@ -1,4 +1,4 @@
-import pandas, os, sys, torch, librosa, colorama, json
+import pandas, os, sys, torch, librosa, colorama, json, utils
 from batdetect2.detector.parameters import DEFAULT_MODEL_PATH
 from batdetect2.api import load_model, get_config
 import batdetect2.utils.detector_utils as du
@@ -10,6 +10,7 @@ if sys.platform.startswith("win"):
     os.add_dll_directory(os.path.join(os.path.dirname(__file__), "ffmpeg")) # allows for remote batch files
 from torchcodec.decoders import AudioDecoder
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+MIN_PROB = 0.2
 
 class Classify():
     def __init__(self): 
@@ -29,7 +30,27 @@ class Classify():
         if speciesLanguage != 'Latin': self.latinToLangDict = speciesNames.set_index('Latin')[speciesLanguage].to_dict()
         else: self.latinToLangDict = None
 
+    def GetDfSummary(self, df):
+        summaryDict = {}
+        for row in df.itertuples():
+            id = row[6]; prob = float(row[1]) * float(row[7])
+            if prob > MIN_PROB:
+                if id in summaryDict:
+                    min = summaryDict[id][1]; max = summaryDict[id][2];
+                    if prob < min: min = prob
+                    if prob > max: max = prob
+                    summaryDict[id] = [summaryDict[id][0]+1, min, max]
+                else:
+                    summaryDict[id] = [1, prob, prob]
+        summary = ""
+        for id, val in summaryDict.items():
+            if self.latinToLangDict is None: species = id
+            else: species = self.latinToLangDict[id]
+            summary += f"{species} {val[0]} calls {val[2]*100:.0f}%-{val[1]*100:.0f}%, "
+        return summary
+        
     def save_results_to_file(self, results, op_path: str) -> None:
+        summary = ""
         if len(results) > 0:
             result_list = results["pred_dict"]["annotation"] # save csv file - if there are predictions
             results_df = pandas.DataFrame(result_list)
@@ -37,13 +58,16 @@ class Classify():
             results_df.index.name = "id" # rename index column   
             if "class_prob" in results_df.columns:  # create a csv file with predicted events
                 preds_df = results_df[["det_prob", "start_time",  "end_time", "high_freq", "low_freq", "class", "class_prob", "event"]]
-                preds_df.to_csv(op_path + ".csv", sep=",") 
+                preds_df.to_csv(op_path + ".csv", sep=",")
+                summary = self.GetDfSummary(preds_df)
             else:
                 with open(op_path + ".csv", "w") as f:
                     f.write("id,det_prob,start_time,end_time,high_freq,low_freq,class,class_prob\n")
         else:
             with open(op_path + ".csv", "w") as f: # empty file so do not repeat classification
                 f.write("id,det_prob,start_time,end_time,high_freq,low_freq,class,class_prob\n")
+        return summary
+    
     def call_pred(self, det_prob, class_prob): 
         classes = list()
         class_calls = list()
@@ -66,26 +90,6 @@ class Classify():
                 class_max_prob.append(call_best_class_prob)
                 class_min_prob.append(call_best_class_prob)
         return classes, class_calls , class_max_prob, class_min_prob
-    
-    def summarize_results(self, results, predictions, config):
-        summary = ""
-        num_detections = len(results["pred_dict"]["annotation"])
-        if num_detections > 0:
-            result = self.call_pred(predictions["det_probs"], predictions["class_probs"])
-            for i in range(len(result[0])):
-                if result[2][i] > config["detection_threshold"]:
-                    latin_name = config["class_names"][result[0][i]]
-                    if self.latinToLangDict is None: species = latin_name
-                    else: species = self.latinToLangDict[latin_name]
-                    if result[1][i] > 1: # ignore isolated single calls
-                        if len(summary) > 0:
-                            summary = summary + f"; {species} {result[1][i]} calls {round(result[2][i]*100)}%-{round(result[3][i]*100)}%"
-                        else:
-                            summary = f" {species} {result[1][i]} calls {round(result[2][i]*100)}%-{round(result[3][i]*100)}%"
-            if len(summary) > 0: # ignore files with no calls over threshold
-                file_name = results["pred_dict"]["id"]
-                print(colorama.Fore.GREEN + f"{file_name}, {summary}  " + colorama.Fore.RESET, flush=True)
-        return summary
 
     def process_file(self, audio_file: str, model: DetectionModel, config: ProcessingConfiguration, device: torch.device = DEVICE) -> Union[RunResults, Any]:
         predictions = []; spec_feats = []
@@ -117,13 +121,13 @@ class Classify():
         calls = du.convert_results(file_id=os.path.basename(audio_file), time_exp=config.get("time_expansion", 1) or 1,
             duration=audio_full.shape[0] / float(sampling_rate), params=config, predictions=predictions,
             spec_feats=spec_feats, cnn_feats=[], spec_slices=[], nyquist_freq=orig_samp_rate / 2)
-        return self.summarize_results(calls, predictions, config), calls
+        return calls
 
     def File(self, filepath, debug=False):
         dir = os.path.dirname(filepath)
         file = os.path.basename(filepath)
         try:
-            summary, calls = self.process_file(filepath, self.model, self.config)
+            calls = self.process_file(filepath, self.model, self.config)
         except  Exception as error:
             print(colorama.Fore.RED + f"Classifier process_file {error}" + colorama.Fore.RESET)
             summary = ""; calls = ""
@@ -131,5 +135,6 @@ class Classify():
         if not os.path.isdir(op_dir): # make directory if it does not exist
             print("Creating directory for annotation files", op_dir)
             os.makedirs(op_dir)
-        self.save_results_to_file(calls, os.path.join(op_dir ,file)) # empty file saves trying to classify again
+        summary = self.save_results_to_file(calls, os.path.join(op_dir ,file)) # empty file saves trying to classify again
+        if len(summary)> 0: print(colorama.Fore.GREEN + f"{file}, {summary}  " + colorama.Fore.RESET, flush=True)
         return summary

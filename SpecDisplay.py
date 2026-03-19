@@ -125,7 +125,8 @@ class SpecDisplay():
         if self.classifyEnabled:            
             callsCsvPath = os.path.join(dir,"ann", file+".csv")
             if os.path.isfile(callsCsvPath):
-                self.ConvertCsvtoNP(callsCsvPath)
+                self.CallsNP, summary = self.ConvertCsvtoNP(callsCsvPath)
+                self.SetClassifyLabel(summary)
                 speciesComboList = []
                 if self.CallsNP.shape[0] > 0: 
                     idList = numpy.unique(self.CallsNP[:, 0])
@@ -430,12 +431,11 @@ class SpecDisplay():
                     else:
                         summaryDict[id] = [1, prob, prob] 
                 i += 1
-        self.CallsNP = numpy.array(arr, dtype='f')
         summary = ""
         for id, val in summaryDict.items():
-            summary += f"{self.SpeciesNames.loc[id][self.SpeciesLanguage]} {val[0]} calls {val[1]:.0f}%-{val[2]:.0f}%, "
-        self.SetClassifyLabel(summary)
+            summary += f"{self.SpeciesNames.loc[id][self.SpeciesLanguage]} {val[0]} calls {val[2]:.0f}%-{val[1]:.0f}%, "
         print(f"ConvertCsvtoNP {callsCsvPath=} {summary=}")
+        return numpy.array(arr, dtype='f'), summary
 
     def DisplayAnnotations(self, plot):
         dpg.delete_item(plot, children_only=True, slot=0) # remove annotations
