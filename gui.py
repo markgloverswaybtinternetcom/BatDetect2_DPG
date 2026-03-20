@@ -273,7 +273,7 @@ class MainWindow():
     def RightKey_pressed(self, sender, app_data, user_data):
         print(f"RightKey_pressed {self.Range=}")
         if self.ActiveDisplay.maxT + self.Range > self.ActiveDisplay.duration: 
-            self.ActiveDisplay.maxT = self.ActiveDisplay.duration;
+            self.ActiveDisplay.maxT = self.ActiveDisplay.duration
             if self.ActiveDisplay.minT - self.Range < 0: self.ActiveDisplay.maxT = self.Range; self.ActiveDisplay.minT = 0            
             else: self.ActiveDisplay.minT = self.ActiveDisplay.duration - self.Range
         else: self.ActiveDisplay.minT += self.Range; self.ActiveDisplay.maxT += self.Range
@@ -384,12 +384,32 @@ class MainWindow():
             if self.LabelDragDisplay is not None:
                 self.LabelStartPlot = dpg.get_plot_mouse_pos()
                 self.LabelStartMouse = dpg.get_mouse_pos()
+                if self.EditMode == "None":
+                    self.DragStart_MaxT = self.ActiveDisplay.maxT
+                    self.DragStart_MinT = self.ActiveDisplay.minT
+                    self.dragLastUpdate = time.time()
                 print(f"label_drag_handler {self.LabelStartPlot=}")
         else:
-            #update rectangle
-            self.LabelDragDisplay.RectOnSpec(self.LabelStartPlot, dpg.get_plot_mouse_pos())
+            if self.EditMode == "None":
+                # Drag scroll display
+                xChange = self.LabelStartPlot[0] - dpg.get_plot_mouse_pos()[0]
+                if time.time() - self.dragLastUpdate > 0.2: # reduce updates
+                    if self.DragStart_MinT + xChange < 0: self.ActiveDisplay.maxT = self.Range; self.ActiveDisplay.minT = 0                
+                    if self.DragStart_MaxT + xChange > self.ActiveDisplay.duration: self.ActiveDisplay.maxT = self.ActiveDisplay.duration; self.ActiveDisplay.minT = self.ActiveDisplay.maxT - self.Range
+                    else: self.ActiveDisplay.maxT = self.DragStart_MaxT + xChange; self.ActiveDisplay.minT = self.DragStart_MinT + xChange                    
+                    self.ActiveDisplay.DisplaySpectogram()
+                    print(f"label_drag_handler {self.ActiveDisplay.minT=}")
+                    dpg.set_value(self.ActiveDisplay.ScrollBar, self.ActiveDisplay.minT) 
+                    self.dragLastUpdate = time.time()
+            else:
+                # Update rectangle for editing
+                self.LabelDragDisplay.RectOnSpec(self.LabelStartPlot, dpg.get_plot_mouse_pos())
 
     def label_release_handler(self, sender, app_data, user_data):
+        if self.EditMode == "None": 
+            # finished drag scrolling
+            self.LabelStartPlot = None
+            return
         display = self.WhichDisplay()
         if self.LabelStartPlot is not None and display is not None:
             plotPos = dpg.get_plot_mouse_pos()

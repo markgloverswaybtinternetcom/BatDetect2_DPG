@@ -12,7 +12,9 @@ It incorporates many of the features recommended for professional bat ecologists
    -   run 'Install.bat' in windows or 'install.sh' on Linux
    -   Windows: right click 'run.bat', select 'Properties',  tick 'Unblock' box and press 'OK'
    -   Linux: chmod u+x run.sh
+ 
  ![](Resources/web_Images/Unblock.png)
+ 
 The UV package manager creates a virtual environment and installs Python, all latest modules used 
 and  a desktop short cut is created.
  
@@ -38,6 +40,8 @@ The wav file will be classified for bat echolocation call, this will be displaye
 
 All the wav files will be classified for bat echolocation calls, this may take some time and are retained in the 'ann' subdirectory. Wakepy should stop the PC sleeping while the files are classified
 The files will be listed in a table at the bottom of the GUI. It will scroll to the first consecutive calls.
+To scroll to the most probable of another species select 'Find Species' combobox.
+
 ![](Resources/web_Images/CornerDisplay.png)
 
  #### Display coordinates on any graph

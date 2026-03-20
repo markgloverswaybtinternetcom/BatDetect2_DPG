@@ -46,7 +46,7 @@ class Classify():
         for id, val in summaryDict.items():
             if self.latinToLangDict is None: species = id
             else: species = self.latinToLangDict[id]
-            summary += f"{species} {val[0]} calls {val[2]*100:.0f}%-{val[1]*100:.0f}%, "
+            summary += f"{species} {val[0]} calls {val[2]:.0%}-{val[1]:.0%}, "
         return summary
         
     def save_results_to_file(self, results, op_path: str) -> None:

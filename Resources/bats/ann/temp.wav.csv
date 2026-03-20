@@ -1,7 +1,0 @@
-id,det_prob,start_time,end_time,high_freq,low_freq,class,class_prob,event
-0,0.601,0.0475,0.0642,23126,18593,Nyctalus noctula,0.48,Echolocation
-1,0.719,0.1995,0.2172,28826,22031,Nyctalus noctula,0.595,Echolocation
-2,0.779,0.3365,0.3527,30415,22890,Nyctalus noctula,0.64,Echolocation
-3,0.776,0.5125,0.5296,26500,20312,Nyctalus noctula,0.687,Echolocation
-4,0.754,0.6225,0.6339,33050,23750,Nyctalus noctula,0.541,Echolocation
-5,0.6,0.7255,0.735,33652,23750,Nyctalus noctula,0.31,Echolocation

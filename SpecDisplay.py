@@ -418,7 +418,7 @@ class SpecDisplay():
             i = 0;
             for row in csvLines: 
                 if i>0: # first line column titles
-                    id = self.LatinIdx[row[6]]; prob = float(row[1]) * float(row[7]) * 100
+                    id = self.LatinIdx[row[6]]; prob = float(row[1]) * float(row[7])
                     if len(row) > 8: ct = self.CallTypes.index(row[8])
                     else: ct = 0
                     arr.append([id, float(row[2]), float(row[3]), float(row[5])/1000, float(row[4])/1000, prob, ct])
@@ -433,7 +433,7 @@ class SpecDisplay():
                 i += 1
         summary = ""
         for id, val in summaryDict.items():
-            summary += f"{self.SpeciesNames.loc[id][self.SpeciesLanguage]} {val[0]} calls {val[2]:.0f}%-{val[1]:.0f}%, "
+            summary += f"{self.SpeciesNames.loc[id][self.SpeciesLanguage]} {val[0]} calls {val[2]:.0%}%-{val[1]:.0%}, "
         print(f"ConvertCsvtoNP {callsCsvPath=} {summary=}")
         return numpy.array(arr, dtype='f'), summary
 
