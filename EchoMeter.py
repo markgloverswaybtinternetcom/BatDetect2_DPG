@@ -1,6 +1,5 @@
 import xml.etree.ElementTree as Xml
-import sys, os, folium, soundfile, pandas, shutil, traceback, colorama
-from Classifier import Classify
+import sys, os, folium, soundfile, pandas, shutil, traceback, colorama, Classifier
 
 class EchoMeter():
     def __init__(self, parentSelf):

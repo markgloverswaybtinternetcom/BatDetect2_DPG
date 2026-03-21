@@ -2,10 +2,12 @@ id,det_prob,start_time,end_time,high_freq,low_freq,class,class_prob,event
 0,0.834,0.0315,0.0367,72135,54687,Pipistrellus pygmaeus,0.831,Echolocation
 1,0.793,0.0955,0.1001,70676,53828,Pipistrellus pygmaeus,0.79,Echolocation
 2,0.732,0.1405,0.1443,68663,52968,Pipistrellus pygmaeus,0.727,Echolocation
-3,0.826,0.3975,0.4043,67459,53828,Pipistrellus pygmaeus,0.823,Echolocation
-4,0.824,0.4625,0.4687,73194,52968,Pipistrellus pygmaeus,0.819,Echolocation
-5,0.803,0.5285,0.5338,72084,54687,Pipistrellus pygmaeus,0.8,Echolocation
-6,0.821,0.5965,0.6015,69471,53828,Pipistrellus pygmaeus,0.818,Echolocation
-7,0.828,0.6665,0.6714,73240,53828,Pipistrellus pygmaeus,0.826,Echolocation
-8,0.823,0.7335,0.7382,75084,54687,Pipistrellus pygmaeus,0.821,Echolocation
-9,0.778,0.7945,0.7988,67819,54687,Pipistrellus pygmaeus,0.765,Echolocation
+3,0.8,0.1583,0.2544,62413,46810,Pipistrellus pygmaeus,0.8,Feeding Buzz
+4,0.8,0.2707,0.3059,44209,28953,Pipistrellus pygmaeus,0.8,Feeding Buzz
+5,0.826,0.3975,0.4043,67459,53828,Pipistrellus pygmaeus,0.823,Echolocation
+6,0.824,0.4625,0.4687,73194,52968,Pipistrellus pygmaeus,0.819,Echolocation
+7,0.803,0.5285,0.5338,72084,54687,Pipistrellus pygmaeus,0.8,Echolocation
+8,0.821,0.5965,0.6015,69471,53828,Pipistrellus pygmaeus,0.818,Echolocation
+9,0.828,0.6665,0.6714,73240,53828,Pipistrellus pygmaeus,0.826,Echolocation
+10,0.823,0.7335,0.7382,75084,54687,Pipistrellus pygmaeus,0.821,Echolocation
+11,0.778,0.7945,0.7988,67819,54687,Pipistrellus pygmaeus,0.765,Echolocation

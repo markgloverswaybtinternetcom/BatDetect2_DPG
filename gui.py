@@ -4,14 +4,14 @@ if sys.platform.startswith("win"):
     import DearPyGui_DragAndDrop as DragAndDrop
     os.add_dll_directory(os.path.join(os.path.dirname(__file__), "ffmpeg")) # allows for remote batch files
 import numpy, soundfile, sounddevice, time, warnings, json, scipy, wakepy, json, colorama
-import pandas, re, multiprocessing, ctypes, math, torchaudio, torch, torchaudio_filters, traceback, webbrowser, chime
+import pandas, re, multiprocessing, ctypes, math, torchaudio, torch, torchaudio_filters, traceback, webbrowser, chime, Classifier
 import scipy.signal, scipy.io.wavfile # filter for ref calls
-from Classifier import Classify
-from EchoMeter import EchoMeter
 from torchcodec.decoders import AudioDecoder
 from screeninfo import get_monitors
 from SpecDisplay import SpecDisplay
 from FileDialog import FileDialog
+from Classifier import Classifier
+from EchoMeter import EchoMeter
 
 PSD_WIDTH = 80;  SLIDER_W = 17; AMP_HT=80; SCROLL_HT=19; BUTTON_HT=19; STATUS_HT=24; SPACING=7; HEADER=30; COLOR_SCALE_W=55
 CONFIG_FILE = "gui_Config.json"; EXAMPLE_FILE = os.path.join("Resources", "bats", "NoctuleFeedingBuzz.wav")
@@ -22,7 +22,7 @@ class MainWindow():
     def __init__(self):
         self.SpeciesNames = pandas.read_csv(os.path.join("Resources", "SpeciesNames.csv"))
         self.lastMousePos = self.ZoomStart = self.LabelStartPlot = self.StatusLabel = self.AssignSpeciesID = self.AssignCallTypeID = None
-        self.lastRow = self.FileTableRow = self.FilesDF = self.SoundProcess = self.soundLine = self.lastMousePlotPos = None
+        self.lastRow = self.FileTableRow = self.FilesDF = self.SoundProcess = self.soundLine = self.lastMousePlotPos = self.calls = None
         self.MultiFile = config["MultiFile"]
         print(f"MainWindow ___init__ {torch.cuda.is_available()=}")       
 
@@ -30,7 +30,7 @@ class MainWindow():
             self.mainWindow = dpg.last_item()
             self.EditMode = config["EditMode"]; 
             self.SpeciesLanguage = config["SpeciesLanguage"] 
-            self.CallTypes = ("Echolocation", "Social", "Feeding")
+            self.CallTypes = ("Echolocation", "Social", "Feeding Buzz")
             self.Range = float(config["Range"]);
             self.SpecDisplay2 = SpecDisplay(self.mainWindow, config, parentSelf=self, activeButtonCallback=self.activeButton2, showDisplay=False, showAmp=False)
             self.ActiveDisplay = self.SpecDisplay1 = SpecDisplay(self.mainWindow, config, parentSelf=self, activeButtonCallback=self.activeButton1)
@@ -135,7 +135,7 @@ class MainWindow():
             dpg.add_key_press_handler(key=dpg.mvKey_Left, callback=self.LeftKey_pressed)
             dpg.add_key_press_handler(key=dpg.mvKey_Right, callback=self.RightKey_pressed)          
 
-        self.classify = Classify()
+        self.classify = Classifier()
         if sys.platform.startswith("win"): DragAndDrop.set_drop(self.FileDrop)
         self.SpecDisplay1.dir = config['dir']; self.SpecDisplay1.file = config['file']
         if len(config['echoMeterDir']) > 0:
@@ -419,30 +419,16 @@ class MainWindow():
                     return
                 self.Status("")
                 print(f"label_release_handler on plot {self.LabelStartPlot=} {plotPos=}")
-                labelMinT = min(self.LabelStartPlot[0], plotPos[0])
-                labelMinF = min(self.LabelStartPlot[1], plotPos[1]) * 1000 # Hz
-                labelMaxT = max(self.LabelStartPlot[0], plotPos[0])
-                labelMaxF = max(self.LabelStartPlot[1], plotPos[1]) * 1000 # Hz
+                labelMinT = min(self.LabelStartPlot[0], plotPos[0])#sec
+                labelMinF = min(self.LabelStartPlot[1], plotPos[1])#kHz
+                labelMaxT = max(self.LabelStartPlot[0], plotPos[0])#sec
+                labelMaxF = max(self.LabelStartPlot[1], plotPos[1])#kHz
                 
                 if self.EditMode == "Source":
                     print("label_release_handler Source")
+                    display.calls.Insert(self.AssignSpeciesID, self.AssignCallTypeID, labelMinT, labelMaxT, labelMinF, labelMaxF)
                     callsCsvPath = os.path.join(self.SpecDisplay1.dir, "ann", f"{self.SpecDisplay1.file}.csv")
-                    CallsDF = pandas.read_csv(callsCsvPath)
-                    # delete any calls in this rectangle
-                    delCallsDF = CallsDF.copy()[(CallsDF['start_time'] > labelMaxT) | (CallsDF['end_time'] < labelMinT) | (CallsDF['low_freq'] > labelMaxF) | (CallsDF['high_freq'] < labelMinF)]
-                    callsDeleted = CallsDF.shape[0] - delCallsDF.shape[0]
-                    print(f"label_release_handler {callsDeleted=}")                        
-                    # insert new call
-                    nRow = delCallsDF[delCallsDF['start_time'] > labelMinT].index[0] -1
-                    print(f"label_release_handler {nRow=}")                        
-                    if 'event' not in delCallsDF.columns :
-                        delCallsDF['event'] = 'EchoLocation'
-                    new_call = pandas.DataFrame({'det_prob': 0.5,'start_time': float(f"{labelMinT:.4f}"),'end_time':float(f"{labelMaxT:.4f}"),'high_freq':float(f"{labelMaxF:.0f}"),
-                        'low_freq':float(f"{labelMinF:.0f}"),'class': self.SpeciesNames["Latin"].iloc[self.AssignSpeciesID], 'class_prob':0.5, 
-                        'event': self.CallTypes[self.AssignCallTypeID]}, index=[nRow+1])
-                    delCallsDF = pandas.concat([delCallsDF.iloc[:nRow], new_call, delCallsDF.iloc[nRow:]]).reset_index(drop=True)        
-                    delCallsDF.to_csv(callsCsvPath, sep=",", index=False)
-                    display.ConvertDFtoNP(delCallsDF)
+                    display.calls.toCSV(callsCsvPath)
                     display.DisplaySpectogram(UpdateMin= False, sound = False)
 
                 elif self.EditMode == "Train" and display == self.SpecDisplay1:
@@ -453,7 +439,7 @@ class MainWindow():
                     else:
                         self.SpecDisplay1.CallsNP = numpy.append(self.SpecDisplay1.CallsNP, numpy.array([[id, labelMinT, labelMaxT, labelMinF/1000, labelMaxF/1000, 1.0, ct]]), axis = 0)  
                     callsJsonPath = os.path.join(self.SpecDisplay1.dir, "ann", f"{self.SpecDisplay1.file}.json")
-                    self.SpecDisplay1.ConvertNPtoJSON(callsJsonPath)
+                    self.SpecDisplay1.calls.toJSON(callsJsonPath)
                     display.DisplaySpectogram(UpdateMin= False, sound = False)
                         
                 elif self.EditMode == "Species Ref" and display == self.SpecDisplay1:
@@ -621,8 +607,7 @@ class MainWindow():
         print(f"AssignCallTypeCombo {callType=} {self.AssignCallTypeID=}")        
                 
     def LoadClassifiedFile(self, f, display):
-        print(f"LoadClassifiedFile {f=}")
-        display.CallsNP = None
+        print(f"LoadClassifiedFile {f=}") 
         dir = os.path.dirname(f); file = os.path.basename(f)
         callsCsvPath = os.path.join(dir,"ann", file+".csv")
         if not os.path.isfile(callsCsvPath):
@@ -667,10 +652,9 @@ class MainWindow():
                 showAssign = True
                 if self.EditMode == "Train": 
                     self.SpecDisplay1.classifyEnabled = False
-                    self.SpecDisplay1.CallsNP = None
                     callsJsonPath = os.path.join(self.SpecDisplay1.dir, "ann", f"{self.SpecDisplay1.file}.json")
                     if os.path.isfile(callsJsonPath):
-                        self.SpecDisplay1.ConvertJSONtoNP(callsJsonPath)
+                        self.SpecDisplay1.calls.fromJSON(callsJsonPath)
                     self.SpecDisplay1.DisplaySpectogram(UpdateMin= False, sound = False)
         dpg.configure_item(self.AssignSpeciesCombo, show=showAssign)
         dpg.configure_item(self.AssignCallTypeCombo, show=showAssign)
@@ -852,8 +836,8 @@ if __name__ == '__main__':
     dpg.set_primary_window(TITLE.replace(" ", ""), True)
     
     while dpg.is_dearpygui_running():
-        main.SpecDisplay1.UpdateSoundLine()
-        main.SpecDisplay2.UpdateSoundLine()
+        main.SpecDisplay1.UpdateSoundLine(main.SpecDisplay1.specPlot)
+        main.SpecDisplay2.UpdateSoundLine(main.SpecDisplay2.specPlot)
         dpg.render_dearpygui_frame()
 
     with open(CONFIG_FILE, "w") as configfile:

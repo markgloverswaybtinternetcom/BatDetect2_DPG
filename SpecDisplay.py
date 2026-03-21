@@ -1,12 +1,14 @@
 import dearpygui.dearpygui as dpg
-import sys, os, subprocess, utils
+import sys, os, subprocess
 if sys.platform.startswith("win"): 
     import DearPyGui_DragAndDrop as DragAndDrop
     os.add_dll_directory(os.path.dirname(__file__) + "/ffmpeg") # allows for remote batch files
-import numpy, soundfile, sounddevice, time, warnings, json, scipy, traceback, colorama
-import pandas, re, multiprocessing, ctypes, math, torchaudio, torch, torchaudio_filters, csv
+import numpy, soundfile, sounddevice, time, warnings, scipy, traceback, colorama
+import pandas, re, multiprocessing, ctypes, math, torchaudio, torch, torchaudio_filters
 import scipy.signal, scipy.io.wavfile # filter for ref calls
-from Classifier import Classify
+import utils
+from Classifier import Classifier
+from BatCalls import BatCalls
 from EchoMeter import EchoMeter
 from torchcodec.decoders import AudioDecoder
 numpy.set_printoptions(precision=3, suppress=True)
@@ -24,12 +26,10 @@ class SpecDisplay():
     def __init__(self, parent, config, parentSelf, activeButtonCallback, showDisplay=True, showAmp=True):
         self.SpeciesNames = parentSelf.SpeciesNames
         self.SpeciesLanguage = parentSelf.SpeciesLanguage
-        self.CallTypes = parentSelf.CallTypes
-        self.LatinIdx = dict(zip(self.SpeciesNames["Latin"], self.SpeciesNames.index)) 
         self.Status = parentSelf.Status
         self.classifyEnabled = True
         sys.excepthook = self.notify_exception
-        self.FileTableRow = self.CallsNP = self.lastMousePlotPos = self.lastMousePos = self.soundLine = self.duration = self.dirIndex = self.FilesDF = self.PlayObject = None 
+        self.FileTableRow = self.lastMousePlotPos = self.lastMousePos = self.soundLine = self.duration = self.dirIndex = self.FilesDF = self.PlayObject = None 
         self.activeButtonCallback = activeButtonCallback        
         self.minF = MIN_FREQ_KHZ; self.maxF = MAX_FREQ_KHZ
         self.colours = self.GenerateSpectrum()
@@ -43,6 +43,7 @@ class SpecDisplay():
         self.HighPassFreq = self.SpecBlankKfreq*1000
         self.soundProgressBar = self.heatSeries = self.ampSeries = self.psdSeries = self.ZoomStart = self.LabelStartPlot = None
         self.maxPercent = 100; self.minPercent = 0
+        self.calls = BatCalls(parentSelf)
         
         specHeight = config["height"] * 0.8 - (AMP_HT + SCROLL_HT + 2*BUTTON_HT + STATUS_HT / 2+ HEADER ) * config["scale"] - SPACING *7
         with dpg.group(horizontal=True, show=showDisplay, height=specHeight):
@@ -78,8 +79,6 @@ class SpecDisplay():
                     PlaySoundbutton = dpg.add_button(label="Play Sound", callback=self.PlaySound)
                     self.PlaySpeedCombo = dpg.add_combo(label="Speed", items=("1", "1/2", "1/5", "1/10", "1/20"), width=66*config["scale"], default_value=f"1/10")
                     saveSoundbutton = dpg.add_button(label="Save Sound",  callback=self.saveSound_click)
-                    self.Annotate = True
-                    self.AnnotateCheckbox = dpg.add_checkbox(label="Annotate", default_value=self.Annotate, callback=self.Annotate_changed)
                     self.showSpeciesCombo = dpg.add_combo(label="Find Species", show=False, width=180 * config["scale"], callback=self.ShowSpeciesCombo_changed)
                     self.ClassifyLabel = dpg.add_text(color= (0, 200, 0, 255))                
         with dpg.theme() as lBlueButton_theme:
@@ -112,7 +111,7 @@ class SpecDisplay():
         dpg.bind_item_theme(self.showSpeciesCombo, orangeText_theme) 
         dpg.bind_item_theme(self.MinSlider, minSlider_theme)
         dpg.bind_item_theme(self.MaxSlider, maxSlider_theme)
-        self.classify = Classify()
+        self.classify = Classifier()
 
     def LoadClassifiedFile(self, filepath, rememberDir=True):
         titleExtra = ""
@@ -125,23 +124,14 @@ class SpecDisplay():
         if self.classifyEnabled:            
             callsCsvPath = os.path.join(dir,"ann", file+".csv")
             if os.path.isfile(callsCsvPath):
-                self.CallsNP, summary = self.ConvertCsvtoNP(callsCsvPath)
-                self.SetClassifyLabel(summary)
-                speciesComboList = []
-                if self.CallsNP.shape[0] > 0: 
-                    idList = numpy.unique(self.CallsNP[:, 0])
-                    if self.SpeciesLanguage != "None":
-                        for id in idList:                 
-                            sl = self.SpeciesLanguage;
-                            if sl == "EnglishAbbrev": sl = "English" # otherwise not unique                    
-                            speciesComboList.append(self.SpeciesNames.loc[id][sl])
-                    if len(speciesComboList) > 1:
-                        dpg.configure_item(self.showSpeciesCombo,  items=speciesComboList)
-                        dpg.configure_item(self.showSpeciesCombo, show=True)
-                    else:
-                        dpg.configure_item(self.showSpeciesCombo, show=False)            
+                summary = self.calls.fromCSV(callsCsvPath)
+                self.SetClassifyLabel(summary)                
+                speciesComboList = self.calls.GetSpeciesList()
+                if len(speciesComboList) > 1:
+                    dpg.configure_item(self.showSpeciesCombo,  items=speciesComboList)
+                    dpg.configure_item(self.showSpeciesCombo, show=True)
                 else:
-                    dpg.configure_item(self.showSpeciesCombo, show=False)
+                    dpg.configure_item(self.showSpeciesCombo, show=False)            
             else:
                 dpg.set_value(self.ClassifyLabel, "No bat calls found")
                 dpg.configure_item(self.ClassifyLabel, color=(200, 0, 0, 255))
@@ -210,12 +200,9 @@ class SpecDisplay():
     def ShowSpeciesCombo_changed(self, sender, app_data, user_data):
         sl = self.SpeciesLanguage
         if sl == "EnglishAbbrev": sl = "English"
-        s = self.SpeciesNames.index[self.SpeciesNames[sl]==app_data].tolist()
+        id = self.SpeciesNames.index[self.SpeciesNames[sl]==app_data].tolist()
         print(f"ShowSpeciesCombo_changed {app_data=} {s=}")
-        condition = (self.CallsNP[:,0] == s)
-        selected_rows = self.CallsNP[condition]
-        c = numpy.argmax(selected_rows[:, 6]) #max probaliity
-        t1=selected_rows[c, 1]
+        t1 = self.calls.FindSpeciesMaxProb(id)
         if t1 > self.Range / 2: 
             if t1 + self.Range / 2 < self.duration: 
                 self.minT =  t1 - self.Range / 2; self.maxT =  t1 + self.Range / 2
@@ -225,14 +212,6 @@ class SpecDisplay():
             self.minT = 0; self.maxT = t1 + self.Range
         self.DisplaySpectogram()
         dpg.set_value(self.ScrollBar, self.minT) 
-   
-    def Annotate_changed(self, sender, app_data, user_data):
-        print(f"Annotate_changed {app_data=}")
-        self.Annotate = app_data
-        dpg.delete_item(self.specPlot, children_only=True, slot=0) # remove annotations
-        self.CallsNP = None
-        #self.DisplaySpectogram(UpdateMin= False, sound = False)
-        self.classifyEnabled = False
 
     def LoadFile(self, filepath, titleExtra=""):
         self.Status("")
@@ -264,20 +243,13 @@ class SpecDisplay():
         dpg.bind_item_theme(self.ScrollBar, slider_theme)
         self.dir = os.path.dirname(filepath)
         self.file = os.path.basename(filepath)
-        self.minT = 0
-        if self.CallsNP is not None: 
-            n = 0
-            while n +1 < len(self.CallsNP) and self.CallsNP[n+1, 0] != self.CallsNP[n, 0] and (self.CallsNP[n+1, 1] - self.CallsNP[n, 1]) > 0.3: 
-                n += 1 #more calls and not same species and too far apart
-            if self.CallsNP.shape[0] > 0: 
-                firstConsecutiveCallx = self.CallsNP[n, 1]
-                if firstConsecutiveCallx > 0.01: self.minT =  firstConsecutiveCallx - 0.01
-            dpg.set_value(self.ScrollBar, self.minT) 
-            if self.minT + self.Range > self.duration: 
-                self.maxT = self.duration
-                if self.minT > self.Range: self.minT = self.duration - self.Range
-                else: self.minT  = 0
-            else: self.maxT = self.minT + self.Range
+        self.minT = self.calls.FindFirstConsecutive()
+        dpg.set_value(self.ScrollBar, self.minT) 
+        if self.minT + self.Range > self.duration: 
+            self.maxT = self.duration
+            if self.minT > self.Range: self.minT = self.duration - self.Range
+            else: self.minT  = 0
+        else: self.maxT = self.minT + self.Range
         dpg.set_value(self.ScrollBar, self.minT)
         self.DisplaySpectogram()
         if self.sample_rate < 45000:
@@ -394,7 +366,9 @@ class SpecDisplay():
         dpg.set_item_label(self.psdXaxis, f"Peak {peak:.1f} kHz")
         
         dpg.bind_item_theme(self.psdSeries, self.line_theme)
-        if self.Annotate: self.DisplayAnnotations(self.specPlot)
+        self.species, exception = self.calls.DisplayAnnotations(self.specPlot, self.minT, self.maxT)
+        if len(exception) > 0: self.Status(exception, error=True)
+
         if sound: self.PlaySound(cursor=None)
     
     def Range_changed(self, range):
@@ -411,88 +385,8 @@ class SpecDisplay():
             dpg.bind_item_theme(self.ScrollBar, slider_theme)        
             self.DisplaySpectogram(UpdateMin= False, sound = False)    
 
-    def ConvertCsvtoNP(self, callsCsvPath):
-        with open(callsCsvPath, mode ='r')as file:
-            csvLines = csv.reader(file)
-            summaryDict = {}; arr = []
-            i = 0;
-            for row in csvLines: 
-                if i>0: # first line column titles
-                    id = self.LatinIdx[row[6]]; prob = float(row[1]) * float(row[7])
-                    if len(row) > 8: ct = self.CallTypes.index(row[8])
-                    else: ct = 0
-                    arr.append([id, float(row[2]), float(row[3]), float(row[5])/1000, float(row[4])/1000, prob, ct])
-                    # no call type / event in standard CSV
-                    if id in summaryDict:
-                        min = summaryDict[id][1]; max = summaryDict[id][2];
-                        if prob < min: min = prob
-                        if prob > max: max = prob
-                        summaryDict[id] = [summaryDict[id][0]+1, min, max]
-                    else:
-                        summaryDict[id] = [1, prob, prob] 
-                i += 1
-        summary = ""
-        for id, val in summaryDict.items():
-            summary += f"{self.SpeciesNames.loc[id][self.SpeciesLanguage]} {val[0]} calls {val[2]:.0%}%-{val[1]:.0%}, "
-        print(f"ConvertCsvtoNP {callsCsvPath=} {summary=}")
-        return numpy.array(arr, dtype='f'), summary
-
-    def DisplayAnnotations(self, plot):
-        dpg.delete_item(plot, children_only=True, slot=0) # remove annotations
-        if self.CallsNP is not None and self.CallsNP.shape[0] > 0 and self.Annotate:
-            i = 0; abbrev= ""
-            calls = self.CallsNP[numpy.where((self.CallsNP[:,1] > self.minT) & (self.CallsNP[:,2] < self.maxT) )]
-            if len(calls) < 35:
-                #print(f"DisplayAnnotations {self.minT=} {self.maxT=} {calls=} {self.CallsNP[:,1]=}")
-                for call in calls:
-                    id=int(call[0]); t1=call[1]; t2=call[2]; f1=call[3]; f2=call[4]; prob = call[5]; ct = int(call[6])
-                    #print(f"DisplayAnnotations {id=} {t1=} {t2=} {f1=} {f2=} {prob=} {ct=}")
-                    if t2 - t1 < 0.01: t = t2 # end of FM calls
-                    else: t = (t1 + t2) / 2 # mid way long or constant frequency calls 
-                        
-                    if self.SpeciesLanguage != "None":
-                        abbrev =  self.SpeciesNames.loc[id][self.SpeciesLanguage].replace(" ","\n")
-                        if ct > 0: l = abbrev + '\n' + self.CallTypes[ct]
-                        else: l = abbrev
-
-                        if t1 > self.minT:
-                            if t2 > self.maxT: break
-                            if i % 2 == 0: #same frequency = alternate rows of labels
-                                ann = dpg.add_plot_annotation(parent=plot, label=l, default_value=(t, f1), offset=(0, 30), color=[150, 150, 150, 128])
-                            else:
-                                ann = dpg.add_plot_annotation(parent=plot, label=l, default_value=(t, f1), offset=(0, 45), color=[150, 150, 150, 128])
-                            i = i +1
-                print(f"DisplayAnnotations added {i} plot_annotations")
-                self.species = abbrev
-                self.Status("")
-            else:
-                self.Status(f"{len(calls)} calls - Too many to label", error=True)
-
-    def ConvertJSONtoNP(self, filepath):
-        print(f"ConvertJSONtoNP {filepath=}")
-        with open(filepath, 'r') as file:
-            jsonData = json.load(file)
-            self.CallsNP = None
-            for call in jsonData['annotation']:
-                id = self.LatinIdx[call["class"]]; ct = self.CallTypes.index(call["event"]); t1 = float(call["start_time"]); t2 = float(call["end_time"]); 
-                f1 = float(call["low_freq"])/1000; f2 = float(call["high_freq"])/1000; prob = float(call["det_prob"]) * float(call["class_prob"]) * 100
-                if self.CallsNP is None: 
-                    self.CallsNP = numpy.array([[ id, t1, t2, f1, f2, prob, ct]], dtype=numpy.float32) 
-                else:
-                    self.CallsNP = numpy.append(self.CallsNP, numpy.array([[ id, t1, t2, f1, f2, prob, ct]], dtype=numpy.float32), axis=0)
-            #print(f"ConvertJSONtoNP {self.CallsNP}")
-                
-    def ConvertNPtoJSON(self, callsJsonPath):
-        print(f"ConvertNPtoJSON {callsJsonPath=}")
-        annotationValues = []
-        for call in self.CallsNP:
-            id=int(call[0]); t1=call[1]; t2=call[2]; f1=call[3]*1000; f2=call[4]*1000; prob = call[5] / 100.0; ct = int(call[6])
-            c = self.SpeciesNames["Latin"][id]; callType = self.CallTypes[ct]
-            annotationValues.append({'class': c, 'class_prob': prob, 'det_prob': prob, 'end_time': t2, 'event': callType, 'high_freq': f2, 'individual': '-1','low_freq': f1, 'start_time': t1})
-        thisdict = {"annotated": False, "annotation": annotationValues, "class_name": c, "duration": self.duration, "id": self.file, "issued": False, "notes": "Automatically generated.", "time_exp": 1}
-        with open(callsJsonPath, "w", encoding="utf-8") as jsonfile:
-            json.dump(thisdict, jsonfile, indent=2, sort_keys=True)
-
+    ############################################################
+    
     def PlaySound(self, cursor=True):
         devices = sounddevice.query_devices()
         if len(devices) == 0:
@@ -578,7 +472,7 @@ class SpecDisplay():
         self.soundLine = dpg.add_plot_annotation(parent=self.specPlot, label="^", default_value=(self.SoundTime, self.yLim[1]), offset=(0, rect[1]),color=[255, 255, 255, 255])
         self.SoundStartTime = float(time.perf_counter()) + 0.2 # fudge factor
         
-    def UpdateSoundLine(self):
+    def UpdateSoundLine(self, plot):
         if self.soundLine is not None:
             try:
                 dpg.delete_item(self.soundLine) 
@@ -589,9 +483,9 @@ class SpecDisplay():
                 self.soundLine = None
                 print(f"UpdateSoundLine {time.perf_counter() - self.SoundStartTime}")
             else:
-                rect = dpg.get_item_rect_size(self.specPlot)
-                self.soundLine = dpg.add_plot_annotation(parent=self.specPlot, label="^", default_value=(self.SoundTime, self.yLim[1]), offset=(0, rect[1]), color=[255, 255, 255, 255])
-        
+                rect = dpg.get_item_rect_size(plot)
+                self.soundLine = dpg.add_plot_annotation(parent=plot, label="^", default_value=(self.SoundTime, self.yLim[1]), offset=(0, rect[1]), color=[255, 255, 255, 255])
+    
     def SetClassifyLabel(self, result):
         if len(result) > 0:
             dpg.set_value(self.ClassifyLabel, result)

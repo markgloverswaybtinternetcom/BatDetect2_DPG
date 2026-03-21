@@ -1,10 +1,13 @@
 id,det_prob,start_time,end_time,high_freq,low_freq,class,class_prob,event
 0,0.707,0.1105,0.1173,54077,43515,Pipistrellus pipistrellus,0.562,Echolocation
 1,0.777,0.2325,0.2389,57011,43515,Pipistrellus pipistrellus,0.663,Echolocation
-2,0.78,0.3375,0.3444,58023,42656,Pipistrellus pipistrellus,0.577,Echolocation
-3,0.723,0.4415,0.449,50678,42656,Pipistrellus pipistrellus,0.628,Echolocation
-4,0.759,0.5455,0.5524,57065,42656,Pipistrellus pipistrellus,0.636,Echolocation
-5,0.795,0.6435,0.6506,56680,42656,Pipistrellus pipistrellus,0.637,Echolocation
-6,0.721,0.7445,0.7521,55805,42656,Pipistrellus pipistrellus,0.501,Echolocation
-7,0.756,0.8835,0.8905,57144,42656,Pipistrellus pipistrellus,0.438,Echolocation
-8,0.662,0.9755,0.9815,52145,43515,Pipistrellus pipistrellus,0.556,Echolocation
+2,0.800,0.2651,0.2839,31207,17510,Pipistrellus pipistrellus,0.800,Social
+3,0.780,0.3375,0.3444,58023,42656,Pipistrellus pipistrellus,0.577,Echolocation
+4,0.800,0.4089,0.4296,34154,19417,Pipistrellus pipistrellus,0.800,Social
+5,0.723,0.4415,0.4490,50678,42656,Pipistrellus pipistrellus,0.628,Echolocation
+6,0.759,0.5455,0.5524,57065,42656,Pipistrellus pipistrellus,0.636,Echolocation
+7,0.800,0.7002,0.7214,37088,18887,Pipistrellus pipistrellus,0.800,Social
+8,0.795,0.6435,0.6506,56680,42656,Pipistrellus pipistrellus,0.637,Echolocation
+9,0.721,0.7445,0.7521,55805,42656,Pipistrellus pipistrellus,0.501,Echolocation
+10,0.756,0.8835,0.8905,57144,42656,Pipistrellus pipistrellus,0.438,Echolocation
+11,0.662,0.9755,0.9815,52145,43515,Pipistrellus pipistrellus,0.556,Echolocation

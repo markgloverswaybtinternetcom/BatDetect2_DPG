@@ -12,7 +12,7 @@ from torchcodec.decoders import AudioDecoder
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 MIN_PROB = 0.2
 
-class Classify():
+class Classifier():
     def __init__(self): 
         detection_threshold = 0.5; time_expansion_factor = 1; chunk_size = 2.0 # defaults if no config file
         args = {'cnn_features': False, 'spec_features': False, 'quiet': False, 'save_preds_if_empty': False, 'model_path': DEFAULT_MODEL_PATH}

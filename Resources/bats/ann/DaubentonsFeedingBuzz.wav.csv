@@ -1,12 +1,12 @@
 id,det_prob,start_time,end_time,high_freq,low_freq,class,class_prob,event
-0,0.63,0.0015,0.0086,70923,23750,Myotis daubentonii,0.521,Echolocation
-1,0.602,0.0445,0.05,73841,24609,Myotis daubentonii,0.574,Echolocation
+0,0.630,0.0015,0.0086,70923,23750,Myotis daubentonii,0.521,Echolocation
+1,0.602,0.0445,0.0500,73841,24609,Myotis daubentonii,0.574,Echolocation
 2,0.674,0.0845,0.0905,77582,27187,Myotis daubentonii,0.654,Echolocation
 3,0.698,0.1365,0.1432,76526,28906,Myotis daubentonii,0.677,Echolocation
 4,0.667,0.1875,0.1945,75282,25468,Myotis daubentonii,0.645,Echolocation
 5,0.565,0.2375,0.2438,74248,19453,Myotis daubentonii,0.515,Echolocation
 6,0.517,0.2985,0.3048,74720,20312,Myotis daubentonii,0.478,Echolocation
-7,0.565,0.3615,0.3677,73059,21171,Myotis daubentonii,0.52,Echolocation
+7,0.565,0.3615,0.3677,73059,21171,Myotis daubentonii,0.520,Echolocation
 8,0.645,0.4135,0.4195,74504,22890,Myotis daubentonii,0.613,Echolocation
 9,0.561,0.4675,0.4733,73963,22031,Myotis daubentonii,0.532,Echolocation
 10,0.669,0.5185,0.5254,75036,22890,Myotis daubentonii,0.639,Echolocation
@@ -17,3 +17,4 @@ id,det_prob,start_time,end_time,high_freq,low_freq,class,class_prob,event
 15,0.668,0.7085,0.7138,69268,25468,Myotis daubentonii,0.621,Echolocation
 16,0.594,0.7725,0.7779,63980,25468,Myotis daubentonii,0.558,Echolocation
 17,0.562,0.7885,0.7939,63408,26328,Myotis daubentonii,0.524,Echolocation
+18,0.800,0.8090,0.9686,51144,21845,Myotis daubentonii,0.800,Feeding Buzz
