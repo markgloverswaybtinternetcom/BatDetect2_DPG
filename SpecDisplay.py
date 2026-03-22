@@ -39,8 +39,10 @@ class SpecDisplay():
         self.minT = config["minT"]; self.maxT = config["maxT"]; self.dir = config["dir"]; self.file = config["file"]        
         self.EditMode = config["EditMode"]
         self.timeStep = self.Range = float(config["Range"])
-        self.SpecBlankKfreq = float(config["SpecBlankKfreq"]) 
-        self.HighPassFreq = self.SpecBlankKfreq*1000
+        self.minF = float(config["minF"]) 
+        self.maxF = float(config["maxF"]) 
+        self.HighPassFreq = self.minF * 1000                     
+        self.LowPassFreq = self.maxF * 1000 
         self.soundProgressBar = self.heatSeries = self.ampSeries = self.psdSeries = self.ZoomStart = self.LabelStartPlot = None
         self.maxPercent = 100; self.minPercent = 0
         self.calls = BatCalls(parentSelf)
@@ -256,7 +258,7 @@ class SpecDisplay():
             self.Status(f"Sample rate = {self.sample_rate / 1000:.1f}kHz FILE NOT ULTRASONIC")
         
     def LoadFileSegment(self):
-        print(f"LoadFileSegment {self.minT=} {self.maxT=} {self.SpecBlankKfreq=} {self.HighPassFreq=}")
+        print(f"LoadFileSegment {self.minT=} {self.maxT=} {self.minF=} {self.maxF=} {self.HighPassFreq=}")
         if self.timeExpand: waveformTensor = self.decoder.get_samples_played_in_range(start_seconds=self.minT*10, stop_seconds=self.maxT*10)
         else: waveformTensor = self.decoder.get_samples_played_in_range(start_seconds=self.minT, stop_seconds=self.maxT)
         waveformTensor = waveformTensor.data
@@ -264,7 +266,7 @@ class SpecDisplay():
         elif self.sample_rate > STD_SAMPLING: 
             nfft = int(NFFT * self.sample_rate / STD_SAMPLING) # allow for extra frequencies
             print(f"LoadFileSegment {self.sample_rate=} > {STD_SAMPLING} reducing {NFFT=} to {nfft=}")        
-        specTransform = torchaudio.transforms.Spectrogram(n_fft=nfft, hop_length=int(nfft*RELATIVE_HOP_LENGTH), power=1, window_fn=torch.blackman_window, normalized=True)#power: 1=magnitude, 2=power
+        specTransform = torchaudio.transforms.Spectrogram(n_fft=nfft, hop_length=int(nfft*RELATIVE_HOP_LENGTH), power=1, window_fn=torch.blackman_window)#power: 1=magnitude, 2=power
         spectrogram = specTransform(waveformTensor) # [Channels, Frequency Bins ,Time Steps]
         #print(f"LoadFileSegment specTransform {waveformTensor.shape=} = {spectrogram.shape=}")    
         if self.sample_rate > STD_SAMPLING: 
@@ -288,12 +290,25 @@ class SpecDisplay():
         #print(f"LoadFileSegment {waveformTensor.nbytes=}, {spectrogram.nbytes=}, channels={spectrogram.shape[0]}, {self.freqBins=}, {self.timeSteps=}")
         if self.HighPassFreq > 0:
             if self.sample_rate > self.HighPassFreq * 2:
-                blankBins = int(self.freqBins / self.maxF *  self.SpecBlankKfreq)
-                spectrogram[0, 0 : blankBins, :] = 0  
-                filter = torchaudio_filters.HighPass(self.HighPassFreq, self.sample_rate) 
-                waveformTensor = filter(waveformTensor)
+                highPassFilter = torchaudio_filters.HighPass(self.HighPassFreq, self.sample_rate) 
+                waveformTensor = highPassFilter(waveformTensor)
             else:
                 self.Status(f"{self.sample_rate=} TOO LOW FOR {self.HighPassFreq=}", error=True)
+        
+        if self.LowPassFreq < MAX_FREQ_KHZ:
+            lowPassFilter = torchaudio_filters.Lowass(self.LowPassFreq, self.sample_rate) 
+            waveformTensor = lowPassFilter(waveformTensor)
+
+        if self.maxF < MAX_FREQ_KHZ:
+            removeHighBins = int(self.freqBins / MAX_FREQ_KHZ * (MAX_FREQ_KHZ - self.maxF))
+            spectrogram = spectrogram[:, :-removeHighBins, :]
+            self.freqBins = spectrogram.shape[1]
+
+        if self.minF > 0.0:
+            removeLowBins = int(self.freqBins / self.maxF * self.minF)
+            spectrogram = spectrogram[:, removeLowBins:, :]
+            self.freqBins = spectrogram.shape[1]
+        
         if spectrogram.shape[0] > 1:
             spectrogram = torch.mean(spectrogram, dim=0).unsqueeze(0) # stereo to mono
             print(f"LoadFileSegment {spectrogram.shape[0]} channels to mono")
@@ -336,7 +351,7 @@ class SpecDisplay():
         self.maxA = self.minA + pRange * self.maxPercent
         #print(f"DisplaySpectogram {self.minA=}, {self.maxA=}")
         values = numpy.flipud(self.npSpec).flatten().tolist()
-        self.specRows = self.npSpec.shape[0]; self.specCols = self.npSpec.shape[1]
+        self.specRows = self.npSpec.shape[0]; self.specCols = self.npSpec.shape[1] ##################
         if self.heatSeries is not None: dpg.delete_item(self.heatSeries); self.heatSeries = None
         self.heatSeries = dpg.add_heat_series(values, rows=self.specRows, cols=self.specCols, parent=self.specYaxis, 
             format="", scale_min=self.minA, scale_max=self.maxA, bounds_min=[self.minT,self.minF], bounds_max=[self.maxT,self.maxF]) 
@@ -357,12 +372,12 @@ class SpecDisplay():
         self.npPsd = psd_transform(spectrogram).numpy()
         minPsd =  self.npPsd.min(); maxPsd = self.npPsd.max()
         if self.psdSeries is not None: dpg.delete_item(self.psdSeries) 
-        powerF = numpy.arange(self.minF, self.maxF,  self.maxF / (self.freqBins-1))
+        powerF = numpy.arange(self.minF, self.maxF,  (self.maxF - self.minF)/ (self.freqBins-1))
         self.psdSeries = dpg.add_line_series(self.npPsd, powerF, parent=self.psdYaxis)
-        dpg.set_axis_limits(self.psdYaxis, self.minF, self.maxF) ########
+        dpg.set_axis_limits(self.psdYaxis, self.minF, self.maxF) 
         dpg.set_axis_limits(self.psdXaxis, minPsd, maxPsd)
         
-        peak = numpy.argmax(self.npPsd) / (self.freqBins-1) * self.maxF
+        peak = numpy.argmax(self.npPsd) / (self.freqBins-1) * (self.maxF - self.minF) + self.minF
         dpg.set_item_label(self.psdXaxis, f"Peak {peak:.1f} kHz")
         
         dpg.bind_item_theme(self.psdSeries, self.line_theme)

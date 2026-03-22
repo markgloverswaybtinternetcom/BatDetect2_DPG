@@ -33,15 +33,14 @@ class MainWindow():
             self.CallTypes = ("Echolocation", "Social", "Feeding Buzz")
             self.Range = float(config["Range"]);
             self.SpecDisplay2 = SpecDisplay(self.mainWindow, config, parentSelf=self, activeButtonCallback=self.activeButton2, showDisplay=False, showAmp=False)
-            self.ActiveDisplay = self.SpecDisplay1 = SpecDisplay(self.mainWindow, config, parentSelf=self, activeButtonCallback=self.activeButton1)
-            self.SpecDisplay1.SpecBlankKfreq = self.SpecDisplay2.SpecBlankKfreq = float(config["SpecBlankKfreq"])
-            self.SpecDisplay1.HighPassFreq = self.SpecDisplay2.HighPassFreq = self.SpecDisplay1.SpecBlankKfreq*1000                     
+            self.ActiveDisplay = self.SpecDisplay1 = SpecDisplay(self.mainWindow, config, parentSelf=self, activeButtonCallback=self.activeButton1)                   
 
             with dpg.group(horizontal=True, height=BUTTON_HT * config["scale"]):               
                 self.saveMapButton = dpg.add_button(label="Save Map", show=False, height=-1, callback=self.SaveMap_click)
                 SelectFileButton = dpg.add_button(label="Open Dir/File ...", height=-1, callback=self.FileDialog_Show)
                 self.RangeCombo = dpg.add_combo(label="Range", items=("0.25s", "0.5s", "1.0s", "2.0s", "5.0s", "10s", "15s"), width=60*config["scale"], default_value=f"{self.SpecDisplay1.Range}s", callback=self.RangeListbox_changed)
-                self.FilterCombo = dpg.add_combo(label="Filter", items=("> 0 kHz", "> 5 kHz", "> 10 kHz", "> 15 kHz", "> 20 kHz", "> 25 kHz", "> 30 kHz", "> 35 kHz", "> 40 kHz", "> 50 kHz", "> 60 kHz"), width=95*config["scale"], default_value=f"> {self.SpecDisplay1.SpecBlankKfreq} kHz", callback=self.FilterListBox_changed)
+                self.LowFilterCombo = dpg.add_combo(label="Low Filter", items=("-", "> 5 kHz", "> 10 kHz", "> 15 kHz", "> 20 kHz", "> 25 kHz", "> 30 kHz", "> 35 kHz", "> 40 kHz", "> 50 kHz", "> 60 kHz"), width=95*config["scale"], default_value=f"> {self.SpecDisplay1.minF} kHz", callback=self.LowFilterListBox_changed)
+                self.HighFilterCombo = dpg.add_combo(label="High Filter", items=("-", "< 120 kHz", "< 100 kHz", "< 80 kHz", "< 60 kHz"), width=95*config["scale"], default_value="-", callback=self.HighFilterListBox_changed)
                 self.SpeciesLanguageCombo = dpg.add_combo(label="Species Language", items=("Latin","LatinAbbrev", "English", "EnglishAbbrev", "None"), width=115*config["scale"], default_value=self.SpeciesLanguage, callback=self.SpeciesLanguageCombo_changed)
                 self.EditCombo = dpg.add_combo(label="Edit", items=("None", "Source", "Species Ref", "Train"), width=100*config["scale"], default_value=self.EditMode, callback=self.EditModeListbox_changed)
                 self.AssignSpeciesCombo = dpg.add_combo(label="Assign Species", width=180 * config["scale"], callback=self.AssignSpeciesCombo_changed)
@@ -679,15 +678,26 @@ class MainWindow():
         self.SpecDisplay1.DisplaySpectogram(UpdateMin= False, sound = False)
         self.SpecDisplay2.DisplaySpectogram(UpdateMin= False, sound = False)
         
-    def FilterListBox_changed(self, sender, app_data, user_data):
-        self.SpecDisplay1.SpecBlankKfreq = self.SpecDisplay2.SpecBlankKfreq = int(app_data.split()[1])
-        self.SpecDisplay1.HighPassFreq = self.SpecDisplay2.HighPassFreq = 1000 * self.SpecDisplay1.SpecBlankKfreq
-        self.SpecDisplay2.SpecBlankKfreq = self.SpecDisplay2.SpecBlankKfreq = int(app_data.split()[1])
-        self.SpecDisplay2.HighPassFreq = self.SpecDisplay2.HighPassFreq = 1000 * self.SpecDisplay1.SpecBlankKfreq
-        print(f"FilterListBox_changed {sender=} {app_data=} {user_data=} {self.SpecDisplay1.SpecBlankKfreq=} {self.SpecDisplay1.HighPassFreq=}")
+    def LowFilterListBox_changed(self, sender, app_data, user_data):
+        if app_data == "-":
+            self.SpecDisplay1.minF = self.SpecDisplay2.minF = 0
+        else:
+            self.SpecDisplay1.minF = self.SpecDisplay2.minF = int(app_data.split()[1])
+        self.SpecDisplay1.HighPassFreq = self.SpecDisplay2.HighPassFreq = 1000 * self.SpecDisplay1.minF
+        print(f"LowFilterListBox_changed {sender=} {app_data=} {user_data=} {self.SpecDisplay1.minF=} {self.SpecDisplay1.HighPassFreq=}")
         self.SpecDisplay1.DisplaySpectogram(UpdateMin= False, sound = False)
         self.SpecDisplay2.DisplaySpectogram(UpdateMin= False, sound = False)
     
+    def HighFilterListBox_changed(self, sender, app_data, user_data):
+        if app_data == "-":
+            self.SpecDisplay1.maxF = self.SpecDisplay2.maxF = 125
+        else:
+            self.SpecDisplay1.maxF = self.SpecDisplay2.maxF = int(app_data.split()[1])
+        self.SpecDisplay1.LowPassFreq = self.SpecDisplay2.LowPassFreq = 1000 * self.SpecDisplay1.maxF
+        print(f"FilterListBox_changed {sender=} {app_data=} {user_data=} {self.SpecDisplay1.maxF=} {self.SpecDisplay1.LowPassFreq=}")
+        self.SpecDisplay1.DisplaySpectogram(UpdateMin= False, sound = False)
+        self.SpecDisplay2.DisplaySpectogram(UpdateMin= False, sound = False)
+
     def RangeListbox_changed(self, sender, app_data, user_data):
         self.Range = float(app_data.rstrip("s"))
         self.SpecDisplay1.Range_changed(self.Range)
@@ -824,14 +834,14 @@ if __name__ == '__main__':
             print(f"{font=} {scale=}")
             config = {"echoMeterDir": "", "dir": ".", "file": EXAMPLE_FILE, "minT": 0, "maxT": 1.0, 
                 "width":  s.width - 200, "height":  int(s.height - (HEADER + STATUS_HT / 2) * scale), "x": 200 , "y":  0, "font": font, "scale": scale,
-                "EditMode": "None", "SpeciesLanguage": "EnglishAbbrev", "Range": "1.0", "SpecBlankKfreq": "10.0", "MultiFile": False}
+                "EditMode": "None", "SpeciesLanguage": "EnglishAbbrev", "Range": "1.0", "minF": "10.0", "maxF": "125.0", "MultiFile": False}
         else:
             font = int(other.width / other.width_mm* 1.5)
             scale = other.width / other.width_mm / 4
             print(f"{font=} {scale=}")
             config = {"echoMeterDir": "", "dir": ".", "file": EXAMPLE_FILE, "minT": 0, "maxT": 1.0, 
                 "width":  other.width, "height":  int(other.height - (HEADER + STATUS_HT / 2) * scale), "x":  other.x, "y":  other.y, "font": font, "scale": scale, 
-                "EditMode": "None", "SpeciesLanguage": "EnglishAbbrev", "Range": "1.0", "SpecBlankKfreq": "10.0", "MultiFile": False}
+                "EditMode": "None", "SpeciesLanguage": "EnglishAbbrev", "Range": "1.0", "minF": "10.0", "maxF": "125.0", "MultiFile": False}
         dpg.create_viewport(title=TITLE, width=config["width"], height=config["height"],
             x_pos=config["x"], y_pos= config["y"], small_icon='Resources/bat_128px.ico', large_icon='Resources/bat_128px.ico')
                    
@@ -855,7 +865,8 @@ if __name__ == '__main__':
         config['font'] = config['font'] /config["scale"]
         config['scale'] = 1
         config["Range"] = main.SpecDisplay1.Range
-        config["SpecBlankKfreq"] = main.SpecDisplay1.SpecBlankKfreq
+        config["minF"] = main.SpecDisplay1.minF
+        config["maxF"] = main.SpecDisplay1.maxF
         config["EditMode"] = main.EditMode
         config["SpeciesLanguage"] = main.SpecDisplay1.SpeciesLanguage
         config["MultiFile"] = main.MultiFile
