@@ -41,6 +41,8 @@ class BatCalls():
 
     def DisplayAnnotations(self, plot, minT, maxT):
         dpg.delete_item(plot, children_only=True, slot=0) # remove annotations
+        species = ""
+        exception = ""
         if self.CallsNP is not None and self.CallsNP.shape[0] > 0:
             i = 0; abbrev= ""
             calls = self.CallsNP[numpy.where((self.CallsNP[:,1] > minT) & (self.CallsNP[:,2] < maxT) )]
@@ -65,9 +67,9 @@ class BatCalls():
                                 ann = dpg.add_plot_annotation(parent=plot, label=l, default_value=(t, f1), offset=(0, 45), color=[150, 150, 150, 128])
                             i = i +1
                 print(f"DisplayAnnotations added {i} plot_annotations")
-                return species, ""
             else:
-                return species, f"{len(calls)} calls - Too many to label"
+                exception = f"{len(calls)} calls - Too many to label"
+        return species, exception
 
     def fromJSON(self, filepath):
         print(f"fromJSON {filepath=}")
@@ -112,13 +114,14 @@ class BatCalls():
         print(f"Insert {speciesId=} {callTypeId=} {callTmin=} {callTmax=} {callFmin=} {callFmax=}")
         callInserted = False
         arr = []
-        for call in self.CallsNP:
-            id=int(call[0]); t1=call[1]; t2=call[2]; f1=call[3]; f2=call[4]; p1=call[5]; p2=call[6]; ct=int(call[7])
-            if not callInserted and callTmax < t1: 
-                arr.append([speciesId, callTmin, callTmax, callFmin, callFmax, 0.8, 0.8, callTypeId])
-                callInserted = True
-            if t2 < callTmin or f1 > callFmax or t1 > callTmax or t2 < callTmin:
-                arr.append([id, t1, t2, f1, f2, p1, p2, ct]) # exclude overlapped calls
+        if self.CallsNP is not None:
+            for call in self.CallsNP:
+                id=int(call[0]); t1=call[1]; t2=call[2]; f1=call[3]; f2=call[4]; p1=call[5]; p2=call[6]; ct=int(call[7])
+                if not callInserted and callTmax < t1: 
+                    arr.append([speciesId, callTmin, callTmax, callFmin, callFmax, 0.8, 0.8, callTypeId])
+                    callInserted = True
+                if t2 < callTmin or f1 > callFmax or t1 > callTmax or t2 < callTmin:
+                    arr.append([id, t1, t2, f1, f2, p1, p2, ct]) # exclude overlapped calls
         if not callInserted: arr.append([speciesId, callTmin, callTmax, callFmin, callFmax, 0.8, 0.8, callTypeId])
         print(f"BatCalls.Insert before{len(self.CallsNP)=}")
         self.CallsNP = numpy.array(arr, dtype='f')
