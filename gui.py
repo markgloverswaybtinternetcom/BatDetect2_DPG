@@ -425,6 +425,7 @@ class MainWindow():
                 labelMaxF = max(self.LabelStartPlot[1], plotPos[1])#kHz
                 
                 if self.EditMode == "Source":
+                    # edit original file annotations
                     print("label_release_handler Source")
                     display.calls.Insert(self.AssignSpeciesID, self.AssignCallTypeID, labelMinT, labelMaxT, labelMinF, labelMaxF)
                     callsCsvPath = os.path.join(self.SpecDisplay1.dir, "ann", f"{self.SpecDisplay1.file}.csv")
@@ -432,6 +433,7 @@ class MainWindow():
                     display.DisplaySpectogram(UpdateMin= False, sound = False)
 
                 elif self.EditMode == "Train" and display == self.SpecDisplay1:
+                    # generate classifier training annotations
                     print("label_release_handler Train")
                     id = self.AssignSpeciesID; ct = self.AssignCallTypeID
                     if self.SpecDisplay1.CallsNP is None: # empty array
@@ -443,9 +445,10 @@ class MainWindow():
                     display.DisplaySpectogram(UpdateMin= False, sound = False)
                         
                 elif self.EditMode == "Species Ref" and display == self.SpecDisplay1:
+                    # generate reference sheet file and annotations
                     print("label_release_handler Species Ref")
                     # append to source classifier csv at current location using Pandas
-                    callsWavPath = os.path.join("SpeciesRef", "ann", f"{self.SpeciesNames[self.FullSpeciesLanguage].iloc[self.AssignSpeciesID]}.wav.csv")
+                    callsWavPath = os.path.join("Resources", "SpeciesRef", "ann", f"{self.SpeciesNames[self.FullSpeciesLanguage].iloc[self.AssignSpeciesID]}.wav")
                     callsCsvPath = callsWavPath + ".csv"
                     callLength = labelMaxT - labelMinT; 
                     startSample = int((labelMinT - self.SpecDisplay1.minT) * self.SpecDisplay1.sample_rate)
@@ -454,6 +457,7 @@ class MainWindow():
                     callAudio = self.bandpass(sample, [labelMinF, labelMaxF], self.SpecDisplay1.sample_rate) # remove background noise
                     if self.SpecDisplay1.sample_rate != STD_SAMPLING:
                         callAudio = scipy.signal.resample(callAudio, int(len(callAudio) * STD_SAMPLING / self.SpecDisplay1.sample_rate))
+                    
                     if os.path.exists(callsCsvPath):
                         callsDF = pandas.read_csv(callsCsvPath)
                         lastCall = callsDF.iloc[-1]
@@ -467,18 +471,19 @@ class MainWindow():
                         audio = numpy.concatenate((audio, silentAudio, callAudio))
                         scipy.io.wavfile.write(callsWavPath, sampleRate, audio)
                     else:
-                        callsDF = pandas.DataFrame(columns = ['id','det_prob','start_time','end_time','high_freq','low_freq','class','class_prob','event'])
+                        """callsDF = pandas.DataFrame(columns = ['id','det_prob','start_time','end_time','high_freq','low_freq','class','class_prob','event'])"""
                         labelMinT = 0; labelMaxT = callLength
                         nRow = 0
                         scipy.io.wavfile.write(callsWavPath, STD_SAMPLING, callAudio)
-                    new_call = [nRow , 0.5,f"{labelMinT:.4f}",f"{labelMaxT:.4f}",f"{labelMaxF:.0f}",f"{labelMinF:.0f}", 
-                        self.SpeciesNames["Latin"].iloc[self.AssignSpeciesID], 0.5, self.CallTypes[self.AssignCallTypeID] ]
-                    callsDF.loc[len(self.SpecDisplay2.CallsDF)] = new_call
-                    callsDF.to_csv(callsCsvPath, sep=",", index=False)
+                    
+                    self.SetActiveDisplayN(displayN)
+                    self.SpecDisplay2.calls.Insert(self.AssignSpeciesID, self.AssignCallTypeID, labelMinT, labelMaxT, labelMinF, labelMaxF)
+                    self.SpecDisplay2.calls.toCSV(callsCsvPath)
+                    self.SpecDisplay2.DisplaySpectogram(UpdateMin= False, sound = False)
 
-                    self.SpecDisplay2.ConvertDFtoNP(callsDF)
+                    """self.SpecDisplay2.ConvertDFtoNP(callsDF)
                     self.SpecDisplay2.LoadFile(callsWavPath)
-                    self.resize_handler(0, None, None)                    
+                    self.resize_handler(0, None, None)"""                  
                 self.LabelStartPlot = None   
 
     def Status(self, txt, error=False):
