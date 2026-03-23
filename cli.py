@@ -1,5 +1,5 @@
 import os, pandas, wakepy, colorama
-from Classifier import Classify
+from Classifier import Classifier
 import argparse, utils
 
 def FileDrop(f):
@@ -20,7 +20,7 @@ def FileDrop(f):
 
 def ClassifyDir(dir_path):
     with wakepy.keep.running():
-        classify = Classify()
+        classify = Classifier()
         files = utils.ListAudioFiles(dir_path)
         FilesDF = pandas.DataFrame(columns =["Filename", "Bat Calls"])
         length = len(files)

@@ -41,8 +41,6 @@ class SpecDisplay():
         self.timeStep = self.Range = float(config["Range"])
         self.minF = float(config["minF"]) 
         self.maxF = float(config["maxF"]) 
-        self.HighPassFreq = self.minF * 1000                     
-        self.LowPassFreq = self.maxF * 1000 
         self.soundProgressBar = self.heatSeries = self.ampSeries = self.psdSeries = self.ZoomStart = self.LabelStartPlot = None
         self.maxPercent = 100; self.minPercent = 0
         self.calls = BatCalls(parentSelf)
@@ -258,7 +256,7 @@ class SpecDisplay():
             self.Status(f"Sample rate = {self.sample_rate / 1000:.1f}kHz FILE NOT ULTRASONIC")
         
     def LoadFileSegment(self):
-        print(f"LoadFileSegment {self.minT=} {self.maxT=} {self.minF=} {self.maxF=} {self.HighPassFreq=}")
+        print(f"LoadFileSegment {self.minT=} {self.maxT=} {self.minF=} {self.maxF=} ")
         if self.timeExpand: waveformTensor = self.decoder.get_samples_played_in_range(start_seconds=self.minT*10, stop_seconds=self.maxT*10)
         else: waveformTensor = self.decoder.get_samples_played_in_range(start_seconds=self.minT, stop_seconds=self.maxT)
         waveformTensor = waveformTensor.data
@@ -288,26 +286,25 @@ class SpecDisplay():
         #print(f"torchaudio {waveformTensor.shape=}, {self.sample_rate=}")
         self.freqBins = spectrogram.shape[1]; self.timeSteps= spectrogram.shape[2]
         #print(f"LoadFileSegment {waveformTensor.nbytes=}, {spectrogram.nbytes=}, channels={spectrogram.shape[0]}, {self.freqBins=}, {self.timeSteps=}")
-        if self.HighPassFreq > 0:
-            if self.sample_rate > self.HighPassFreq * 2:
-                highPassFilter = torchaudio_filters.HighPass(self.HighPassFreq, self.sample_rate) 
-                waveformTensor = highPassFilter(waveformTensor)
-            else:
-                self.Status(f"{self.sample_rate=} TOO LOW FOR {self.HighPassFreq=}", error=True)
         
-        if self.LowPassFreq < MAX_FREQ_KHZ:
-            lowPassFilter = torchaudio_filters.Lowass(self.LowPassFreq, self.sample_rate) 
-            waveformTensor = lowPassFilter(waveformTensor)
-
         if self.maxF < MAX_FREQ_KHZ:
             removeHighBins = int(self.freqBins / MAX_FREQ_KHZ * (MAX_FREQ_KHZ - self.maxF))
             spectrogram = spectrogram[:, :-removeHighBins, :]
             self.freqBins = spectrogram.shape[1]
+            lowPassFreq = self.maxF * 1000
+            lowPassFilter = torchaudio_filters.LowPass(lowPassFreq, self.sample_rate) 
+            waveformTensor = lowPassFilter(waveformTensor)
 
         if self.minF > 0.0:
             removeLowBins = int(self.freqBins / self.maxF * self.minF)
             spectrogram = spectrogram[:, removeLowBins:, :]
             self.freqBins = spectrogram.shape[1]
+            highPassFreq = self.minF * 1000
+            if self.sample_rate > highPassFreq * 2:
+                highPassFilter = torchaudio_filters.HighPass(highPassFreq, self.sample_rate) 
+                waveformTensor = highPassFilter(waveformTensor)
+            else:
+                self.Status(f"{self.sample_rate=} TOO LOW FOR {highPassFreq=}", error=True)
         
         if spectrogram.shape[0] > 1:
             spectrogram = torch.mean(spectrogram, dim=0).unsqueeze(0) # stereo to mono

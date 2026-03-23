@@ -23,19 +23,20 @@ class BatCalls():
                     else: ct = 0
                     arr.append([id, float(row[2]), float(row[3]), float(row[5])/1000, float(row[4])/1000, p1, p2, ct])
                     # no call type / event in standard CSV
+                    prob = p1 * p2
                     if id in summaryDict:
                         min = summaryDict[id][1]; max = summaryDict[id][2];
-                        prob = p1 * p2
                         if prob < min: min = prob
                         if prob > max: max = prob
                         summaryDict[id] = [summaryDict[id][0]+1, min, max]
                     else:
-                        summaryDict[id] = [1, 1.0, 0.0] 
+                        summaryDict[id] = [1, prob, prob] 
                 i += 1
         summary = ""
         for id, val in summaryDict.items():
-            summary += f"{self.SpeciesNames.loc[id][self.SpeciesLanguage]} {val[0]} calls {val[2]:.0%}-{val[1]:.0%}, "
-        print(f"fromCSV {arr=} {summary=}")
+            species = self.SpeciesNames.loc[id][self.SpeciesLanguage]
+            if val[0] == 1: summary += f"{species} 1 call {val[1]:.0%}, "
+            else: summary += f"{species} {val[0]} calls {val[2]:.0%}-{val[1]:.0%}, "
         self.CallsNP = numpy.array(arr, dtype='f')
         return summary
 
@@ -83,7 +84,6 @@ class BatCalls():
                     self.CallsNP = numpy.array([[ id, t1, t2, f1, f2, p1, p2, ct]], dtype=numpy.float32) 
                 else:
                     self.CallsNP = numpy.append(self.CallsNP, numpy.array([[ id, t1, t2, f1, f2, p1, p2, ct]], dtype=numpy.float32), axis=0)
-            #print(f"fromJSON {self.CallsNP}")
                 
     def toJSON(self, callsJsonPath):
         print(f"CallNPtoJSON {callsJsonPath=}")

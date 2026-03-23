@@ -38,14 +38,21 @@ class MainWindow():
             with dpg.group(horizontal=True, height=BUTTON_HT * config["scale"]):               
                 self.saveMapButton = dpg.add_button(label="Save Map", show=False, height=-1, callback=self.SaveMap_click)
                 SelectFileButton = dpg.add_button(label="Open Dir/File ...", height=-1, callback=self.FileDialog_Show)
-                self.RangeCombo = dpg.add_combo(label="Range", items=("0.25s", "0.5s", "1.0s", "2.0s", "5.0s", "10s", "15s"), width=60*config["scale"], default_value=f"{self.SpecDisplay1.Range}s", callback=self.RangeListbox_changed)
-                self.LowFilterCombo = dpg.add_combo(label="Low Filter", items=("-", "> 5 kHz", "> 10 kHz", "> 15 kHz", "> 20 kHz", "> 25 kHz", "> 30 kHz", "> 35 kHz", "> 40 kHz", "> 50 kHz", "> 60 kHz"), width=95*config["scale"], default_value=f"> {self.SpecDisplay1.minF} kHz", callback=self.LowFilterListBox_changed)
-                self.HighFilterCombo = dpg.add_combo(label="High Filter", items=("-", "< 120 kHz", "< 100 kHz", "< 80 kHz", "< 60 kHz"), width=95*config["scale"], default_value="-", callback=self.HighFilterListBox_changed)
-                self.SpeciesLanguageCombo = dpg.add_combo(label="Species Language", items=("Latin","LatinAbbrev", "English", "EnglishAbbrev", "None"), width=115*config["scale"], default_value=self.SpeciesLanguage, callback=self.SpeciesLanguageCombo_changed)
-                self.EditCombo = dpg.add_combo(label="Edit", items=("None", "Source", "Species Ref", "Train"), width=100*config["scale"], default_value=self.EditMode, callback=self.EditModeListbox_changed)
+                self.RangeCombo = dpg.add_combo(label="Range", items=("0.25s", "0.5s", "1.0s", "2.0s", "5.0s", "10s", "15s"), 
+                    width=60*config["scale"], default_value=f"{self.SpecDisplay1.Range}s", callback=self.RangeListbox_changed)
+                self.LowFilterCombo = dpg.add_combo(label="Low Filter", 
+                    items=("> 0 kHz", "> 5 kHz", "> 10 kHz", "> 15 kHz", "> 20 kHz", "> 25 kHz", "> 30 kHz", "> 35 kHz", "> 40 kHz", "> 50 kHz", "> 60 kHz"), 
+                    width=95*config["scale"], default_value=f"> {self.SpecDisplay1.minF} kHz", callback=self.LowFilterListBox_changed)
+                self.HighFilterCombo = dpg.add_combo(label="High Filter", items=("< 125 kHz", "< 100 kHz", "< 80 kHz", "< 60 kHz"), 
+                    width=95*config["scale"], default_value=f"> {self.SpecDisplay1.maxF} kHz", callback=self.HighFilterListBox_changed)
+                self.SpeciesLanguageCombo = dpg.add_combo(label="Species Language", items=("Latin","LatinAbbrev", "English", "EnglishAbbrev", "None"),
+                    width=115*config["scale"], default_value=self.SpeciesLanguage, callback=self.SpeciesLanguageCombo_changed)
+                self.EditCombo = dpg.add_combo(label="Edit", items=("None", "Source", "Species Ref", "Train"), width=100*config["scale"], 
+                    default_value=self.EditMode, callback=self.EditModeListbox_changed)
                 self.AssignSpeciesCombo = dpg.add_combo(label="Assign Species", width=180 * config["scale"], callback=self.AssignSpeciesCombo_changed)
                 self.AssignCallTypeID = 0
-                self.AssignCallTypeCombo = dpg.add_combo(label="Call Type", items=self.CallTypes, width=110*config["scale"], default_value=self.CallTypes[self.AssignCallTypeID], callback=self.AssignCallTypeCombo_changed)
+                self.AssignCallTypeCombo = dpg.add_combo(label="Call Type", items=self.CallTypes, width=110*config["scale"], 
+                    default_value=self.CallTypes[self.AssignCallTypeID], callback=self.AssignCallTypeCombo_changed)
                 
                 self.HelpButton = dpg.add_button(label="Help", width=60*config["scale"], callback=self.HelpButton_pressed)                     
             with dpg.table(policy=dpg.mvTable_SizingFixedFit, scrollY=True, height=config["height"] * 0.2):
@@ -394,7 +401,9 @@ class MainWindow():
                 xChange = self.LabelStartPlot[0] - dpg.get_plot_mouse_pos()[0]
                 if time.time() - self.dragLastUpdate > 0.2: # reduce updates
                     if self.DragStart_MinT + xChange < 0: self.ActiveDisplay.maxT = self.Range; self.ActiveDisplay.minT = 0                
-                    if self.DragStart_MaxT + xChange > self.ActiveDisplay.duration: self.ActiveDisplay.maxT = self.ActiveDisplay.duration; self.ActiveDisplay.minT = self.ActiveDisplay.maxT - self.Range
+                    if self.DragStart_MaxT + xChange > self.ActiveDisplay.duration: 
+                        self.ActiveDisplay.maxT = self.ActiveDisplay.duration
+                        self.ActiveDisplay.minT = self.ActiveDisplay.maxT - self.Range
                     else: self.ActiveDisplay.maxT = self.DragStart_MaxT + xChange; self.ActiveDisplay.minT = self.DragStart_MinT + xChange                    
                     self.ActiveDisplay.DisplaySpectogram()
                     print(f"label_drag_handler {self.ActiveDisplay.minT=}")
@@ -679,22 +688,14 @@ class MainWindow():
         self.SpecDisplay2.DisplaySpectogram(UpdateMin= False, sound = False)
         
     def LowFilterListBox_changed(self, sender, app_data, user_data):
-        if app_data == "-":
-            self.SpecDisplay1.minF = self.SpecDisplay2.minF = 0
-        else:
-            self.SpecDisplay1.minF = self.SpecDisplay2.minF = int(app_data.split()[1])
-        self.SpecDisplay1.HighPassFreq = self.SpecDisplay2.HighPassFreq = 1000 * self.SpecDisplay1.minF
-        print(f"LowFilterListBox_changed {sender=} {app_data=} {user_data=} {self.SpecDisplay1.minF=} {self.SpecDisplay1.HighPassFreq=}")
+        self.SpecDisplay1.minF = self.SpecDisplay2.minF = int(app_data.split()[1])
+        print(f"LowFilterListBox_changed {sender=} {app_data=} {user_data=} {self.SpecDisplay1.minF=}")
         self.SpecDisplay1.DisplaySpectogram(UpdateMin= False, sound = False)
         self.SpecDisplay2.DisplaySpectogram(UpdateMin= False, sound = False)
     
     def HighFilterListBox_changed(self, sender, app_data, user_data):
-        if app_data == "-":
-            self.SpecDisplay1.maxF = self.SpecDisplay2.maxF = 125
-        else:
-            self.SpecDisplay1.maxF = self.SpecDisplay2.maxF = int(app_data.split()[1])
-        self.SpecDisplay1.LowPassFreq = self.SpecDisplay2.LowPassFreq = 1000 * self.SpecDisplay1.maxF
-        print(f"FilterListBox_changed {sender=} {app_data=} {user_data=} {self.SpecDisplay1.maxF=} {self.SpecDisplay1.LowPassFreq=}")
+        self.SpecDisplay1.maxF = self.SpecDisplay2.maxF = int(app_data.split()[1])
+        print(f"FilterListBox_changed {sender=} {app_data=} {user_data=} {self.SpecDisplay1.maxF=}")
         self.SpecDisplay1.DisplaySpectogram(UpdateMin= False, sound = False)
         self.SpecDisplay2.DisplaySpectogram(UpdateMin= False, sound = False)
 
