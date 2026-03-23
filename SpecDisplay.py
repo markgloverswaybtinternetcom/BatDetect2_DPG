@@ -46,18 +46,15 @@ class SpecDisplay():
         self.calls = BatCalls(parentSelf)
         
         specHeight = config["height"] * 0.8 - (AMP_HT + SCROLL_HT + 2*BUTTON_HT + STATUS_HT / 2+ HEADER ) * config["scale"] - SPACING *7
-        with dpg.group(horizontal=True, show=showDisplay, height=specHeight):
-            self.topGroup = dpg.last_item()
+        with dpg.group(horizontal=True, show=showDisplay, height=specHeight) as self.topGroup:
             self.MinSlider = dpg.add_slider_int(width=SLIDER_W * config["scale"], height = -1, callback=self.MinSlider_callback, default_value=self.minPercent, vertical=True, clamped=True, min_value=0, max_value=100)
             self.MaxSlider  = dpg.add_slider_int(width=SLIDER_W * config["scale"], height = -1, callback=self.MaxSlider_callback, default_value=self.maxPercent, vertical=True, clamped=True, min_value=0, max_value=100)
             self.colormap_scale = self.colormap_scale1 = dpg.add_colormap_scale(width=COLOR_SCALE_W * config["scale"], height = -1, colormap=self.colorMap, format="%.2f")
-            with dpg.plot(height=-1, label="Power", no_menus=False, width=PSD_WIDTH * config["scale"], crosshairs=True):
-                self.psdPlot = dpg.last_item()
+            with dpg.plot(height=-1, label="Power", no_menus=False, width=PSD_WIDTH * config["scale"], crosshairs=True) as self.psdPlot:
                 self.psdXaxis = dpg.add_plot_axis(dpg.mvXAxis, label="", no_gridlines=True)
                 self.psdYaxis = dpg.add_plot_axis(dpg.mvYAxis, no_tick_labels=True, no_gridlines=False, foreground_grid=True)
                 dpg.set_axis_ticks(self.psdYaxis, YtickLabels)
-            with dpg.plot(label="Spectogram", height=-1, width=-1, crosshairs=True, pan_button=-1, pan_mod=2, box_select_button=dpg.mvMouseButton_Left, no_menus=True):
-                self.specPlot = dpg.last_item()
+            with dpg.plot(label="Spectogram", height=-1, width=-1, crosshairs=True, pan_button=-1, pan_mod=2, box_select_button=dpg.mvMouseButton_Left, no_menus=True)as self.specPlot:
                 self.specXaxis = dpg.add_plot_axis(dpg.mvXAxis, label="Time seconds", tick_format="%.3f", foreground_grid=True)
                 self.specYaxis = dpg.add_plot_axis(dpg.mvYAxis, label="Frequency kHz", foreground_grid=True )
                 dpg.set_axis_ticks(self.specYaxis, YtickLabels)
@@ -67,8 +64,7 @@ class SpecDisplay():
             self.bottomGroup = dpg.last_item()
             self.activeDisplayText = dpg.add_button(callback=self.ActiveDisplay_click, height=SCROLL_HT * config["scale"] *2 , width=(PSD_WIDTH + SLIDER_W *2 + COLOR_SCALE_W + SPACING*3) * config["scale"])
             with dpg.group(horizontal=False):
-                with dpg.plot(no_title=True, show=showAmp, height=AMP_HT * config["scale"], width=-1):
-                    self.ampPlot = dpg.last_item()
+                with dpg.plot(no_title=True, show=showAmp, height=AMP_HT * config["scale"], width=-1) as self.ampPlot:
                     self.ampXaxis = dpg.add_plot_axis(dpg.mvXAxis, tick_format="%.3f", foreground_grid=True)
                     self.ampYaxis = dpg.add_plot_axis(dpg.mvYAxis, label="Amplitude", no_gridlines=True, foreground_grid=True)
                 with dpg.group(horizontal=True, height=SCROLL_HT * config["scale"]):

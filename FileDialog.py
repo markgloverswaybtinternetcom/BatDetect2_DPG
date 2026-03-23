@@ -38,11 +38,10 @@ class FileDialog():
             ico_home = dpg.add_static_texture( width=hwidth, height=hheight, default_value=hdata)
             self.img_mini_folder = dpg.add_static_texture( width=mfwidth, height=mfheight, default_value=mfdata)
 
-        with dpg.window(label="File dialog", show=False, modal=True, width=1000, height=-1, no_collapse=True, pos=(0, 100)):
-            self.window = dpg.last_item()
+        with dpg.window(label="File dialog", show=False, modal=True, width=1000, height=-1, no_collapse=True, pos=(0, 100)) as self.window:
             self.CurrentDirectoryText = dpg.add_text("Home")
-            with dpg.table(height=525, width=-1, clipper=True, resizable=True, policy=dpg.mvTable_SizingStretchProp, borders_innerV=True, reorderable=True, hideable=True, sortable=True, scrollX=True, scrollY=True):
-                self.table = dpg.last_item()
+            with dpg.table(height=525, width=-1, clipper=True, resizable=True, policy=dpg.mvTable_SizingStretchProp, 
+                borders_innerV=True, reorderable=True, hideable=True, sortable=True, scrollX=True, scrollY=True) as self.table:
                 dpg.add_table_column(label=' ', init_width_or_weight=4)
                 dpg.add_table_column(label='Name', init_width_or_weight=110)
                 dpg.add_table_column(label='Date', init_width_or_weight=30)

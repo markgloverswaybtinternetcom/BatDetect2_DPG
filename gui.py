@@ -26,8 +26,7 @@ class MainWindow():
         self.MultiFile = config["MultiFile"]
         print(f"MainWindow ___init__ {torch.cuda.is_available()=}")       
 
-        with dpg.window(label=TITLE.replace(" ", ""), width=-1, height=-1, pos=(0, 0), tag=TITLE.replace(" ", "")):
-            self.mainWindow = dpg.last_item()
+        with dpg.window(label=TITLE.replace(" ", ""), width=-1, height=-1, pos=(0, 0), tag=TITLE.replace(" ", "")) as self.mainWindow:
             self.EditMode = config["EditMode"]; 
             self.SpeciesLanguage = config["SpeciesLanguage"] 
             self.CallTypes = ("Echolocation", "Social", "Feeding Buzz")
@@ -55,8 +54,7 @@ class MainWindow():
                     default_value=self.CallTypes[self.AssignCallTypeID], callback=self.AssignCallTypeCombo_changed)
                 
                 self.HelpButton = dpg.add_button(label="Help", width=60*config["scale"], callback=self.HelpButton_pressed)                     
-            with dpg.table(policy=dpg.mvTable_SizingFixedFit, scrollY=True, height=config["height"] * 0.2):
-                self.FileTable = dpg.last_item()
+            with dpg.table(policy=dpg.mvTable_SizingFixedFit, scrollY=True, height=config["height"] * 0.2) as self.FileTable:
                 dpg.add_table_column(label="Filename")
                 dpg.add_table_column(label="Bat Calls")
 
