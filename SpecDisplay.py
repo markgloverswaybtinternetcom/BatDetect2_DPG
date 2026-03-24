@@ -29,7 +29,7 @@ class SpecDisplay():
         self.Status = parentSelf.Status
         self.classifyEnabled = True
         sys.excepthook = self.notify_exception
-        self.FileTableRow = self.lastMousePlotPos = self.lastMousePos = self.soundLine = self.duration = self.dirIndex = self.FilesDF = self.PlayObject = None 
+        self.FileTableRow = self.lastMousePlotPos = self.lastMousePos = self.soundLine = self.duration = self.dirIndex = self.FilesDF = self.PlayObject = self.ZoomStart = None 
         self.activeButtonCallback = activeButtonCallback        
         self.minF = MIN_FREQ_KHZ; self.maxF = MAX_FREQ_KHZ
         self.colours = self.GenerateSpectrum()

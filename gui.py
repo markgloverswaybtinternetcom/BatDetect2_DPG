@@ -21,7 +21,7 @@ TITLE = "Bat Detect GUI"
 class MainWindow():            
     def __init__(self):
         self.SpeciesNames = pandas.read_csv(os.path.join("Resources", "SpeciesNames.csv"))
-        self.lastMousePos = self.ZoomStart = self.LabelStartPlot = self.StatusLabel = self.AssignSpeciesID = self.AssignCallTypeID = None
+        self.lastMousePos = self.LabelStartPlot = self.StatusLabel = self.AssignSpeciesID = self.AssignCallTypeID = None
         self.lastRow = self.FileTableRow = self.FilesDF = self.SoundProcess = self.soundLine = self.lastMousePlotPos = self.calls = None
         self.MultiFile = config["MultiFile"]
         print(f"MainWindow ___init__ {torch.cuda.is_available()=}")       
@@ -288,9 +288,9 @@ class MainWindow():
     
     def zoom_drag_handler(self, sender, app_data, user_data):
         display = self.WhichDisplay()
-        if self.ZoomStart is None and display is not None:
-            self.ZoomStart = dpg.get_plot_mouse_pos()
-            print(f"zoom_drag_handler {self.ZoomStart=}")
+        if display is not None and display.ZoomStart is None:
+            display.ZoomStart = dpg.get_plot_mouse_pos()
+            print(f"zoom_drag_handler {display.ZoomStart=}")
     
     def WhichDisplay(self):
         if self.FileDialog.Shown(): return None
@@ -302,21 +302,20 @@ class MainWindow():
         display = None
         if mousePos[1] > plotPos1[1] and mousePos[1] < plotPos1[1] + plotRect1[1] and mousePos[0] > plotPos1[0]: # click on spectrogram1
             display = self.SpecDisplay1
-        elif mousePos[1] > plotPos1 [1] and mousePos[1] < plotPos2[1] + plotRect2[1] and mousePos[0] > plotPos2[0]: # click on spectrogram2
+        elif mousePos[1] > plotPos2[1] and mousePos[1] < plotPos2[1] + plotRect2[1] and mousePos[0] > plotPos2[0]: # click on spectrogram2
             display = self.SpecDisplay2
         return display
         
     
     def zoom_release_handler(self, sender, app_data, user_data):
         display = self.WhichDisplay()
-        if self.ZoomStart is not None and display is not None:
+        if display is not None and display.ZoomStart is not None:
             plotPos = dpg.get_plot_mouse_pos()
-            if plotPos != self.ZoomStart:
-                print(f"zoom_release_handler drag on plot {self.ZoomStart=} {plotPos=}")              
+            if plotPos != display.ZoomStart:
+                print(f"zoom_release_handler drag on plot {display.ZoomStart=} {plotPos=}")              
                 xLim = dpg.get_axis_limits(display.specXaxis)
                 yLim = dpg.get_axis_limits(display.specYaxis)
                 a = int(yLim[0] / display.maxF * (display.freqBins-1)); b = int(yLim[1] / display.maxF * (display.freqBins-1))
-                print(f"zoom_release_handler on plot {xLim=} {yLim=} {a=} {b=} {display.npPsd.shape=}") 
                 peak = (numpy.argmax(display.npPsd[a:b]) + a) / (display.freqBins-1) * display.maxF
                 dpg.set_axis_limits(display.psdYaxis, yLim[0], yLim[1])
                 dpg.set_axis_limits(display.ampXaxis, xLim[0], xLim[1])               
@@ -330,7 +329,7 @@ class MainWindow():
                 display.ZoomRecording = display.Recording[a:b]
                 print(f"zoom_release_handler on plot {xLim=} {yLim=} {display.minT=} {a=} {b=} {display.Recording.shape=} {display.ZoomRecording.shape=}") 
                 display.zoomed = True
-            self.ZoomStart = None
+            display.ZoomStart = None
         elif display is not None:
             mousePos = dpg.get_mouse_pos()
             mousePlotPos = dpg.get_plot_mouse_pos()             
