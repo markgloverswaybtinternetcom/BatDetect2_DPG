@@ -35,7 +35,6 @@ class MainWindow():
             self.ActiveDisplay = self.SpecDisplay1 = SpecDisplay(self.mainWindow, config, parentSelf=self, activeButtonCallback=self.activeButton1)                   
 
             with dpg.group(horizontal=True, height=BUTTON_HT * config["scale"]):               
-                self.saveMapButton = dpg.add_button(label="Save Map", show=False, height=-1, callback=self.SaveMap_click)
                 SelectFileButton = dpg.add_button(label="Open Dir/File ...", height=-1, callback=self.FileDialog_Show)
                 self.RangeCombo = dpg.add_combo(label="Range", items=("0.25s", "0.5s", "1.0s", "2.0s", "5.0s", "10s", "15s"), 
                     width=60*config["scale"], default_value=f"{self.SpecDisplay1.Range}s", callback=self.RangeListbox_changed)
@@ -52,6 +51,7 @@ class MainWindow():
                 self.AssignCallTypeID = 0
                 self.AssignCallTypeCombo = dpg.add_combo(label="Call Type", items=self.CallTypes, width=110*config["scale"], 
                     default_value=self.CallTypes[self.AssignCallTypeID], callback=self.AssignCallTypeCombo_changed)
+                self.saveMapButton = dpg.add_button(label="Save Map", show=False, height=-1, callback=self.SaveMap_click)
                 
                 self.HelpButton = dpg.add_button(label="Help", width=60*config["scale"], callback=self.HelpButton_pressed)                     
             with dpg.table(policy=dpg.mvTable_SizingFixedFit, scrollY=True, height=config["height"] * 0.2) as self.FileTable:

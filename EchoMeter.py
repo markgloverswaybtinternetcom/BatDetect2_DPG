@@ -1,5 +1,6 @@
 import xml.etree.ElementTree as Xml
-import sys, os, folium, soundfile, pandas, shutil, traceback, colorama, Classifier
+import sys, os, folium, soundfile, pandas, shutil, traceback, colorama
+from Classifier import Classifier
 
 class EchoMeter():
     def __init__(self, parentSelf):
@@ -13,7 +14,7 @@ class EchoMeter():
 
     def LoadEchoMeterDir(self, echoMeterPath):
         self.echoMeterPath = echoMeterPath
-        self.classify = Classify()
+        self.classify = Classifier()
         self.TE_DirPath = os.path.join(self.echoMeterPath, "TimeExpanded")
         gpsBatFilePath = os.path.join(self.echoMeterPath, "GpsBatCallFiles.csv")
         if os.path.exists(gpsBatFilePath):

@@ -390,7 +390,24 @@ class SpecDisplay():
                     dpg.add_theme_style(dpg.mvStyleVar_GrabMinSize, grabSize, category=dpg.mvThemeCat_Core)
             dpg.bind_item_theme(self.ScrollBar, slider_theme)        
             self.DisplaySpectogram(UpdateMin= False, sound = False)    
-
+    
+    def SetClassifyLabel(self, result):
+        if len(result) > 0:
+            dpg.set_value(self.ClassifyLabel, result)
+            if result == "No summary file":
+                dpg.configure_item(self.ClassifyLabel, color=(200, 0, 0, 255))
+            else:
+                dpg.configure_item(self.ClassifyLabel, color=(0, 200, 0, 255))
+        else:
+            dpg.set_value(self.ClassifyLabel, "No bat calls found")
+            dpg.configure_item(self.ClassifyLabel, color=(200, 0, 0, 255))
+            
+    def notify_exception(self, type, value, tb):
+        traceback_details = "\n".join(traceback.extract_tb(tb).format())
+        msg = f"caller: {' '.join(sys.argv)}\n{type}: {value}\n{traceback_details}"
+        print(colorama.Fore.RED + msg + colorama.Fore.RESET)
+        self.Status("EXCEPTION see console", error=True)
+        
     ############################################################
     
     def PlaySound(self, cursor=True):
@@ -400,8 +417,8 @@ class SpecDisplay():
             return
         sounddevice.stop()
         speed = eval(dpg.get_value(self.PlaySpeedCombo))
-        if self.ZoomRecording is None: Recording = self.Recording
-        else: Recording = self.ZoomRecording
+        if self.ZoomRecording is None: Recording = numpy.copy(self.Recording)
+        else: Recording = numpy.copy(self.ZoomRecording)
         replayRate = self.sample_rate * speed
         duration = len(Recording) / replayRate
         maxLength = round(self.sample_rate * MAX_PLAY_SEC * speed)
@@ -412,12 +429,13 @@ class SpecDisplay():
             Recording = self.DownSample(Recording, downscale_factor)
             replayRate = int(replayRate / downscale_factor)
             
-        print(f"SpecDisplay PlaySound {cursor=} {len(Recording)=}, {self.sample_rate=}, {speed=} {replayRate=}, {duration=:.1f}")
+        print(f"SpecDisplay PlaySound {cursor=} {len(Recording)=} {Recording[0]=}, {self.sample_rate=}, {speed=} {replayRate=}, {duration=:.1f}")
         if duration > MAX_PLAY_SEC:
             Recording = Recording[:maxLength] * LOUDNESS
             duration = MAX_PLAY_SEC
         else:   
             Recording *= LOUDNESS
+        print(f"SpecDisplay PlaySound {Recording[0]=}")
             
         if duration > 1.0 and cursor is not None:
             self.PlaySoundAndProgress(Recording, replayRate, speed)
@@ -450,7 +468,7 @@ class SpecDisplay():
         return downsampled_arr
         
     def PlaySoundAndProgress(self, recording, SampleRate, speed):
-        print(f"PlaySoundAndProgress {len(recording)=} {SampleRate=} {speed=}")
+        print(f"PlaySoundAndProgress {len(recording)=} {recording[0]=}{SampleRate=} {speed=}")
         if self.soundLine is not None:
             self.soundLine = None
             self.SoundProcess.terminate()
@@ -491,20 +509,3 @@ class SpecDisplay():
             else:
                 rect = dpg.get_item_rect_size(plot)
                 self.soundLine = dpg.add_plot_annotation(parent=plot, label="^", default_value=(self.SoundTime, self.yLim[1]), offset=(0, rect[1]), color=[255, 255, 255, 255])
-    
-    def SetClassifyLabel(self, result):
-        if len(result) > 0:
-            dpg.set_value(self.ClassifyLabel, result)
-            if result == "No summary file":
-                dpg.configure_item(self.ClassifyLabel, color=(200, 0, 0, 255))
-            else:
-                dpg.configure_item(self.ClassifyLabel, color=(0, 200, 0, 255))
-        else:
-            dpg.set_value(self.ClassifyLabel, "No bat calls found")
-            dpg.configure_item(self.ClassifyLabel, color=(200, 0, 0, 255))
-            
-    def notify_exception(self, type, value, tb):
-        traceback_details = "\n".join(traceback.extract_tb(tb).format())
-        msg = f"caller: {' '.join(sys.argv)}\n{type}: {value}\n{traceback_details}"
-        print(colorama.Fore.RED + msg + colorama.Fore.RESET)
-        self.Status("EXCEPTION see console", error=True)
