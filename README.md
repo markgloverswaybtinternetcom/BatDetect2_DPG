@@ -76,7 +76,7 @@ Some sounds are easier to recognise as sounds than spectrograms. Bat sounds are 
  *   Up and down arrow keys move spectrogram one file
  *   Or click on table row
  *   'Range' combo-box alters size of spectrogram window
- *   'Filter' combo-box filters displayed graphs and played sound. This can removed audible noise, but may hide the fact that a bat call is in fact an audible noise harmonic. 
+ *   'Filter' combo-boxes reduce displayed graphs and filter played sound. This can removed audible or other noise, but may hide the fact that a bat call is in fact an audible noise harmonic. 
 
  ![](Resources/web_Images/RangeFilter.png)
  

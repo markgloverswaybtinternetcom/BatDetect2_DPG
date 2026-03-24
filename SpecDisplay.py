@@ -38,9 +38,7 @@ class SpecDisplay():
         YtickLabels = self.GenerateYtickLabels()        
         self.minT = config["minT"]; self.maxT = config["maxT"]; self.dir = config["dir"]; self.file = config["file"]        
         self.EditMode = config["EditMode"]
-        self.timeStep = self.Range = float(config["Range"])
-        self.minF = float(config["minF"]) 
-        self.maxF = float(config["maxF"]) 
+        self.timeStep = self.Range = float(config["Range"]) 
         self.soundProgressBar = self.heatSeries = self.ampSeries = self.psdSeries = self.ZoomStart = self.LabelStartPlot = None
         self.maxPercent = 100; self.minPercent = 0
         self.calls = BatCalls(parentSelf)
@@ -197,7 +195,7 @@ class SpecDisplay():
         sl = self.SpeciesLanguage
         if sl == "EnglishAbbrev": sl = "English"
         id = self.SpeciesNames.index[self.SpeciesNames[sl]==app_data].tolist()
-        print(f"ShowSpeciesCombo_changed {app_data=} {s=}")
+        print(f"ShowSpeciesCombo_changed {app_data=} {app_data=}")
         t1 = self.calls.FindSpeciesMaxProb(id)
         if t1 > self.Range / 2: 
             if t1 + self.Range / 2 < self.duration: 

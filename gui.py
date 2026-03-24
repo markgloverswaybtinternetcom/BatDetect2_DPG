@@ -41,9 +41,9 @@ class MainWindow():
                     width=60*config["scale"], default_value=f"{self.SpecDisplay1.Range}s", callback=self.RangeListbox_changed)
                 self.LowFilterCombo = dpg.add_combo(label="Low Filter", 
                     items=("> 0 kHz", "> 5 kHz", "> 10 kHz", "> 15 kHz", "> 20 kHz", "> 25 kHz", "> 30 kHz", "> 35 kHz", "> 40 kHz", "> 50 kHz", "> 60 kHz"), 
-                    width=95*config["scale"], default_value=f"> {self.SpecDisplay1.minF} kHz", callback=self.LowFilterListBox_changed)
+                    width=95*config["scale"],  callback=self.LowFilterListBox_changed)
                 self.HighFilterCombo = dpg.add_combo(label="High Filter", items=("< 125 kHz", "< 100 kHz", "< 80 kHz", "< 60 kHz"), 
-                    width=95*config["scale"], default_value=f"> {self.SpecDisplay1.maxF} kHz", callback=self.HighFilterListBox_changed)
+                    width=95*config["scale"], callback=self.HighFilterListBox_changed)
                 self.SpeciesLanguageCombo = dpg.add_combo(label="Species Language", items=("Latin","LatinAbbrev", "English", "EnglishAbbrev", "None"),
                     width=115*config["scale"], default_value=self.SpeciesLanguage, callback=self.SpeciesLanguageCombo_changed)
                 self.EditCombo = dpg.add_combo(label="Edit", items=("None", "Source", "Species Ref", "Train"), width=100*config["scale"], 
@@ -203,8 +203,8 @@ class MainWindow():
         yMax = dpg.get_y_scroll_max(self.FileTable)
         rowSize = yMax/len(self.FilesDF)
         print(f"ScrollToRow {y=} {yMax=} {row=} {len(self.FilesDF)} {rowSize=}")
-        if yMax > 0: pxl = row * rowSize
-        else: pxl = row * ROW_PXL
+        if yMax > 0: pxl = (row+1) * rowSize
+        else: pxl = (row+1) * ROW_PXL
         dpg.set_y_scroll(self.FileTable, pxl)
 
     def resize_handler(self, sender, app_data, user_data):
@@ -833,14 +833,14 @@ if __name__ == '__main__':
             print(f"{font=} {scale=}")
             config = {"echoMeterDir": "", "dir": ".", "file": EXAMPLE_FILE, "minT": 0, "maxT": 1.0, 
                 "width":  s.width - 200, "height":  int(s.height - (HEADER + STATUS_HT / 2) * scale), "x": 200 , "y":  0, "font": font, "scale": scale,
-                "EditMode": "None", "SpeciesLanguage": "EnglishAbbrev", "Range": "1.0", "minF": "10.0", "maxF": "125.0", "MultiFile": False}
+                "EditMode": "None", "SpeciesLanguage": "EnglishAbbrev", "Range": "1.0", "MultiFile": False}
         else:
             font = int(other.width / other.width_mm* 1.5)
             scale = other.width / other.width_mm / 4
             print(f"{font=} {scale=}")
             config = {"echoMeterDir": "", "dir": ".", "file": EXAMPLE_FILE, "minT": 0, "maxT": 1.0, 
                 "width":  other.width, "height":  int(other.height - (HEADER + STATUS_HT / 2) * scale), "x":  other.x, "y":  other.y, "font": font, "scale": scale, 
-                "EditMode": "None", "SpeciesLanguage": "EnglishAbbrev", "Range": "1.0", "minF": "10.0", "maxF": "125.0", "MultiFile": False}
+                "EditMode": "None", "SpeciesLanguage": "EnglishAbbrev", "Range": "1.0", "MultiFile": False}
         dpg.create_viewport(title=TITLE, width=config["width"], height=config["height"],
             x_pos=config["x"], y_pos= config["y"], small_icon='Resources/bat_128px.ico', large_icon='Resources/bat_128px.ico')
                    
@@ -864,8 +864,6 @@ if __name__ == '__main__':
         config['font'] = config['font'] /config["scale"]
         config['scale'] = 1
         config["Range"] = main.SpecDisplay1.Range
-        config["minF"] = main.SpecDisplay1.minF
-        config["maxF"] = main.SpecDisplay1.maxF
         config["EditMode"] = main.EditMode
         config["SpeciesLanguage"] = main.SpecDisplay1.SpeciesLanguage
         config["MultiFile"] = main.MultiFile
