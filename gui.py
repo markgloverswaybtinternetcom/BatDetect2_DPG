@@ -631,7 +631,7 @@ class MainWindow():
     def ClassifyDir(self, dir_path):
         with wakepy.keep.running():
             config["dir"] = dir_path
-            classify = Classify()
+            classify = Classifier()
             files = utils.ListAudioFiles(dir_path)
             # process files
             dpg.delete_item(self.FileTable, children_only=True, slot=0) # remove columns

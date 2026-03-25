@@ -218,7 +218,7 @@ class FileDialog():
     def TableRow_selected(self, sender, app_data, user_data):
         global LastRowSelected # fixes bug getting old value of self
         table = user_data[0]; nRow = user_data[1]; filepath = user_data[2]
-        print(f"TableRow_selected {table=} {nRow=} {filepath=}")
+        #print(f"TableRow_selected {nRow=} {filepath=}")
         if LastRowSelected is not None: 
             dpg.unhighlight_table_row(table, LastRowSelected)
         if os.path.isdir(filepath):
