@@ -3,7 +3,6 @@ import sys, os, time, datetime, psutil, textwrap, soundfile, colorama, WavUtil
 from mutagen.mp3 import MP3
 if sys.platform.startswith("win"): 
     import win32api
-from torchcodec.decoders import AudioDecoder
 
 LastRowSelected = None #fixes bug 
 

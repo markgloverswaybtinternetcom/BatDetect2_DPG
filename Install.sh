@@ -10,7 +10,6 @@ uv add sounddevice
 uv add torch
 uv add torchaudio
 uv add torchaudio_filters
-uv add torchcodec
 uv add librosa
 uv add folium
 uv add screeninfo
@@ -18,7 +17,6 @@ uv add chime
 uv add wakepy
 uv add psutil
 uv add mutagen
-sudo apt-get install ffmpeg
 sudo apt-get install libasound-dev portaudio19-dev libportaudio2 libportaudiocpp0
 chmod u+x ./run.sh
 echo '[Desktop Entry]' > ~/Desktop/dpg.desktop

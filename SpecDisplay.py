@@ -2,15 +2,13 @@ import dearpygui.dearpygui as dpg
 import sys, os, subprocess
 if sys.platform.startswith("win"): 
     import DearPyGui_DragAndDrop as DragAndDrop
-    os.add_dll_directory(os.path.dirname(__file__) + "/ffmpeg") # allows for remote batch files
-import numpy, soundfile, sounddevice, time, warnings, scipy, traceback, colorama
-import pandas, re, multiprocessing, ctypes, math, torchaudio, torch, torchaudio_filters
+import numpy, soundfile, sounddevice, warnings, scipy, traceback, colorama, time
+import pandas, re, multiprocessing, ctypes, math, torch, torchaudio, torchaudio_filters
 import scipy.signal, scipy.io.wavfile # filter for ref calls
 import utils
 from Classifier import Classifier
 from BatCalls import BatCalls
 from EchoMeter import EchoMeter
-from torchcodec.decoders import AudioDecoder
 numpy.set_printoptions(precision=3, suppress=True)
 numpy.set_printoptions(threshold=sys.maxsize)
 
@@ -29,7 +27,8 @@ class SpecDisplay():
         self.Status = parentSelf.Status
         self.classifyEnabled = True
         sys.excepthook = self.notify_exception
-        self.FileTableRow = self.lastMousePlotPos = self.lastMousePos = self.soundLine = self.duration = self.dirIndex = self.FilesDF = self.PlayObject = self.ZoomStart = None 
+        self.FileTableRow = self.lastMousePlotPos = self.lastMousePos = self.soundLine = self.duration = None
+        self.dirIndex = self.FilesDF = self.PlayObject = self.ZoomStart = self.SoundFile = None 
         self.activeButtonCallback = activeButtonCallback        
         self.minF = MIN_FREQ_KHZ; self.maxF = MAX_FREQ_KHZ
         self.colours = self.GenerateSpectrum()
@@ -157,7 +156,7 @@ class SpecDisplay():
     def RememberDirectory(self, dir, f):
         print(f"RememberDirectory {dir=} {f=}")
         # will include files with no classified calls
-        self.dirFiles = utils.ListAudioFiles(dir)
+        self.dirFiles = utils.ListAudioFiles(dir, TimeExpanded=True)
         i = 0
         for filepath in self.dirFiles:
             if f == filepath:
@@ -210,17 +209,20 @@ class SpecDisplay():
     def LoadFile(self, filepath, titleExtra=""):
         self.Status("")
         filename = os.path.basename(os.path.splitext(filepath)[0])
-        self.decoder = AudioDecoder(filepath)
-        self.sample_rate = self.decoder.metadata.sample_rate
+        if self.SoundFile is not None: self.SoundFile.close()
+        self.SoundFile = soundfile.SoundFile(filepath, 'r')
+        self.sample_rate = self.SoundFile.samplerate
+        self.duration = self.SoundFile.frames / self.sample_rate
+        
         if filename.endswith("TE"):
             self.timeExpand = True            
             self.sample_rate *= 10
+            self.duration = self.duration / 10
             c = f"Time expanded file increasing sampling rate to {self.sample_rate}"
             print(f"LoadFile {c}")
             self.Status(c)
         else:  self.timeExpand = False
-        if self.decoder.metadata.begin_stream_seconds_from_header is None: self.duration = self.decoder.metadata.duration_seconds_from_header
-        else: self.duration = self.decoder.metadata.duration_seconds_from_header - self.decoder.metadata.begin_stream_seconds_from_header
+        
         print(f"LoadFile {filepath=}  {self.duration=} {titleExtra=}")
         userPath = os.path.expanduser("~")
         if userPath.lower() in filepath.lower():
@@ -251,19 +253,21 @@ class SpecDisplay():
         
     def LoadFileSegment(self):
         print(f"LoadFileSegment {self.minT=} {self.maxT=} {self.minF=} {self.maxF=} ")
-        if self.timeExpand: waveformTensor = self.decoder.get_samples_played_in_range(start_seconds=self.minT*10, stop_seconds=self.maxT*10)
-        else: waveformTensor = self.decoder.get_samples_played_in_range(start_seconds=self.minT, stop_seconds=self.maxT)
-        waveformTensor = waveformTensor.data
+        nSamples = int(self.sample_rate * (self.maxT - self.minT))
+        self.SoundFile.seek(int(self.sample_rate * self.minT))
+        waveform_arr = numpy.swapaxes(self.SoundFile.read(nSamples, always_2d=True),0,1) #stereo wrong axis for Torch
+        waveformTensor = torch.from_numpy(waveform_arr).float()
         if self.sample_rate <= STD_SAMPLING: nfft=NFFT
         elif self.sample_rate > STD_SAMPLING: 
             nfft = int(NFFT * self.sample_rate / STD_SAMPLING) # allow for extra frequencies
             print(f"LoadFileSegment {self.sample_rate=} > {STD_SAMPLING} reducing {NFFT=} to {nfft=}")        
         specTransform = torchaudio.transforms.Spectrogram(n_fft=nfft, hop_length=int(nfft*RELATIVE_HOP_LENGTH), power=1, window_fn=torch.blackman_window)#power: 1=magnitude, 2=power
+        print(f"LoadFileSegment specTransform {waveformTensor.shape=}")  
         spectrogram = specTransform(waveformTensor) # [Channels, Frequency Bins ,Time Steps]
-        #print(f"LoadFileSegment specTransform {waveformTensor.shape=} = {spectrogram.shape=}")    
+        print(f"LoadFileSegment specTransform {waveformTensor.shape=} = {spectrogram.shape=}")    
         if self.sample_rate > STD_SAMPLING: 
             n =  NFFT // 2 +1
-            #print(f"LoadFileSegment top {spectrogram.shape[1] - n} frequencies cut off")
+            print(f"LoadFileSegment top {spectrogram.shape[1] - n} frequencies cut off")
             spectrogram = spectrogram[:, :n, :]# cut off higher frequencies
         elif self.sample_rate < STD_SAMPLING:
             #n = NFFT // 2 +1 - spectrogram.shape[1]

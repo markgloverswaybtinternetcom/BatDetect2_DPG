@@ -9,7 +9,6 @@ uv add soundfile
 uv add torch
 uv add torchaudio
 uv add torchaudio_filters
-uv add torchcodec
 uv add librosa
 uv add folium
 uv add screeninfo
@@ -19,7 +18,6 @@ uv add wakepy
 uv add psutil
 uv add sounddevice
 uv add mutagen
-tar -xf ffmpeg.zip
 Resources\create-shortcut --work-dir "%CD%" --icon-file "%CD%\Resources\bat_128px.ico" "%CD%\run.bat" "%USERPROFILE%\Desktop\BatDetect2 DPG.lnk"
 uv run gui.py
 pause

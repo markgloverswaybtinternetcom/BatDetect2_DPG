@@ -2,11 +2,9 @@ import dearpygui.dearpygui as dpg
 import sys, os, subprocess, utils
 if sys.platform.startswith("win"): 
     import DearPyGui_DragAndDrop as DragAndDrop
-    os.add_dll_directory(os.path.join(os.path.dirname(__file__), "ffmpeg")) # allows for remote batch files
 import numpy, soundfile, sounddevice, time, warnings, json, scipy, wakepy, json, colorama
 import pandas, re, multiprocessing, ctypes, math, torchaudio, torch, torchaudio_filters, traceback, webbrowser, chime, Classifier
 import scipy.signal, scipy.io.wavfile # filter for ref calls
-from torchcodec.decoders import AudioDecoder
 from screeninfo import get_monitors
 from SpecDisplay import SpecDisplay
 from FileDialog import FileDialog
@@ -178,7 +176,8 @@ class MainWindow():
                 self.LoadClassifiedFile(lastFile, self.SpecDisplay1)
             else:
                 self.Status(f"LAST FILE '{lastFile}' NO LONGER EXISTS", error=True)
-        self.SpeciesLanguageCombo_changed(None, self.SpeciesLanguage, None)
+                
+        self.SpeciesLanguageCombo_changed(None, self.SpeciesLanguage, None, updateDisplay=False)
         self.EditModeListbox_changed(None, self.EditMode, None)
 
     def notify_exception(self, type, value, tb):
@@ -249,6 +248,9 @@ class MainWindow():
         elif self.ActiveDisplay.dirIndex > 0:
             self.ActiveDisplay.dirIndex -= 1
             self.LoadClassifiedFile(self.ActiveDisplay.dirFiles[self.ActiveDisplay.dirIndex], self.ActiveDisplay)
+        else:
+            self.ActiveDisplay.dirIndex = len(self.ActiveDisplay.dirFiles) -1 # wrap arround
+            self.LoadClassifiedFile(self.ActiveDisplay.dirFiles[self.ActiveDisplay.dirIndex], self.ActiveDisplay)
                 
     def DownKey_pressed(self, sender, app_data, user_data):
         print(f"UpKey_pressed {self.MultiFile=} {self.lastRow=} {self.ActiveDisplay.dirIndex=}")
@@ -264,7 +266,10 @@ class MainWindow():
         elif self.ActiveDisplay.dirIndex < len(self.ActiveDisplay.dirFiles) -1:
             self.ActiveDisplay.dirIndex += 1
             self.LoadClassifiedFile(self.ActiveDisplay.dirFiles[self.ActiveDisplay.dirIndex], self.ActiveDisplay)
-            
+        else:
+            self.ActiveDisplay.dirIndex = 0 # wrap arround
+            self.LoadClassifiedFile(self.ActiveDisplay.dirFiles[self.ActiveDisplay.dirIndex], self.ActiveDisplay)
+             
     def LeftKey_pressed(self, sender, app_data, user_data):
         print(f"LeftKey_pressed {self.Range=}")        
         if self.ActiveDisplay.minT - self.Range < 0: self.ActiveDisplay.maxT = self.Range; self.ActiveDisplay.minT = 0
@@ -632,7 +637,7 @@ class MainWindow():
         with wakepy.keep.running():
             config["dir"] = dir_path
             classify = Classifier()
-            files = utils.ListAudioFiles(dir_path)
+            files = utils.ListAudioFiles(dir_path, TimeExpanded=False)
             # process files
             dpg.delete_item(self.FileTable, children_only=True, slot=0) # remove columns
             dpg.delete_item(self.FileTable, children_only=True, slot=1) # remove rows
@@ -669,7 +674,7 @@ class MainWindow():
         dpg.configure_item(self.AssignSpeciesCombo, show=showAssign)
         dpg.configure_item(self.AssignCallTypeCombo, show=showAssign)
 
-    def SpeciesLanguageCombo_changed(self, sender, app_data, user_data):
+    def SpeciesLanguageCombo_changed(self, sender, app_data, user_data, updateDisplay=True):
         print(f"SpeciesLanguageCombo_changed {sender=} {app_data=} {user_data=}")
         self.SpeciesLanguage = self.SpecDisplay1.SpeciesLanguage = self.SpecDisplay2.SpeciesLanguage = app_data
         self.AbbrevSpeciesLanguage = self.FullSpeciesLanguage = self.SpeciesLanguage
@@ -681,8 +686,9 @@ class MainWindow():
             sortedSpecies = list(self.SpeciesNames.sort_values(by=["bat",self.FullSpeciesLanguage], ascending=[False,True])[self.FullSpeciesLanguage])
         else: sortedSpecies = []
         dpg.configure_item(self.AssignSpeciesCombo, items=sortedSpecies)
-        self.SpecDisplay1.DisplaySpectogram(UpdateMin= False, sound = False)
-        self.SpecDisplay2.DisplaySpectogram(UpdateMin= False, sound = False)
+        if updateDisplay:
+            self.SpecDisplay1.DisplaySpectogram(UpdateMin= False, sound = False)
+            self.SpecDisplay2.DisplaySpectogram(UpdateMin= False, sound = False)
         
     def LowFilterListBox_changed(self, sender, app_data, user_data):
         self.SpecDisplay1.minF = self.SpecDisplay2.minF = int(app_data.split()[1])

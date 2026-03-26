@@ -1,4 +1,4 @@
-import pandas, os, sys, torch, librosa, colorama, json, utils
+import pandas, os, sys, torch, colorama, json, utils, time, soundfile
 from batdetect2.detector.parameters import DEFAULT_MODEL_PATH
 from batdetect2.api import load_model, get_config
 import batdetect2.utils.detector_utils as du
@@ -6,9 +6,6 @@ import batdetect2.utils.audio_utils as au
 import batdetect2.detector.compute_features as feats
 from batdetect2.types import ( DetectionModel, ProcessingConfiguration, RunResults)
 from typing import Any, Union
-if sys.platform.startswith("win"): 
-    os.add_dll_directory(os.path.join(os.path.dirname(__file__), "ffmpeg")) # allows for remote batch files
-from torchcodec.decoders import AudioDecoder
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 MIN_PROB = 0.2
 
@@ -94,9 +91,8 @@ class Classifier():
 
     def process_file(self, audio_file: str, model: DetectionModel, config: ProcessingConfiguration, device: torch.device = DEVICE) -> Union[RunResults, Any]:
         predictions = []; spec_feats = []
-        self.decoder = AudioDecoder(audio_file)
-        file_samp_rate = self.decoder.metadata.sample_rate
-        #file_samp_rate = librosa.get_samplerate(audio_file)
+        info = soundfile.info(audio_file)
+        file_samp_rate = info.samplerate
         orig_samp_rate = file_samp_rate * (config.get("time_expansion") or 1)
         sampling_rate, audio_full = au.load_audio( audio_file, time_exp_fact=config.get("time_expansion", 1) or 1,  target_samp_rate=config["target_samp_rate"], scale=config["scale_raw_audio"], max_duration=config.get("max_duration"))
 

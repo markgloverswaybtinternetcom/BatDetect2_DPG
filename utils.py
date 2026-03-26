@@ -1,14 +1,15 @@
 import sys, os, re
 
-def ListAudioFiles(ip_dir: str):
+def ListAudioFiles(ip_dir: str, TimeExpanded = False):
     matches = []
     for filename in os.listdir(ip_dir):
         filepath = os.path.join(ip_dir, filename)
         if os.path.isdir(filepath): continue
         size = os.path.getsize(filepath)
         f = filename.upper()
-        if (f.endswith(".WAV") or f.endswith(".MP3")) and not f.endswith("_TE.WAV") and f != 'TEMP.WAV' and size > 0:
-            matches.append(filepath)
+        if (f.endswith(".WAV") or f.endswith(".MP3")) and f != 'TEMP.WAV' and size > 0:
+            if TimeExpanded == True or not f.endswith("_TE.WAV"):
+                matches.append(filepath)
     return matches
    
 def FileDate(a):
