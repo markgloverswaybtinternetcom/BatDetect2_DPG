@@ -21,7 +21,7 @@ def FileDrop(f):
 def ClassifyDir(dir_path):
     with wakepy.keep.running():
         classify = Classifier()
-        files = utils.ListAudioFiles(dir_path)
+        files = utils.ListAudioFiles(dir_path, TimeExpanded=False)
         FilesDF = pandas.DataFrame(columns =["Filename", "Bat Calls"])
         length = len(files)
         for index, audio_file in enumerate(files): 

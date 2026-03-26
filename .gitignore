@@ -5,7 +5,6 @@ build/
 dist/
 wheels/
 *.egg-info
-ffmpeg/
 Resources/temp.wav
 README.md.backup
 gui_Config.json
