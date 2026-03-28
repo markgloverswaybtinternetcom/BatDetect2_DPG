@@ -106,13 +106,19 @@ class FileDialog():
     
     def _get_all_drives(self):
         all_drives = psutil.disk_partitions()
-        drive_list = [drive.mountpoint for drive in all_drives if drive.mountpoint]
         if os.name == 'posix':
+            drive_list = [drive.mountpoint for drive in all_drives if drive.mountpoint and drive.mountpoint.startswith("/media")]
+        else:
+            drive_list = [drive.mountpoint for drive in all_drives if drive.mountpoint]
+            
+        print(f"_get_all_drives {drive_list=}")
+        """if os.name == 'posix':
             for device in os.listdir('/dev'):
                 if device.startswith("sd") or device.startswith("nvme"):
+                    print(f"_get_all_drives {device=}")
                     device_path = f"/dev/{device}"
                     if device_path not in drive_list:
-                        drive_list.append(device_path)
+                        drive_list.append(device_path)"""
         return drive_list
 
     def DisplayRoost(self):

@@ -12,7 +12,7 @@ from EchoMeter import EchoMeter
 numpy.set_printoptions(precision=3, suppress=True)
 numpy.set_printoptions(threshold=sys.maxsize)
 
-MIN_FREQ_KHZ = 0; MAX_FREQ_KHZ = 125; STD_SAMPLING = 250000; MAX_PLAY_RATE = 40000; MAX_PLAY_SEC = 30; LOUDNESS = 10
+MIN_FREQ_KHZ = 0; MAX_FREQ_KHZ = 125; STD_SAMPLING = 250000; MAX_PLAY_RATE = 40000; MAX_PLAY_SEC = 30; LOUDNESS = 15
 NFFT = 512; RELATIVE_HOP_LENGTH = 0.5 # spectogram settings
 PSD_WIDTH = 80;  SLIDER_W = 17; AMP_HT=80; SCROLL_HT=19; BUTTON_HT=19; STATUS_HT=24; SPACING=7; HEADER=30; COLOR_SCALE_W=55
 ROW_PXL = 17 # table scrolling

@@ -25,6 +25,8 @@ echo 'Type=Application' >> ~/Desktop/dpg.desktop
 echo "Exec=$(pwd)/run.sh" >> ~/Desktop/dpg.desktop
 echo "Icon=$(pwd)/Resources/bat_128px.ico" >> ~/Desktop/dpg.desktop
 echo 'Terminal=true' >> ~/Desktop/dpg.desktop
+chmod u+x ./run.sh
+chmod u+x ./wavplayer/wavplay
 chmod u+x ~/Desktop/dpg.desktop
 echo "Need to Allow Launching on Desktop shortcut file dpg.desktop"
 uv run gui.py
