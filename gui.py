@@ -3,7 +3,8 @@ import sys, os, subprocess, utils
 if sys.platform.startswith("win"): 
     import DearPyGui_DragAndDrop as DragAndDrop
 import numpy, soundfile, sounddevice, time, warnings, json, scipy, wakepy, json, colorama
-import pandas, re, multiprocessing, ctypes, math, torchaudio, torch, torchaudio_filters, traceback, webbrowser, chime, Classifier
+import re, multiprocessing, ctypes, math, torchaudio, torch, torchaudio_filters, traceback, webbrowser, chime, Classifier
+import pandas, polars
 import scipy.signal, scipy.io.wavfile # filter for ref calls
 from screeninfo import get_monitors
 from SpecDisplay import SpecDisplay
@@ -564,7 +565,7 @@ class MainWindow():
             self.MultiFile = True;
             dpg.configure_item(self.SpecDisplay2.topGroup, show=False)
             if os.path.basename(f).startswith("Session_"):
-                print(f"FileDrop single echometer directory {f} found")
+                print(f"LoadFileOrDir single echometer directory {f} found")
                 self.Status(f"Classifying single echo meter session at {f}")
                 self.LoadEchoMeterDir(f)
                 config['echoMeterDir'] = f
@@ -581,9 +582,39 @@ class MainWindow():
                 self.LoadEchoMeterDir(f)
                 config['echoMeterDir'] = f
             else:
-                self.ClassifyDir(f)
-                self.Status(f"Classified directory {f}")
-            self.resize_handler(0, None, None)
+                match = None
+                for filename in os.listdir(f):
+                    match = re.match(r".*-results_\d+\.csv$", filename)
+                    if match: break
+                if match:
+                    print(f"LoadFileOrDir {match=}")
+                    df = polars.read_csv(os.path.join(f, str(match.group(0))))
+                    df = df.select([polars.col('ORIGINAL FILE NAME').alias("Filename"),'SCIENTIFIC NAME','CALL TYPE','PROBABILITY'])
+                    df = df.filter((polars.col("SCIENTIFIC NAME") != "") & (polars.col("CALL TYPE") != "null"))
+                    agg_df = df.group_by('Filename','SCIENTIFIC NAME','CALL TYPE').agg([polars.max('PROBABILITY')]).sort('Filename')
+                    filename = ""
+                    fileSummary = ""
+                    latinToLangDict = self.SpeciesNames.set_index('Latin')[self.SpeciesLanguage].to_dict()
+                    self.FilesDF = polars.DataFrame(schema=[("Filename", polars.Utf8), ("Bat Call", polars.Utf8)]) # Utf8 = string
+                    for row in agg_df.iter_rows():
+                        callType = ""
+                        if filename != row[0]:
+                            if len(fileSummary) > 0:
+                                new_row = polars.DataFrame({"Filename": [filename], "Bat Call": [fileSummary]})
+                                self.FilesDF = self.FilesDF.extend(new_row)
+                            fileSummary = ""
+                            filename = row[0]
+                        species = latinToLangDict[row[1]]
+                        if row[2] != "echolocation": callType = " " + row[2]
+                        fileSummary += f"{species}{callType} {row[3]:.0%}, "
+                    if len(fileSummary) > 0:
+                        new_row = polars.DataFrame({"Filename": [filename], "Bat Call": [fileSummary]})
+                        self.FilesDF = self.FilesDF.extend(new_row)
+                    print(self.FilesDF)
+                else:
+                    self.ClassifyDir(f)
+                    self.Status(f"Classified directory {f}")
+                self.resize_handler(0, None, None)
         elif os.path.isfile(f):
             if display == self.SpecDisplay1: self.MultiFile = False; 
             self.LoadClassifiedFile(f, display)

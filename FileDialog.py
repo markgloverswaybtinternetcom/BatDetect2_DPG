@@ -4,6 +4,7 @@ from mutagen.mp3 import MP3
 if sys.platform.startswith("win"): 
     import win32api
 
+MAX_SECS = 5.0
 LastRowSelected = None #fixes bug 
 
 class FileDialog(): 
@@ -54,6 +55,7 @@ class FileDialog():
                     self.UpDirButton = dpg.add_button(arrow=True, direction=dpg.mvDir_Up,label="Up Dir", callback=self.UpDir_callback)
                     self.loadFileButton = dpg.add_button(label="Load WAV / Dir in main", callback=self.LoadFileSelected_callback)
                     self.loadCompareButton = dpg.add_button(label="Load WAV in comparison", callback=self.LoadFileComparison_callback)
+                    self.SplitLongWavs = dpg.add_button(label="Split Long WAVs", show=False, callback=self.SplitLongWavs_callback)
                     self.WavMetadataButton = dpg.add_button(label="WAV Metadata in Console", callback=self.WavMetadata_callback)                               
         with dpg.item_handler_registry(tag="file dialog resize handler"):
             dpg.add_item_resize_handler(callback=self.resize_handler)
@@ -110,15 +112,6 @@ class FileDialog():
             drive_list = [drive.mountpoint for drive in all_drives if drive.mountpoint and drive.mountpoint.startswith("/media")]
         else:
             drive_list = [drive.mountpoint for drive in all_drives if drive.mountpoint]
-            
-        print(f"_get_all_drives {drive_list=}")
-        """if os.name == 'posix':
-            for device in os.listdir('/dev'):
-                if device.startswith("sd") or device.startswith("nvme"):
-                    print(f"_get_all_drives {device=}")
-                    device_path = f"/dev/{device}"
-                    if device_path not in drive_list:
-                        drive_list.append(device_path)"""
         return drive_list
 
     def DisplayRoost(self):
@@ -263,6 +256,7 @@ class FileDialog():
             dpg.unhighlight_table_row(table, LastRowSelected)
         dpg.highlight_table_row(table, nRow, color=[0,100,0])
         LastRowSelected = nRow
+        dpg.configure_item(self.SplitLongWavs, show=True)
         print(f"Dir_selected {self.selectedDir=}")
     
     def UpDir_callback(self):
@@ -281,6 +275,27 @@ class FileDialog():
                     phrases = line.split(',')
                     for phrase in phrases: print(phrase)
                 elif len(line) > 0: print(line)
+    
+    def SplitLongWavs_callback(self):
+        global LastRowSelected # fixes bug getting old value of self
+        if self.selectedDir is not None:
+            for f in os.listdir(self.selectedDir):
+                f = os.path.join(self.selectedDir, f) 
+                if os.path.isfile(f) and (f.lower().endswith(".wav") or f.lower().endswith(".mp3")):
+                    sf = soundfile.SoundFile(f, 'r')
+                    sample_rate = sf.samplerate
+                    duration = sf.frames / sample_rate
+                    sf.close()
+                    if duration > MAX_SECS:
+                        nSamples = int(MAX_SECS * sample_rate)                    
+                        n=0
+                        for block in soundfile.blocks(f, blocksize=nSamples):
+                            soundfile.write(f"{f.split('.', 1)[0]}_{n}.wav", block, samplerate=sample_rate)
+                            n += 1
+                        os.remove(f)
+            if LastRowSelected is not None: 
+                dpg.unhighlight_table_row(table, LastRowSelected)
+                   
         
     def resize_handler(self, sender, app_data, user_data):
         windowHeight = dpg.get_item_height(self.window)

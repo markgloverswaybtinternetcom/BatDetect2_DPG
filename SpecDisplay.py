@@ -255,7 +255,7 @@ class SpecDisplay():
         print(f"LoadFileSegment {self.minT=} {self.maxT=} {self.minF=} {self.maxF=} ")
         nSamples = int(self.sample_rate * (self.maxT - self.minT))
         self.SoundFile.seek(int(self.sample_rate * self.minT))
-        waveform_arr = numpy.swapaxes(self.SoundFile.read(nSamples, always_2d=True),0,1) #stereo wrong axis for Torch
+        waveform_arr = numpy.swapaxes(self.SoundFile.read(nSamples, always_2d=True), 0, 1) #stereo wrong axis for Torch
         waveformTensor = torch.from_numpy(waveform_arr).float()
         if self.sample_rate <= STD_SAMPLING: nfft=NFFT
         elif self.sample_rate > STD_SAMPLING: 
