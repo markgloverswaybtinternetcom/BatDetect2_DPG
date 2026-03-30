@@ -67,7 +67,7 @@ class BatCalls():
                             else:
                                 ann = dpg.add_plot_annotation(parent=plot, label=l, default_value=(t, f1), offset=(0, 45), color=[150, 150, 150, 128])
                             i = i +1
-                #print(f"DisplayAnnotations added {i} plot_annotations")
+                        #print(f"DisplayAnnotations added {i} plot_annotations")
             else:
                 exception = f"{len(calls)} calls - Too many to label"
         return species, exception

@@ -81,13 +81,13 @@ Some sounds are easier to recognise as sounds than spectrograms. Bat sounds are 
  ![](Resources/web_Images/RangeFilter.png)
  
 The new area will have its time expanded sound play automatically, this will stop short if the spectrogram area is changed.
-    
+ 
  #### Save Bat Call Sound
  
 *   Select 'Speed' combo-box,
  *   Press 'Save Sound' button
  
- Saves only displayed sound, file-name based on originating file and in the same directory.  
+ Saves only displayed sound, file-name based on originating file, position in file, species and in the same directory. 
  Time expanded recordings names end with 'TE.wav'
  
  #### Save current settings
@@ -102,7 +102,7 @@ The new area will have its time expanded sound play automatically, this will sto
    *   Press 'Select Dir' button
    *   Press 'Split Long WAVs' button
  
-Any files longer than 5 seconds will be split into smaller files
+Any files longer than 5 seconds will be split into smaller files. The pipeline only says there is a species in a file, so it recommends short files of 5 seconds.
  
    #### Load results from pipeline
    *   copy results '.csv' from BTO pipeline email into directory processed

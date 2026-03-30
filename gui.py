@@ -183,7 +183,7 @@ class MainWindow():
             else:
                 self.Status(f"LAST FILE '{lastFile}' NO LONGER EXISTS", error=True)
                 
-        self.SpeciesLanguageCombo_changed(None, self.SpeciesLanguage, None, updateDisplay=False)
+        self.SpeciesLanguageCombo_changed(None, self.SpeciesLanguage, None)
         self.EditModeListbox_changed(None, self.EditMode, None)
 
     def notify_exception(self, type, value, tb):
@@ -610,7 +610,7 @@ class MainWindow():
             df = polars.read_csv(os.path.join(f, str(match.group(0))))
             df = df.select([polars.col('ORIGINAL FILE NAME').alias("Filename"),'SCIENTIFIC NAME','CALL TYPE','PROBABILITY'])
             df = df.filter((polars.col("SCIENTIFIC NAME") != "") & (polars.col("CALL TYPE") != "null"))
-            agg_df = df.group_by('Filename','SCIENTIFIC NAME','CALL TYPE').agg([polars.col('PROBABILITY').max().alias("maxProb"), polars.col('PROBABILITY').min().alias("minProb"), polars.count().alias("count")]).sort('Filename','maxProb')
+            agg_df = df.group_by('Filename','SCIENTIFIC NAME','CALL TYPE').agg([polars.col('PROBABILITY').max().alias("maxProb"), polars.col('PROBABILITY').min().alias("minProb"), polars.len().alias("count")]).sort('Filename','maxProb')
             filename = ""
             fileSummary = ""
             latinToLangDict = self.SpeciesNames.set_index('Latin')[self.SpeciesLanguage].to_dict()
@@ -723,9 +723,9 @@ class MainWindow():
         dpg.configure_item(self.AssignSpeciesCombo, show=showAssign)
         dpg.configure_item(self.AssignCallTypeCombo, show=showAssign)
 
-    def SpeciesLanguageCombo_changed(self, sender, app_data, user_data, updateDisplay=True):
+    def SpeciesLanguageCombo_changed(self, sender, app_data, user_data):
         print(f"SpeciesLanguageCombo_changed {sender=} {app_data=} {user_data=}")
-        self.SpeciesLanguage = self.SpecDisplay1.SpeciesLanguage = self.SpecDisplay2.SpeciesLanguage = app_data
+        self.SpeciesLanguage = self.SpecDisplay1.SpeciesLanguage = self.SpecDisplay2.SpeciesLanguage = self.SpecDisplay1.calls.SpeciesLanguage = self.SpecDisplay2.calls.SpeciesLanguage = app_data
         self.AbbrevSpeciesLanguage = self.FullSpeciesLanguage = self.SpeciesLanguage
         if self.SpeciesLanguage == "LatinAbbrev": self.FullSpeciesLanguage = "Latin"
         elif self.SpeciesLanguage == "EnglishAbbrev": self.FullSpeciesLanguage = "English"
@@ -735,7 +735,7 @@ class MainWindow():
             sortedSpecies = list(self.SpeciesNames.sort_values(by=["bat",self.FullSpeciesLanguage], ascending=[False,True])[self.FullSpeciesLanguage])
         else: sortedSpecies = []
         dpg.configure_item(self.AssignSpeciesCombo, items=sortedSpecies)
-        if updateDisplay:
+        if sender is not None:
             self.SpecDisplay1.DisplaySpectogram(UpdateMin= False, sound = False)
             self.SpecDisplay2.DisplaySpectogram(UpdateMin= False, sound = False)
         
