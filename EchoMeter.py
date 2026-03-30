@@ -20,7 +20,8 @@ class EchoMeter():
         if os.path.exists(gpsBatFilePath):
             self.GpsFilesDF = polars.read_csv(gpsBatFilePath)
         else:
-            self.GpsFilesDF = polars.DataFrame([], columns =["SessionName", "Filename", "DateTime", "Lat", "Long", "Class", "Abbrev", "Species"])
+            self.GpsFilesDF = polars.DataFrame(schema=[("SessionName", polars.Utf8), ("Filename", polars.Utf8), ("DateTime", polars.Utf8), 
+                ("Lat", polars.Float64), ("Long", polars.Float64), ("Class", polars.Utf8), ("Abbrev", polars.Utf8), ("Species", polars.Utf8) ]) # Utf8 = string
             if not os.path.exists(self.TE_DirPath):
                 os.makedirs(self.TE_DirPath)
         print("LoadEchoMeterDir", echoMeterPath)
@@ -29,7 +30,7 @@ class EchoMeter():
             # single directory
             if basename not in self.GpsFilesDF["SessionName"].values:
                 self.DecodeSession(echoMeterPath)
-                self.GpsFilesDF.to_csv(os.path.join(self.echoMeterPath, 'GpsBatCallFiles.csv'), index=False)
+                self.GpsFilesDF.write_csv(os.path.join(self.echoMeterPath, 'GpsBatCallFiles.csv'))
         else:
             # multiple sub-directories
             self.LoadNewSessions()
@@ -37,24 +38,26 @@ class EchoMeter():
             
     def LoadNewSessions(self):
         for session in os.listdir(self.echoMeterPath):
+            print(f"LoadNewSessions {session=} {len(self.GpsFilesDF)=}")
             if session.startswith("Session_"):
-                if session not in self.GpsFilesDF["SessionName"].values:
-                    self.DecodeSession(os.path.join(self.echoMeterPath, session))
+                sessionExists = self.GpsFilesDF.select(polars.col("SessionName").is_in([session]).any()).item()
+                print(f"LoadNewSessions {sessionExists=}")
+                if sessionExists:
+                    print(f"LoadNewSessions {session} already exists")
                 else:
-                    print(f"LoadNewSessions {session} already exists")				
-        self.GpsFilesDF.to_csv(os.path.join(self.echoMeterPath, 'GpsBatCallFiles.csv'), index=False)
+                    self.DecodeSession(os.path.join(self.echoMeterPath, session))
+        self.GpsFilesDF.write_csv(os.path.join(self.echoMeterPath, 'GpsBatCallFiles.csv'))
 
     def SaveEchoMeterDir(self, GpsFilesDF=None):
         if GpsFilesDF is not None:
-            self.GpsFilesDF = GpsFilesDF.dropna()
-        self.GpsFilesDF.to_csv(os.path.join(self.echoMeterPath, 'GpsBatCallFiles.csv'), index=False)
+            self.GpsFilesDF.write_csv(os.path.join(self.echoMeterPath, 'GpsBatCallFiles.csv'))
             
     def SaveMap(self, Satellite=False, GpsFilesDF=None, separateRubbish=False):
         if GpsFilesDF is not None:
-            self.GpsFilesDF = GpsFilesDF.dropna()
-            self.GpsFilesDF.to_csv(os.path.join(self.echoMeterPath, 'GpsBatCallFiles.csv'), index=False)
-        avgLat = self.GpsFilesDF["Lat"].mean()
-        avgLong = self.GpsFilesDF["Long"].mean()								
+            self.GpsFilesDF = GpsFilesDF.drop_nulls()
+            self.GpsFilesDF.write_csv(os.path.join(self.echoMeterPath, 'GpsBatCallFiles.csv'))      
+        avgLat = self.GpsFilesDF.select(polars.col("Lat").mean()).item()
+        avgLong = self.GpsFilesDF.select(polars.col("Long").mean()).item()
         map = folium.Map(location= [avgLat, avgLong] , zoom_start=17, width='100%', height='100%')
         if Satellite:
             tile = folium.TileLayer( tiles = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
@@ -63,7 +66,7 @@ class EchoMeter():
             rubbishDirPath = self.echoMeterPath + "/rubbish"
             os.rename(self.TE_DirPath, rubbishDirPath)
             os.makedirs(self.TE_DirPath)
-        for index, row in self.GpsFilesDF.iterrows():
+        for row in self.GpsFilesDF.iter_rows(named=True):
             if row["Species"] != 'NoID' and  row["Species"] != 'None':
                 aText = f'"TimeExpanded/{row["Filename"]}"'
                 pText = f'{row["Species"].replace(" ","_")}<br>{row["DateTime"].replace(" ","_")}<br><a href={aText}>Play sound 1/10</a>'
@@ -124,7 +127,8 @@ class EchoMeter():
                             results = self.classify.File(audioPath)
                             if len(results) > 0: 
                                 dateTime =  f"{a[6]+a[7]}/{a[4]+a[5]}/{a[2]+a[3]} {a[9]+a[10]}:{a[11]+a[12]}:{a[13]+a[14]}"
-                                self.GpsFilesDF.loc[len(self.GpsFilesDF)] = [session, recordingFile, dateTime, float(lat), float(long), results, abbrev, species]
+                                new_row = polars.DataFrame({ "SessionName": [session], "Filename": [recordingFile],  "DateTime": [dateTime], "Lat": [float(lat)], "Long": [float(long)], "Class": [results], "Abbrev": [abbrev], "Species": [species],})
+                                self.GpsFilesDF.extend(new_row)
                                 recording, sampleRate = soundfile.read(audioPath)
                                 self.SaveAudio(os.path.join(self.TE_DirPath, recordingFile), recording, sampleRate, factor=0.1) 
 

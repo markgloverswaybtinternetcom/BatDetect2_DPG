@@ -208,8 +208,8 @@ class MainWindow():
         yMax = dpg.get_y_scroll_max(self.FileTable)
         rowSize = yMax/len(self.FilesDF)
         print(f"ScrollToRow {y=} {yMax=} {row=} {len(self.FilesDF)} {rowSize=}")
-        if yMax > 0: pxl = (row+1) * rowSize
-        else: pxl = (row+1) * ROW_PXL
+        if yMax > 0: pxl = (row) * rowSize
+        else: pxl = (row) * ROW_PXL
         dpg.set_y_scroll(self.FileTable, pxl)
 
     def resize_handler(self, sender, app_data, user_data):
@@ -826,14 +826,13 @@ class MainWindow():
     def LoadGpsTable(self, table, dir_path):
         self.echoMeter = EchoMeter(self)
         self.FilesDF = self.echoMeter.LoadEchoMeterDir(dir_path)
-        self.FilesDF = self.FilesDF.with_columns(polars.lit(0.0).alias("minT"))
         nRows, nCols = self.FilesDF.shape
         self.NumFiles = nRows  
         self.FilesDF.drop('SessionName','Abbrev')
         
         dpg.delete_item(table, children_only=True, slot=0) # remove columns
         dpg.delete_item(table, children_only=True, slot=1) # remove rows
-        for column in columns: 
+        for column in self.FilesDF.columns: 
             if column == "Class": 
                 dpg.add_table_column(label="BatDetect2", width_fixed=True, init_width_or_weight=800, parent=table)
             elif column != "minT":
@@ -844,18 +843,17 @@ class MainWindow():
             with dpg.table_row(parent=table, height=ROW_PXL * config["scale"]):
                 for c in range(nCols):  
                     col_name = self.FilesDF.columns[c]
-                    if col_name not in removeColumns and not col_name.startswith('Unnamed'):
-                        a = self.FilesDF[r, col_name] 
-                        if isinstance(a, float) :
-                            f = float(a)
-                            if math.isnan(f):
-                                a = ''
-                        if col_name == "Species":
-                            speciesCell = dpg.add_selectable(label=str(a), callback=self.TableRow_selected, span_columns=True, user_data=[table, self.FilesDF, r, nRow])
-                            self.GpsSpeciesCells.append(speciesCell)
-                            dpg.bind_item_theme(speciesCell, self.magentaText_theme)
-                        else: 
-                            dpg.add_selectable(label=str(a), callback=self.TableRow_selected, span_columns=True, user_data=[table, self.FilesDF, r, nRow])
+                    a = self.FilesDF[r, col_name] 
+                    if isinstance(a, float) :
+                        f = float(a)
+                        if math.isnan(f):
+                            a = ''
+                    if col_name == "Species":
+                        speciesCell = dpg.add_selectable(label=str(a), callback=self.TableRow_selected, span_columns=True, user_data=[table, self.FilesDF, r, nRow])
+                        self.GpsSpeciesCells.append(speciesCell)
+                        dpg.bind_item_theme(speciesCell, self.magentaText_theme)
+                    else: 
+                        dpg.add_selectable(label=str(a), callback=self.TableRow_selected, span_columns=True, user_data=[table, self.FilesDF, r, nRow])
             nRow += 1            
     def SaveMap_clicked(self):
         resultFile = self.echoMeter.SaveMap(GpsFilesDF=self.FilesDF)
