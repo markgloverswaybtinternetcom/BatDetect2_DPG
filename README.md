@@ -102,6 +102,8 @@ The new area will have its time expanded sound play automatically, this will sto
    *   Press 'Select Dir' button
    *   Press 'Split Long WAVs' button
  
+Any files longer than 5 seconds will be split into smaller files
+ 
    #### Load results from pipeline
    *   copy results '.csv' from BTO pipeline email into directory processed
    *   Press 'Open Dir/File...', navigate to directory
