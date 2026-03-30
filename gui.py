@@ -143,21 +143,26 @@ class MainWindow():
         self.SpecDisplay1.dir = config['dir']; self.SpecDisplay1.file = config['file']
         if len(config['echoMeterDir']) > 0:
             self.LoadEchoMeterDir(config['echoMeterDir'])
-            rows = self.FilesDF[self.FilesDF['Filename'] == config["file"]]
-            if not rows.empty :            
-                row = rows.index[0]
+            matches = self.FilesDF.filter(polars.col("Filename") == config["file"])
+            matching_rows = (self.FilesDF.with_row_count("row_nr").filter(polars.col("Filename") == config["file"]).select("row_nr").to_series().to_list())
+            if len(matching_rows) > 0:
+                row = matching_rows[0]
                 dpg.highlight_table_row(self.FileTable, row, color=[0,100,0])
                 self.ScrollToRow(row)
                 self.lastRow = row
                 self.MultiFile = True; self.resize_handler(0, None, None)
                 self.Status(f"'{config['echoMeterDir']}' Echo Meter files, select file") 
         elif self.MultiFile:
-            self.LoadBatDetectTable(self.FileTable, self.SpecDisplay1.dir) 
+            dirResults_file = os.path.join(self.SpecDisplay1.dir, "BatDetect2 Results.csv")
+            if os.path.isfile(dirResults_file):
+                self.LoadBatDetectTable(self.FileTable, self.SpecDisplay1.dir)
+            else:
+                self.LoadBtoPipelineResults(self.SpecDisplay1.dir)
             if len(config["file"]) > 0:
-                rows = self.FilesDF[self.FilesDF['Filename'] == config["file"]]
-                print(f"MainWindow {config["file"]=}, {rows=}")
-                if not rows.empty:
-                    row = rows.index[0]
+                matching_rows = (self.FilesDF.with_row_count("row_nr").filter(polars.col("Filename") == config["file"]).select("row_nr").to_series().to_list())
+                print(f"MainWindow {config["file"]=}, {matching_rows=}")
+                if len(matching_rows) > 0:
+                    row = matching_rows[0]
                     try:
                         print(f"MainWindow {config["file"]=}, {row=}")
                         dpg.highlight_table_row(self.FileTable, row, color=[0,100,0]) 
@@ -174,7 +179,7 @@ class MainWindow():
         if len(config["file"]) > 0:
             lastFile = os.path.join(config["dir"], config["file"])
             if os.path.isfile(lastFile):
-                self.LoadClassifiedFile(lastFile, self.SpecDisplay1)
+                self.LoadClassifiedFile(lastFile, self.SpecDisplay1, config["minT"])
             else:
                 self.Status(f"LAST FILE '{lastFile}' NO LONGER EXISTS", error=True)
                 
@@ -213,7 +218,7 @@ class MainWindow():
         pos = dpg.get_viewport_pos()
         config["x"] = pos[0]
         config["y"] = pos[1]
-        #print(f"resize_handler {self.MultiFile=} {config['width']=} {config['height']=} {pos=}")
+        print(f"resize_handler {self.MultiFile=} {config['width']=} {config['height']=} {pos=}")
         
         if self.MultiFile: 
             dpg.configure_item(self.FileTable, show=True)
@@ -276,7 +281,7 @@ class MainWindow():
         if self.ActiveDisplay.minT - self.Range < 0: self.ActiveDisplay.maxT = self.Range; self.ActiveDisplay.minT = 0
         else: self.ActiveDisplay.minT -= self.Range; self.ActiveDisplay.maxT -= self.Range
         self.ActiveDisplay.DisplaySpectogram()
-        if self.FilesDF is not None: self.FilesDF.loc[self.lastRow, 'minT'] = self.ActiveDisplay.minT
+        if self.FilesDF is not None: self.FileMinTs[self.lastRow] = self.ActiveDisplay.minT
         print(f"LeftKey_pressed {self.ActiveDisplay.minT=}")
         dpg.set_value(self.ActiveDisplay.ScrollBar, self.ActiveDisplay.minT) 
 
@@ -288,8 +293,8 @@ class MainWindow():
             else: self.ActiveDisplay.minT = self.ActiveDisplay.duration - self.Range
         else: self.ActiveDisplay.minT += self.Range; self.ActiveDisplay.maxT += self.Range
         self.ActiveDisplay.DisplaySpectogram()
-        print(f"RightKey_pressed {self.lastRow=} {self.ActiveDisplay.minT}")
-        if self.FilesDF is not None: self.FilesDF.loc[self.lastRow, 'minT'] = self.ActiveDisplay.minT
+        print(f"RightKey_pressed {self.lastRow=} {self.ActiveDisplay.minT=} {self.FileMinTs[self.lastRow]=}")
+        if self.FilesDF is not None: self.FileMinTs[self.lastRow] = self.ActiveDisplay.minT
         dpg.set_value(self.ActiveDisplay.ScrollBar, self.ActiveDisplay.minT) 
     
     def zoom_drag_handler(self, sender, app_data, user_data):
@@ -482,7 +487,6 @@ class MainWindow():
                         audio = numpy.concatenate((audio, silentAudio, callAudio))
                         scipy.io.wavfile.write(callsWavPath, sampleRate, audio)
                     else:
-                        """callsDF = pandas.DataFrame(columns = ['id','det_prob','start_time','end_time','high_freq','low_freq','class','class_prob','event'])"""
                         labelMinT = 0; labelMaxT = callLength
                         nRow = 0
                         scipy.io.wavfile.write(callsWavPath, STD_SAMPLING, callAudio)
@@ -581,40 +585,13 @@ class MainWindow():
                 self.Status(f"Classifying multiple Echo Meter sessions at {f}")
                 self.LoadEchoMeterDir(f)
                 config['echoMeterDir'] = f
+            elif self.LoadBtoPipelineResults(f):
+                self.Status(f"'{f}' BTO Pipeline results loaded")
+                return
             else:
-                match = None
-                for filename in os.listdir(f):
-                    match = re.match(r".*-results_\d+\.csv$", filename)
-                    if match: break
-                if match:
-                    print(f"LoadFileOrDir {match=}")
-                    df = polars.read_csv(os.path.join(f, str(match.group(0))))
-                    df = df.select([polars.col('ORIGINAL FILE NAME').alias("Filename"),'SCIENTIFIC NAME','CALL TYPE','PROBABILITY'])
-                    df = df.filter((polars.col("SCIENTIFIC NAME") != "") & (polars.col("CALL TYPE") != "null"))
-                    agg_df = df.group_by('Filename','SCIENTIFIC NAME','CALL TYPE').agg([polars.max('PROBABILITY')]).sort('Filename')
-                    filename = ""
-                    fileSummary = ""
-                    latinToLangDict = self.SpeciesNames.set_index('Latin')[self.SpeciesLanguage].to_dict()
-                    self.FilesDF = polars.DataFrame(schema=[("Filename", polars.Utf8), ("Bat Call", polars.Utf8)]) # Utf8 = string
-                    for row in agg_df.iter_rows():
-                        callType = ""
-                        if filename != row[0]:
-                            if len(fileSummary) > 0:
-                                new_row = polars.DataFrame({"Filename": [filename], "Bat Call": [fileSummary]})
-                                self.FilesDF = self.FilesDF.extend(new_row)
-                            fileSummary = ""
-                            filename = row[0]
-                        species = latinToLangDict[row[1]]
-                        if row[2] != "echolocation": callType = " " + row[2]
-                        fileSummary += f"{species}{callType} {row[3]:.0%}, "
-                    if len(fileSummary) > 0:
-                        new_row = polars.DataFrame({"Filename": [filename], "Bat Call": [fileSummary]})
-                        self.FilesDF = self.FilesDF.extend(new_row)
-                    print(self.FilesDF)
-                else:
-                    self.ClassifyDir(f)
-                    self.Status(f"Classified directory {f}")
-                self.resize_handler(0, None, None)
+                self.ClassifyDir(f)
+                self.Status(f"Classified directory {f}")
+            self.resize_handler(0, None, None)
         elif os.path.isfile(f):
             if display == self.SpecDisplay1: self.MultiFile = False; 
             self.LoadClassifiedFile(f, display)
@@ -623,6 +600,45 @@ class MainWindow():
             self.resize_handler(0, None, None)
         else: self.Status("NO FILE OR DIRECTOY", error=True)
  
+    def LoadBtoPipelineResults(self, f):
+        match = None
+        for filename in os.listdir(f):
+            match = re.match(r".*-results_\d+\.csv$", filename)
+            if match: break
+        if match:
+            print(f"LoadFileOrDir {match=}")
+            df = polars.read_csv(os.path.join(f, str(match.group(0))))
+            df = df.select([polars.col('ORIGINAL FILE NAME').alias("Filename"),'SCIENTIFIC NAME','CALL TYPE','PROBABILITY'])
+            df = df.filter((polars.col("SCIENTIFIC NAME") != "") & (polars.col("CALL TYPE") != "null"))
+            agg_df = df.group_by('Filename','SCIENTIFIC NAME','CALL TYPE').agg([polars.col('PROBABILITY').max().alias("maxProb"), polars.col('PROBABILITY').min().alias("minProb"), polars.count().alias("count")]).sort('Filename','maxProb')
+            filename = ""
+            fileSummary = ""
+            latinToLangDict = self.SpeciesNames.set_index('Latin')[self.SpeciesLanguage].to_dict()
+            self.FilesDF = polars.DataFrame(schema=[("Filename", polars.Utf8), ("Bat Call", polars.Utf8)]) # Utf8 = string
+            for row in agg_df.iter_rows():
+                callType = ""
+                if filename != row[0]:
+                    if len(fileSummary) > 0:
+                        new_row = polars.DataFrame({"Filename": [filename], "Bat Call": [fileSummary]})
+                        self.FilesDF = self.FilesDF.extend(new_row)
+                    fileSummary = ""
+                    filename = row[0]
+                species = latinToLangDict[row[1]]
+                if row[2] != "echolocation": callType = " " + row[2]
+                if row[5] > 1: fileSummary += f"{species}{callType} {row[5]} {row[3]:.0%}-{row[4]:.0%}, "
+                else: fileSummary += f"{species}{callType} {row[3]:.0%}, "
+            if len(fileSummary) > 0:
+                new_row = polars.DataFrame({"Filename": [filename], "Bat Call": [fileSummary]})
+                self.FilesDF = self.FilesDF.extend(new_row)
+            self.LoadBatDetectTable(self.FileTable, f, loadBatDetect2=False)
+            user_data = [self.FileTable,  self.FilesDF, 0, 0]
+            self.TableRow_selected(0, [], user_data)
+            self.ScrollToRow(0)
+            config["echoMeterDir"] = ""
+            return True
+        else: 
+            return False
+                    
     def LoadEchoMeterDir(self, f):
         self.echoMeter = EchoMeter(self)
         self.LoadGpsTable(self.FileTable, f)                
@@ -643,7 +659,7 @@ class MainWindow():
         
         if self.FileTableRow is not None and len(config["echoMeterDir"]) > 0:
             row = self.FileTableRow
-            self.FilesDF.loc[row, "Species"] = species
+            self.FilesDF[row, "Species"] = species # immutable???
             dpg.configure_item(self.GpsSpeciesCells[row], label=species)
             self.echoMeter.SaveEchoMeterDir(self.FilesDF)
 
@@ -652,8 +668,8 @@ class MainWindow():
         self.AssignCallTypeID = self.CallTypes.index(callType) #used in numpy array
         print(f"AssignCallTypeCombo {callType=} {self.AssignCallTypeID=}")        
                 
-    def LoadClassifiedFile(self, f, display):
-        print(f"LoadClassifiedFile {f=}") 
+    def LoadClassifiedFile(self, f, display, minT=None):
+        print(f"LoadClassifiedFile {f=} {minT=}") 
         dir = os.path.dirname(f); file = os.path.basename(f)
         callsCsvPath = os.path.join(dir,"ann", file+".csv")
         if not os.path.isfile(callsCsvPath):
@@ -662,7 +678,7 @@ class MainWindow():
             results = self.classify.File(f, debug=True)
             if len(results) > 0:
                 self.Status(f"Classified file {f}")
-        display.LoadClassifiedFile(f, not self.MultiFile)                     
+        display.LoadClassifiedFile(f, not self.MultiFile, minT)                     
                 
     def ClassifyDir(self, dir_path):
         with wakepy.keep.running():
@@ -672,18 +688,20 @@ class MainWindow():
             # process files
             dpg.delete_item(self.FileTable, children_only=True, slot=0) # remove columns
             dpg.delete_item(self.FileTable, children_only=True, slot=1) # remove rows
-            self.SpecDisplay1.FilesDF = self.FilesDF = pandas.DataFrame(columns =["Filename", "Bat Calls"])
+            self.FilesDF = polars.DataFrame(schema=[("Filename", polars.Utf8), ("Bat Call", polars.Utf8)]) # Utf8 = string
             for column in self.FilesDF.columns: 
                 dpg.add_table_column(label=column, parent=self.FileTable)
-
+            r = 0;
             self.Status(f"Classifying '{os.path.basename(dir_path)}'") 
             for index, audio_file in enumerate(files): 
                 result = classify.File(audio_file)
-                if len(result) > 0: self.AddToFileTable(audio_file, result)
+                if len(result) > 0: 
+                    self.AddToFileTable(audio_file, result, r)
+                    r += 1
                 self.Status(f"file {index +1} of {len(files)} Classified") 
             dirResults_file = os.path.join(dir_path, "BatDetect2 Results.csv")
-            self.FilesDF.to_csv(dirResults_file, index=False)
-            self.FilesDF['minT'] = "0.0"
+            self.FilesDF.write_csv(dirResults_file)
+            self.FileMinTs = [0.0] * len(self.FilesDF)
             self.Status(f"'{os.path.basename(dir_path)}' files all Classified, select file") 
             self.lastRow = None
             config["file"] = ""
@@ -743,20 +761,20 @@ class MainWindow():
         print(f"TableRow_selected {dfRow=} {gRow=} {self.lastRow=}")
         self.FileTableRow = dfRow
         if len(config["echoMeterDir"]) > 0:
-            self.SpecDisplay1.dir = os.path.join(self.echoMeterDir, self.FilesDF.loc[dfRow]["SessionName"])
+            self.SpecDisplay1.dir = os.path.join(self.echoMeterDir, self.FilesDF[dfRow, "SessionName"])
         try:
             if self.lastRow is not None:
                 dpg.unhighlight_table_row(table, self.lastRow)
         except: print(colorama.Fore.RED + "TableRow_selected dpg bug" + colorama.Fore.RESET)
         dpg.highlight_table_row(table, gRow, color=[0,100,0])
-        file = df.loc[dfRow]["Filename"] 
+        file = df[dfRow, "Filename"] 
         self.lastRow = gRow
-        self.LoadClassifiedFile(os.path.join(self.SpecDisplay1.dir,file), self.SpecDisplay1)
+        self.LoadClassifiedFile(os.path.join(self.SpecDisplay1.dir,file), self.SpecDisplay1, self.FileMinTs[dfRow])
                 
-    def AddToFileTable(self, filename, result):
+    def AddToFileTable(self, filename, result, r):
         file = os.path.basename(filename)
-        r = len(self.FilesDF)
-        self.FilesDF.loc[r] = [file, result]
+        new_row = polars.DataFrame({ "Filename": [file], "Bat Call": [result]})
+        self.FilesDF.extend(new_row)
         with dpg.table_row(parent=self.FileTable, height=ROW_PXL * config["scale"]):
             dpg.add_selectable(label=file, callback=self.TableRow_selected, span_columns=True, user_data=[self.FileTable, self.FilesDF, r, r])
             amDate = utils.FileDate(result)
@@ -765,25 +783,27 @@ class MainWindow():
             ysm = dpg.get_y_scroll_max(self.FileTable)
             if ysm > 0: 
                 dpg.set_y_scroll(self.FileTable, ysm)
-                print(f"AddToFileTable {ysm=}")
                 
-    def LoadBatDetectTable(self, table, dir):
+    def LoadBatDetectTable(self, table, dir, loadBatDetect2=True):
+        print(f"LoadBatDetectTable {table=} {dir=}")
         config["echoMeterDir"] = ""
-        dirResults_file = os.path.join(self.SpecDisplay1.dir, "BatDetect2 Results.csv")
-        self.FilesDF = df = pandas.read_csv(dirResults_file)
+        if loadBatDetect2:
+            dirResults_file = os.path.join(self.SpecDisplay1.dir, "BatDetect2 Results.csv")
+            self.FilesDF = df = polars.read_csv(dirResults_file)
+        else: df = self.FilesDF
         nRows, nCols = df.shape
         self.NumFiles = nRows
         self.lastRow = None
         dpg.delete_item(table, children_only=True, slot=0) # remove columns
         dpg.delete_item(table, children_only=True, slot=1) # remove rows
-        for column in df.columns: 
+        for column in df.columns:
             dpg.add_table_column(label=column, parent=table)
-        nRow = 0
-        for r in range(nRows):
+        nRow = nFile = 0
+        for row in df.iter_rows():
             nCol = 0
             for c in range(nCols):
                 col_name = df.columns[c]
-                a = df.loc[r][col_name]
+                a = row[c]
                 if col_name == "Filename": 
                     if nCol == 0 and not os.path.exists(f"{dir}/{a}"): 
                         nRow -= 1
@@ -792,24 +812,24 @@ class MainWindow():
                     amDate = utils.FileDate(a)
                     if len(amDate) > 0:
                         a = f"{a} ({amDate})"
-                        dpg.add_selectable(label=a, tag=f"row{r}", parent=tRow, callback=self.TableRow_selected, span_columns=True, user_data=[table, df, r, nRow])
+                        dpg.add_selectable(label=a, parent=tRow, callback=self.TableRow_selected, span_columns=True, user_data=[table, df, nFile, nRow])
                     else:
-                        dpg.add_selectable(label=a, tag=f"row{r}", parent=tRow, callback=self.TableRow_selected, span_columns=True, user_data=[table, df, r, nRow])
+                        dpg.add_selectable(label=a, parent=tRow, callback=self.TableRow_selected, span_columns=True, user_data=[table, df, nFile, nRow])
                 else:
-                    dpg.add_selectable(label=a, parent=tRow, callback=self.TableRow_selected, span_columns=True, user_data=[table, df, r, nRow])
+                    dpg.add_selectable(label=a, parent=tRow, callback=self.TableRow_selected, span_columns=True, user_data=[table, df, nFile, nRow])
                 nCol += 1
             tRow = None
             nRow += 1
-        df['minT'] = 0.0 # extra column to retain position in file
+            nFile += 1
+        self.FileMinTs = [0.0] * len(self.FilesDF)
 
     def LoadGpsTable(self, table, dir_path):
         self.echoMeter = EchoMeter(self)
         self.FilesDF = self.echoMeter.LoadEchoMeterDir(dir_path)
-        self.FilesDF['minT'] = "0.0"
+        self.FilesDF = self.FilesDF.with_columns(polars.lit(0.0).alias("minT"))
         nRows, nCols = self.FilesDF.shape
-        self.NumFiles = nRows        
-        removeColumns = ['SessionName','Abbrev']
-        columns = list(filter(lambda x: x not in removeColumns, self.FilesDF.columns.to_list()))
+        self.NumFiles = nRows  
+        self.FilesDF.drop('SessionName','Abbrev')
         
         dpg.delete_item(table, children_only=True, slot=0) # remove columns
         dpg.delete_item(table, children_only=True, slot=1) # remove rows
@@ -825,7 +845,7 @@ class MainWindow():
                 for c in range(nCols):  
                     col_name = self.FilesDF.columns[c]
                     if col_name not in removeColumns and not col_name.startswith('Unnamed'):
-                        a = self.FilesDF.loc[r][col_name] 
+                        a = self.FilesDF[r, col_name] 
                         if isinstance(a, float) :
                             f = float(a)
                             if math.isnan(f):

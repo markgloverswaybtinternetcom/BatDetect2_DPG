@@ -3,7 +3,7 @@ import sys, os, subprocess
 if sys.platform.startswith("win"): 
     import DearPyGui_DragAndDrop as DragAndDrop
 import numpy, soundfile, sounddevice, warnings, scipy, traceback, colorama, time
-import pandas, re, multiprocessing, ctypes, math, torch, torchaudio, torchaudio_filters
+import re, multiprocessing, ctypes, math, torch, torchaudio, torchaudio_filters
 import scipy.signal, scipy.io.wavfile # filter for ref calls
 import utils
 from Classifier import Classifier
@@ -28,7 +28,7 @@ class SpecDisplay():
         self.classifyEnabled = True
         sys.excepthook = self.notify_exception
         self.FileTableRow = self.lastMousePlotPos = self.lastMousePos = self.soundLine = self.duration = None
-        self.dirIndex = self.FilesDF = self.PlayObject = self.ZoomStart = self.SoundFile = None 
+        self.dirIndex = self.PlayObject = self.ZoomStart = self.SoundFile = None 
         self.activeButtonCallback = activeButtonCallback        
         self.minF = MIN_FREQ_KHZ; self.maxF = MAX_FREQ_KHZ
         self.colours = self.GenerateSpectrum()
@@ -106,7 +106,7 @@ class SpecDisplay():
         dpg.bind_item_theme(self.MaxSlider, maxSlider_theme)
         self.classify = Classifier()
 
-    def LoadClassifiedFile(self, filepath, rememberDir=True):
+    def LoadClassifiedFile(self, filepath, rememberDir=True, minT=None):
         titleExtra = ""
         dir = os.path.dirname(filepath); file = os.path.basename(filepath)
         if rememberDir: 
@@ -128,7 +128,7 @@ class SpecDisplay():
             else:
                 dpg.set_value(self.ClassifyLabel, "No bat calls found")
                 dpg.configure_item(self.ClassifyLabel, color=(200, 0, 0, 255))
-        self.LoadFile(filepath, titleExtra)  
+        self.LoadFile(filepath, titleExtra, minT)  
 
     def GenerateSpectrum(self):
         colours = []
@@ -206,7 +206,7 @@ class SpecDisplay():
         self.DisplaySpectogram()
         dpg.set_value(self.ScrollBar, self.minT) 
 
-    def LoadFile(self, filepath, titleExtra=""):
+    def LoadFile(self, filepath, titleExtra="", minT=None):
         self.Status("")
         filename = os.path.basename(os.path.splitext(filepath)[0])
         if self.SoundFile is not None: self.SoundFile.close()
@@ -223,7 +223,7 @@ class SpecDisplay():
             self.Status(c)
         else:  self.timeExpand = False
         
-        print(f"LoadFile {filepath=}  {self.duration=} {titleExtra=}")
+        print(f"LoadFile {filepath=}  {self.duration=} {titleExtra=} {self.minT}")
         userPath = os.path.expanduser("~")
         if userPath.lower() in filepath.lower():
             dpg.set_item_label(self.specPlot, f"Spectrogram of {filepath[len(userPath)+1:]} {utils.FileDate(filename)} {titleExtra}")
@@ -239,7 +239,8 @@ class SpecDisplay():
         dpg.bind_item_theme(self.ScrollBar, slider_theme)
         self.dir = os.path.dirname(filepath)
         self.file = os.path.basename(filepath)
-        self.minT = self.calls.FindFirstConsecutive()
+        if minT is not None and minT > 0: self.minT = minT
+        else: self.minT = self.calls.FindFirstConsecutive()
         dpg.set_value(self.ScrollBar, self.minT) 
         if self.minT + self.Range > self.duration: 
             self.maxT = self.duration

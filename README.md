@@ -95,6 +95,20 @@ The new area will have its time expanded sound play automatically, this will sto
    *   If you exit by closing the GUI the current settings will be retained
    *   If you exit by closing the console the current settings will not be retained.
  
+ ### BTO Pipeline Use
+ 
+ #### Split long files for pipeline
+   *   Press 'Open Dir/File...', navigate to directory
+   *   Press 'Select Dir' button
+   *   Press 'Split Long WAVs' button
+ 
+   #### Load results from pipeline
+   *   copy results '.csv' from BTO pipeline email into directory processed
+   *   Press 'Open Dir/File...', navigate to directory
+   *   Press 'Select Dir' button
+   *   Press 'Load WAV / Dir in main' button
+ 
+   The summary should be displayed in a similar way to BatDetect2, but there is no annotation available from the BTO.
 ### Mobile Echo Meter Touch Use
 
  *   Save one or more Echo Meter sessions in a separate directory (from Android Documents>EchoMeter>Recordings)

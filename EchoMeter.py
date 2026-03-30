@@ -1,5 +1,5 @@
 import xml.etree.ElementTree as Xml
-import sys, os, folium, soundfile, pandas, shutil, traceback, colorama
+import sys, os, folium, soundfile, polars, shutil, traceback, colorama
 from Classifier import Classifier
 
 class EchoMeter():
@@ -18,9 +18,9 @@ class EchoMeter():
         self.TE_DirPath = os.path.join(self.echoMeterPath, "TimeExpanded")
         gpsBatFilePath = os.path.join(self.echoMeterPath, "GpsBatCallFiles.csv")
         if os.path.exists(gpsBatFilePath):
-            self.GpsFilesDF = pandas.read_csv(gpsBatFilePath)
+            self.GpsFilesDF = polars.read_csv(gpsBatFilePath)
         else:
-            self.GpsFilesDF = pandas.DataFrame([], columns =["SessionName", "Filename", "DateTime", "Lat", "Long", "Class", "Abbrev", "Species"])
+            self.GpsFilesDF = polars.DataFrame([], columns =["SessionName", "Filename", "DateTime", "Lat", "Long", "Class", "Abbrev", "Species"])
             if not os.path.exists(self.TE_DirPath):
                 os.makedirs(self.TE_DirPath)
         print("LoadEchoMeterDir", echoMeterPath)
