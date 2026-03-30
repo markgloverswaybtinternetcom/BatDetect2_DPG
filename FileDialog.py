@@ -41,7 +41,7 @@ class FileDialog():
         with dpg.window(label="File dialog", show=False, modal=True, width=1000, height=-1, no_collapse=True, pos=(0, 100)) as self.window:
             self.CurrentDirectoryText = dpg.add_text("Home")
             with dpg.table(height=525, width=-1, clipper=True, resizable=True, policy=dpg.mvTable_SizingStretchProp, 
-                borders_innerV=True, reorderable=True, hideable=True, sortable=True, scrollX=True, scrollY=True) as self.table:
+                borders_innerV=True, reorderable=True, hideable=True, scrollX=True, scrollY=True, sortable=True, callback=self.sort_callback) as self.table:
                 dpg.add_table_column(label=' ', init_width_or_weight=4)
                 dpg.add_table_column(label='Name', init_width_or_weight=110)
                 dpg.add_table_column(label='Date', init_width_or_weight=30)
@@ -141,7 +141,7 @@ class FileDialog():
             if sys.platform.startswith("win"): 
                 cwd = os.getcwd()
                 f = open(f"{newDir}/Classify.bat", 'w')
-                f.write('title Classify Bat Console')
+                f.write('title BatDetect2 Classify Console')
                 f.write(f'\ncall "{cwd}\\.venv\\Scripts\\activate.bat"')
                 f.write(f'\npython "{cwd}\\cli.py" %1')
                 f.write("\npause")
@@ -304,3 +304,50 @@ class FileDialog():
         if abs(tableHeight - correctTableHeight) > 5: 
             #print(f"FileDialog resize_handler {app_data=}")
             dpg.configure_item(self.table, height = correctTableHeight)  
+    
+    
+    def sort_callback(self, sender, sort_specs):
+        # sort_specs scenarios:
+        #   1. no sorting -> sort_specs == None
+        #   2. single sorting -> sort_specs == [[column_id, direction]]
+        #   3. multi sorting -> sort_specs == [[column_id, direction], [column_id, direction], ...]
+        #
+        # notes:
+        #   1. direction is ascending if == 1
+        #   2. direction is ascending if == -1
+
+        print(f"sort_callback {sender=} {sort_specs=}")
+        if sort_specs is None: return # no sorting case
+        rows = dpg.get_item_children(sender, 1)
+        cols = dpg.get_item_children(sender, 0)
+        column_id = sort_specs[0][0]
+        i = cols.index(column_id)
+        colLabel = dpg.get_item_label(column_id)
+
+        # create a list that can be sorted based on first cell value, keeping track of row and value used to sort
+        sortable_list = []
+        for row in rows:
+            cell = dpg.get_item_children(row, 1)[i]
+            label = dpg.get_item_label(cell)
+            if len(label) > 0: sortable_list.append([row, label]) # image if directory
+        #print(f"sort_callback {sortable_list=}")
+        if len(sortable_list) == 0: return
+
+        def _sorter(e):
+            return e[1]
+
+        def _uk_date_sorter(e):
+            date_obj = datetime.datetime.strptime(e[1], "%d/%m/%Y %H:%M")
+            return int(date_obj.strftime("%Y%m%d%H%M"))
+            
+        if colLabel == "Date":
+            sortable_list.sort(key=_uk_date_sorter, reverse=sort_specs[0][1] < 0)
+        else:
+            sortable_list.sort(key=_sorter, reverse=sort_specs[0][1] < 0)
+
+        # create list of just sorted row ids
+        new_order = []
+        for pair in sortable_list:
+            new_order.append(pair[0])
+
+        dpg.reorder_items(sender, 1, new_order)
