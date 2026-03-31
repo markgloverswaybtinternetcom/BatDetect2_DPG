@@ -8,6 +8,7 @@ MAX_SECS = 5.0
 LastRowSelected = None #fixes bug 
 
 class FileDialog(): 
+    """Provides fast sound file selection in DearPyGui with info designed for wav files"""
     def __new__(cls, *args, **kwargs):
         return super().__new__(cls)
         
@@ -93,7 +94,8 @@ class FileDialog():
         dpg.bind_item_theme(self.RoostDirButton, navButton_theme)
         dpg.bind_item_theme(self.RoostAddDirButton, navButton_theme)
         dpg.bind_item_theme(self.UpDirButton, navButton_theme)
- 
+        self.sorted = False 
+        
     def Show(self):
         global LastRowSelected
         print(f"FileDialog Show {len(self.history)=}")
@@ -167,6 +169,7 @@ class FileDialog():
     def DisplayFiles(self, paths):        
         global LastRowSelected
         dpg.delete_item(self.table, children_only=True, slot=1) # remove rows
+        self.sorted = False # now replacing any sorting
         LastRowSelected = None
         nRow = 0
         for entry in paths:
@@ -239,13 +242,12 @@ class FileDialog():
             self.selectedDir = self.selectedFile = None
     
     def LoadFileComparison_callback(self):
+        """Comparision goes to a second display"""
         print(f"LoadFileSelected_callback ")
         if self.loadCallback is not None:
             dpg.configure_item(self.window, show=False)
             if self.selectedFile is not None:
                 self.loadCallback(self.selectedFile, 2)
-            elif self.selectedDir is not None:
-                self.loadCallback(self.selectedDir, 2)
             self.selectedDir = self.selectedFile = None
                 
     def Dir_selected(self, sender, app_data, user_data):
@@ -254,6 +256,17 @@ class FileDialog():
         self.selectedDir = filepath
         if LastRowSelected is not None: 
             dpg.unhighlight_table_row(table, LastRowSelected)
+                
+        if self.sorted:
+            # if sorted nRow is wrong, so must find filename
+            filename = os.path.basename(filepath)
+            rows = dpg.get_item_children(table, 1)
+            nRow = 0
+            for row in rows:
+                fCell = dpg.get_item_children(row, 1)[1]
+                f = dpg.get_item_label(fCell)
+                if f == filename: break
+                nRow += 1
         dpg.highlight_table_row(table, nRow, color=[0,100,0])
         LastRowSelected = nRow
         dpg.configure_item(self.SplitLongWavs, show=True)
@@ -266,6 +279,7 @@ class FileDialog():
         else: self.DisplayDir(self.history[-1])
     
     def WavMetadata_callback(self):
+        """WAV file metadata format varies by manufactuer and firmware version, so just do text to console"""
         if self.selectedFile is not None:
             metadata = WavUtil.parse_metadata(self.selectedFile)
             metadata = metadata.splitlines()
@@ -277,6 +291,7 @@ class FileDialog():
                 elif len(line) > 0: print(line)
     
     def SplitLongWavs_callback(self):
+        """Utility for BTO Pipeline online classifier, which wants short files as it only has file level granularity"""
         global LastRowSelected # fixes bug getting old value of self
         if self.selectedDir is not None:
             for f in os.listdir(self.selectedDir):
@@ -351,3 +366,4 @@ class FileDialog():
             new_order.append(pair[0])
 
         dpg.reorder_items(sender, 1, new_order)
+        self.sorted = True

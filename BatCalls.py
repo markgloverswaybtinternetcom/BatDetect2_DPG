@@ -2,7 +2,7 @@ import dearpygui.dearpygui as dpg
 import numpy, json, csv
 
 class BatCalls(): 
-    """Uses numpy rather than pandas for speed"""
+    """Annotation information on bat call, uses numpy rather than pandas for speed"""
     
     def __init__(self, parentSelf):
         self.SpeciesNames = parentSelf.SpeciesNames

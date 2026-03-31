@@ -17,7 +17,8 @@ CONFIG_FILE = "gui_Config.json"; EXAMPLE_FILE = os.path.join("Resources", "bats"
 DISPLAY_ROWS=7; ROW_PXL = 17 # table scrolling
 TITLE = "Bat Detect GUI"
     
-class MainWindow():            
+class MainWindow(): 
+    """Graphical user interface using DearPyGui"""    
     def __init__(self):
         self.SpeciesNames = pandas.read_csv(os.path.join("Resources", "SpeciesNames.csv"))
         self.lastMousePos = self.LabelStartPlot = self.StatusLabel = self.AssignSpeciesID = self.AssignCallTypeID = None

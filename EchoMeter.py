@@ -3,6 +3,7 @@ import sys, os, folium, soundfile, polars, shutil, traceback, colorama
 from Classifier import Classifier
 
 class EchoMeter():
+    """Deals with Wildlife Accoustics Echo Meter GPS based recordings"""
     def __init__(self, parentSelf):
         self.SpeciesNames = parentSelf.SpeciesNames
         self.FullSpeciesLanguage = parentSelf.FullSpeciesLanguage

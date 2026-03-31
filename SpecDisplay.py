@@ -18,6 +18,7 @@ PSD_WIDTH = 80;  SLIDER_W = 17; AMP_HT=80; SCROLL_HT=19; BUTTON_HT=19; STATUS_HT
 ROW_PXL = 17 # table scrolling
 
 class SpecDisplay(): 
+    """Specrogram display with attached power and amplitude graphs"""
     def __new__(cls, *args, **kwargs):
         return super().__new__(cls)
         

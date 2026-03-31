@@ -1,6 +1,7 @@
 import os, pandas, wakepy, colorama
 from Classifier import Classifier
 import argparse, utils
+"""Colour coded Command line run classifier using BatDetect2"""
 
 def FileDrop(f):
 	if os.path.isdir(f):

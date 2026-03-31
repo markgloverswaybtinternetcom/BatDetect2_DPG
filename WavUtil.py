@@ -2,6 +2,8 @@ import os, struct
 from typing import Union, BinaryIO, Dict, Optional
 from dataclasses import dataclass, field
 
+"""WAV file metadata format varies by manufactuer and firmware version, so just doing text"""
+
 def WavDetails(filepath):
     #print(f"WavDetails {filepath=}")
     with open(filepath, "rb") as wav:
@@ -59,7 +61,7 @@ def _read_chunk(riff: BinaryIO):
     size = int.from_bytes(riff.read(4), "little")
     #print(f"_read_chunk {chunk_id=} {size=}")
     identifier = None
-    if size > 0:
+    if size > 0: # some weird formats, danger can loop forever
         if chunk_id in CHUNKS_WITH_SUBCHUNKS:
             identifier = riff.read(4).decode("ascii")
         chunk = Chunk( chunk_id=chunk_id, size=size, position=position, identifier=identifier)
