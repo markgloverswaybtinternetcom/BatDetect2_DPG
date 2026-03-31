@@ -29,6 +29,7 @@ class Classifier():
         else: self.latinToLangDict = None
 
     def GetDfSummary(self, df):
+        """Creates file species summary info"""
         summaryDict = {}
         for row in df.itertuples():
             id = row[6]; prob = float(row[1]) * float(row[7])
@@ -42,6 +43,7 @@ class Classifier():
                     summaryDict[id] = [1, prob, prob]
         summary = ""
         for id, val in summaryDict.items():
+            if id == "Barbastellus barbastellus": id = "Barbastella barbastellus" #batdetect2 latine error
             if self.latinToLangDict is None: species = id
             else: species = self.latinToLangDict[id]
             if val[0] == 1: summary += f"{species} 1 call {val[1]:.0%}, "
@@ -49,6 +51,7 @@ class Classifier():
         return summary
         
     def save_results_to_file(self, results, op_path: str) -> None:
+        """Creates call annotation file"""
         summary = ""
         if len(results) > 0:
             result_list = results["pred_dict"]["annotation"] # save csv file - if there are predictions
@@ -66,31 +69,9 @@ class Classifier():
             with open(op_path + ".csv", "w") as f: # empty file so do not repeat classification
                 f.write("id,det_prob,start_time,end_time,high_freq,low_freq,class,class_prob\n")
         return summary
-    
-    def call_pred(self, det_prob, class_prob): 
-        classes = list()
-        class_calls = list()
-        class_max_prob = list()
-        class_min_prob = list()
-        
-        for call in range(det_prob.size):        
-            call_best_class = class_prob.argmax(axis=0)[call] #class index of max
-            call_best_class_prob = class_prob.max(axis=0)[call] # max call probability
-            try:
-                i = classes.index(call_best_class) # exception if class does not exist
-                class_calls[i] = class_calls[i]+1
-                if call_best_class_prob > class_max_prob[i]:
-                    class_max_prob[i] = call_best_class_prob
-                if call_best_class_prob < class_min_prob[i]:
-                    class_min_prob[i] = call_best_class_prob
-            except ValueError:  # if class does not exist yet
-                classes.append(call_best_class)
-                class_calls.append(1)
-                class_max_prob.append(call_best_class_prob)
-                class_min_prob.append(call_best_class_prob)
-        return classes, class_calls , class_max_prob, class_min_prob
 
     def process_file(self, audio_file: str, model: DetectionModel, config: ProcessingConfiguration, device: torch.device = DEVICE) -> Union[RunResults, Any]:
+        """Replaces function of same name in BatDetect2"""
         predictions = []; spec_feats = []
         info = soundfile.info(audio_file)
         file_samp_rate = info.samplerate
@@ -98,7 +79,7 @@ class Classifier():
         sampling_rate, audio_full = au.load_audio( audio_file, time_exp_fact=config.get("time_expansion", 1) or 1,  target_samp_rate=config["target_samp_rate"], scale=config["scale_raw_audio"], max_duration=config.get("max_duration"))
 
         # loop through larger file and split into chunks
-        # TODO: fix so that it overlaps correctly and takes care of duplicate detections at borders
+        # BatDetect2 TODO: fix so that it overlaps correctly and takes care of duplicate detections at borders
         for chunk_time, audio in du.iterate_over_chunks( audio_full, sampling_rate, config["chunk_size"]):
             pred_nms, features, spec = du._process_audio_array( audio, sampling_rate, model, config, device)
             spec_np = spec.detach().cpu().numpy().squeeze()
@@ -122,6 +103,7 @@ class Classifier():
         return calls
 
     def File(self, filepath, debug=False):
+        """Classifies one file using BatDetect2"""
         dir = os.path.dirname(filepath)
         file = os.path.basename(filepath)
         try:

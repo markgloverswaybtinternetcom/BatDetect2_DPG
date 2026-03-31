@@ -75,6 +75,7 @@ class SpecDisplay():
                     saveSoundbutton = dpg.add_button(label="Save Sound",  callback=self.saveSound_click)
                     self.showSpeciesCombo = dpg.add_combo(label="Find Species", show=False, width=180 * config["scale"], callback=self.ShowSpeciesCombo_changed)
                     self.ClassifyLabel = dpg.add_text(color= (0, 200, 0, 255))                
+        # style for the GUI elements
         with dpg.theme() as lBlueButton_theme:
             with dpg.theme_component(dpg.mvAll):
                 dpg.add_theme_color(dpg.mvThemeCol_Button, (0, 0, 175, 255), category=dpg.mvThemeCat_Core)
@@ -195,6 +196,9 @@ class SpecDisplay():
         sl = self.SpeciesLanguage
         if sl == "EnglishAbbrev": sl = "English"
         id = self.SpeciesNames.index[self.SpeciesNames[sl]==app_data].tolist()
+        if len(id) != 1:
+            print(colorama.Fore.RED + f"ShowSpeciesCombo_changed {len(id)=}" + colorama.Fore.RESET) 
+            return
         print(f"ShowSpeciesCombo_changed {app_data=} {app_data=}")
         t1 = self.calls.FindSpeciesMaxProb(id)
         if t1 > self.Range / 2: 

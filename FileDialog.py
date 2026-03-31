@@ -28,8 +28,7 @@ class FileDialog():
             f.close()
         with open(dirsTxtFile, 'r') as file:
             self.RoostDirs = file.read().splitlines()
-        drives = self._get_all_drives()
-        #print(f"FileDialog {drives=}")
+        drives = self.LoadMediaDrives()
         self.RoostDirs.extend(drives)
         
         self.history = []
@@ -61,7 +60,8 @@ class FileDialog():
         with dpg.item_handler_registry(tag="file dialog resize handler"):
             dpg.add_item_resize_handler(callback=self.resize_handler)
         dpg.bind_item_handler_registry(self.window, "file dialog resize handler")
-
+        
+        # style for the GUI elements
         with dpg.theme() as self.redText_theme:
             with dpg.theme_component(dpg.mvAll):
                 dpg.add_theme_color(dpg.mvThemeCol_Text, (200, 0, 0, 255), category=dpg.mvThemeCat_Core)                
@@ -106,9 +106,10 @@ class FileDialog():
         dpg.configure_item(self.window, show=True) 
     
     def Shown(self):
+        """Allows Mainwindow to check if it should react to clicks = DearPyGui bug"""
         return dpg.is_item_shown(self.window)
     
-    def _get_all_drives(self):
+    def LoadMediaDrives(self):
         all_drives = psutil.disk_partitions()
         if os.name == 'posix':
             drive_list = [drive.mountpoint for drive in all_drives if drive.mountpoint and drive.mountpoint.startswith("/media")]
@@ -118,14 +119,15 @@ class FileDialog():
 
     def DisplayRoost(self):
         #print(f"DisplayRoost ")
+        # alter buttons for Roost directory
         dpg.configure_item(self.RoostDirButton, show=False)
         dpg.configure_item(self.RoostAddDirButton, show=True)
         dpg.configure_item(self.RoostAddDirInputText, show=True)
         dpg.configure_item(self.UpDirButton, show=False)
         dpg.configure_item(self.loadFileButton, show=False)
-        #dpg.configure_item(self.loadDirButton, show=False)
         dpg.configure_item(self.loadCompareButton, show=False)
         dpg.configure_item(self.WavMetadataButton, show=False)
+        
         self.IsRoostDir = True      
         self.DisplayFiles(self.RoostDirs)
         dpg.set_value(self.CurrentDirectoryText, "Home")
@@ -142,6 +144,7 @@ class FileDialog():
             dpg.set_value(self.RoostAddDirInputText, "")
             if sys.platform.startswith("win"): 
                 cwd = os.getcwd()
+                # create Classify.bat so easy to drop directories for classification
                 f = open(f"{newDir}/Classify.bat", 'w')
                 f.write('title BatDetect2 Classify Console')
                 f.write(f'\ncall "{cwd}\\.venv\\Scripts\\activate.bat"')
@@ -152,6 +155,7 @@ class FileDialog():
     def DisplayDir(self, dir):
         #print(f"DisplayDir {dir=}")
         if self.IsRoostDir == True:
+            # add extra buttons for ordinary directories
             dpg.configure_item(self.RoostDirButton, show=True)
             dpg.configure_item(self.RoostAddDirButton, show=False)
             dpg.configure_item(self.RoostAddDirInputText, show=False)

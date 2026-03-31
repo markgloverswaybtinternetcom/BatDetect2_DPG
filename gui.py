@@ -62,7 +62,8 @@ class MainWindow():
             sys.excepthook = self.notify_exception
             
             self.FileDialog = FileDialog(self.FileDialog_Finished)
-            
+        
+        # style for the GUI elements
         BACKGROUND_COLOUR = (0,0,0)
         with dpg.theme() as self.align_right:
             with dpg.theme_component(dpg.mvButton):
@@ -79,7 +80,6 @@ class MainWindow():
                 dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, BACKGROUND_COLOUR, category=dpg.mvThemeCat_Core)
                 dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 0 ,0), category=dpg.mvThemeCat_Core)
         dpg.bind_item_theme(self.StatusLabel, self.align_right)
-        
         with dpg.font_registry():
             default_font = dpg.add_font("./Resources/Swansea-q3pd.ttf", config["font"])
             bold_font = dpg.add_font("./Resources/SwanseaBold-D0ox.ttf", int(config["font"] * 1.5))
@@ -87,7 +87,6 @@ class MainWindow():
             print(f"MainWindow default_font altered to Swansea-q3pd.ttf {config['font']=} {config['scale']=}")
             dpg.bind_font(default_font)
         dpg.bind_item_font(self.StatusLabel, bold_font)
-        
         with dpg.theme() as greenButton_theme:
             with dpg.theme_component(dpg.mvAll):
                 dpg.add_theme_color(dpg.mvThemeCol_Button, (0, 100, 0, 255), category=dpg.mvThemeCat_Core)
@@ -124,10 +123,10 @@ class MainWindow():
         dpg.bind_item_theme(self.AssignCallTypeCombo, self.magentaText_theme)
         dpg.bind_item_theme(self.SpeciesLanguageCombo, orangeText_theme)
         
+        # mouse and keyboard handlers
         with dpg.item_handler_registry(tag="main resize handler") as resize_handler:
             dpg.add_item_resize_handler(callback=self.resize_handler)
         dpg.bind_item_handler_registry(self.mainWindow, "main resize handler")
-        
         with dpg.handler_registry(tag="mouse handler") :
             dpg.add_mouse_release_handler(button=dpg.mvMouseButton_Left, callback=self.zoom_release_handler)
             dpg.add_mouse_drag_handler(button=dpg.mvMouseButton_Left, callback=self.zoom_drag_handler)
@@ -139,6 +138,7 @@ class MainWindow():
             dpg.add_key_press_handler(key=dpg.mvKey_Left, callback=self.LeftKey_pressed)
             dpg.add_key_press_handler(key=dpg.mvKey_Right, callback=self.RightKey_pressed)          
 
+        # Initialise display from last time closed down
         self.classify = Classifier()
         if sys.platform.startswith("win"): DragAndDrop.set_drop(self.FileDrop)
         self.SpecDisplay1.dir = config['dir']; self.SpecDisplay1.file = config['file']
@@ -183,7 +183,6 @@ class MainWindow():
                 self.LoadClassifiedFile(lastFile, self.SpecDisplay1, config["minT"])
             else:
                 self.Status(f"LAST FILE '{lastFile}' NO LONGER EXISTS", error=True)
-                
         self.SpeciesLanguageCombo_changed(None, self.SpeciesLanguage, None)
         self.EditModeListbox_changed(None, self.EditMode, None)
 
@@ -205,6 +204,7 @@ class MainWindow():
         webbrowser.open_new_tab(os.path.join("file:", os.getcwd(), "help.html"))
         
     def ScrollToRow(self, row): 
+        """DearPyGUI does not provide a good table function to do this"""
         y = dpg.get_y_scroll(self.FileTable)
         yMax = dpg.get_y_scroll_max(self.FileTable)
         rowSize = yMax/len(self.FilesDF)

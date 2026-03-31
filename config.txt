@@ -11,7 +11,7 @@
 'spec_divide_factor': 32,
 'spec_height': 256, 
 'scale_raw_audio': False,
-'class_names': ['Barbastellus barbastellus', 'Eptesicus serotinus', 'Myotis alcathoe', 'Myotis bechsteinii', 'Myotis brandtii', 'Myotis daubentonii', 'Myotis mystacinus', 'Myotis nattereri', 'Nyctalus leisleri', 'Nyctalus noctula', 'Pipistrellus nathusii', 'Pipistrellus pipistrellus', 'Pipistrellus pygmaeus', 'Plecotus auritus', 'Plecotus austriacus', 'Rhinolophus ferrumequinum', 'Rhinolophus hipposideros'], 
+'class_names': ['Barbastella barbastellus', 'Eptesicus serotinus', 'Myotis alcathoe', 'Myotis bechsteinii', 'Myotis brandtii', 'Myotis daubentonii', 'Myotis mystacinus', 'Myotis nattereri', 'Nyctalus leisleri', 'Nyctalus noctula', 'Pipistrellus nathusii', 'Pipistrellus pipistrellus', 'Pipistrellus pygmaeus', 'Plecotus auritus', 'Plecotus austriacus', 'Rhinolophus ferrumequinum', 'Rhinolophus hipposideros'], 
 'time_expansion': 1,
 'top_n': 3, 
 'return_raw_preds': False, 

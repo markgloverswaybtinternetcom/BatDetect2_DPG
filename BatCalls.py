@@ -12,13 +12,16 @@ class BatCalls():
         self.CallsNP = None
         
     def fromCSV(self, callsCsvPath):
+        """"Load annotation information from BatDetect2 classifier CSV file"""
         with open(callsCsvPath, mode ='r')as file:
             csvLines = csv.reader(file)
             summaryDict = {}; arr = []
             i = 0;
             for row in csvLines: 
                 if i>0: # first line column titles
-                    id = self.LatinIdx[row[6]]; p1 = float(row[1]); p2 = float(row[7])
+                    species = row[6]
+                    if species == "Barbastellus barbastellus": species = "Barbastella barbastellus" #batdetect2 latine error
+                    id = self.LatinIdx[species]; p1 = float(row[1]); p2 = float(row[7])
                     if len(row) > 8: ct = self.CallTypes.index(row[8])
                     else: ct = 0
                     arr.append([id, float(row[2]), float(row[3]), float(row[5])/1000, float(row[4])/1000, p1, p2, ct])
@@ -41,6 +44,7 @@ class BatCalls():
         return summary
 
     def DisplayAnnotations(self, plot, minT, maxT):
+        """"Displays annotations on a spectrogram as a label"""
         dpg.delete_item(plot, children_only=True, slot=0) # remove annotations
         species = ""
         exception = ""
@@ -73,6 +77,7 @@ class BatCalls():
         return species, exception
 
     def fromJSON(self, filepath):
+        """"Load annotation information from a JSON file in format that the BatDetect2 uses for traiing models"""
         print(f"fromJSON {filepath=}")
         with open(filepath, 'r') as file:
             jsonData = json.load(file)
@@ -86,11 +91,12 @@ class BatCalls():
                     self.CallsNP = numpy.append(self.CallsNP, numpy.array([[ id, t1, t2, f1, f2, p1, p2, ct]], dtype=numpy.float32), axis=0)
                 
     def toJSON(self, callsJsonPath):
+        """"Save annotation information to a JSON file in format that the BatDetect2 uses for traiing models"""
         print(f"CallNPtoJSON {callsJsonPath=}")
         annotationValues = []
         for call in self.CallsNP:
-            id = self.LatinIdx[call[0]]; t1=call[1]; t2=call[2]; f1=call[3]*1000
-            f2=call[4]*1000; p1 = call[5]; p2 = call[6]; ct = self.CallTypes.index(int(call[7]))
+            id = self.SpeciesNames["Latin"][int(call[0])]; t1=f"{call[1]:.4f}"; t2=f"{call[2]:.4f}"; f"{call[3]*1000:.0f}"
+            f2=f"{call[4]*1000:.0f}"; p1 = f"{call[5]:.3f}"; p2 = f"{call[6]:.3f}"; ct = self.CallTypes.index(int(call[7]))
             c = self.SpeciesNames["Latin"][id]; callType = self.CallTypes[ct]
             annotationValues.append({'class': c, 'class_prob': prob, 'det_prob': prob, 'end_time': t2, 'event': callType, 'high_freq': f2, 'individual': '-1','low_freq': f1, 'start_time': t1})
         thisdict = {"annotated": False, "annotation": annotationValues, "class_name": c, "duration": self.duration, "id": self.file, "issued": False, "notes": "Automatically generated.", "time_exp": 1}
@@ -98,6 +104,7 @@ class BatCalls():
             json.dump(thisdict, jsonfile, indent=2, sort_keys=True)
 
     def toCSV(self, csvFilePath):
+        """"Save annotation information to BatDetect2 classifier CSV file, after manual editing"""
         print(f"toCSV {csvFilePath=}")
         data = [['id','det_prob','start_time','end_time','high_freq','low_freq','class','class_prob','event']]
         n = 0

@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 """WAV file metadata format varies by manufactuer and firmware version, so just doing text"""
 
 def WavDetails(filepath):
+    """"This code seems to be much faster than some of the large C packages"""
     #print(f"WavDetails {filepath=}")
     with open(filepath, "rb") as wav:
         riff = parse_into_chunks(wav) # Resource Interchange File Format 
@@ -25,10 +26,8 @@ def WavDetails(filepath):
 def parse_metadata(path):
     with open(path, "rb") as wav:
         riff = parse_into_chunks(wav) # Resource Interchange File Format 
-        #media_info = get_media_info(wav, riff)
         comment = get_audioMoth_comment(wav, riff)
         guan = get_guan(wav, riff)
-        #artist = get_artist(wav, riff)
     return comment + '\n' + guan
 
 CHUNKS_WITH_SUBCHUNKS = ["RIFF", "LIST"]
