@@ -146,7 +146,7 @@ class FileDialog():
                 cwd = os.getcwd()
                 # create Classify.bat so easy to drop directories for classification
                 f = open(f"{newDir}/Classify.bat", 'w')
-                f.write('title BatDetect2 Classify Console')
+                f.write('title Classifying %~nx1%')
                 f.write(f'\ncall "{cwd}\\.venv\\Scripts\\activate.bat"')
                 f.write(f'\npython "{cwd}\\cli.py" %1')
                 f.write("\npause")
