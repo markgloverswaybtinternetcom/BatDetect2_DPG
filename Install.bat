@@ -20,5 +20,6 @@ uv add psutil
 uv add sounddevice
 uv add mutagen
 Resources\create-shortcut --work-dir "%CD%" --icon-file "%CD%\Resources\bat_128px.ico" "%CD%\run.bat" "%USERPROFILE%\Desktop\BatDetect2 DPG.lnk"
+uv run bd2Link.py
 uv run gui.py
 pause

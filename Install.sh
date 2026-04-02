@@ -30,5 +30,6 @@ chmod u+x ./run.sh
 chmod u+x ./wavplayer/wavplay
 chmod u+x ~/Desktop/dpg.desktop
 echo "Need to Allow Launching on Desktop shortcut file dpg.desktop"
+uv run bd2Link.py
 uv run gui.py
 /bin/bash
