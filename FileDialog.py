@@ -118,7 +118,7 @@ class FileDialog():
         return drive_list
 
     def DisplayRoost(self):
-        #print(f"DisplayRoost ")
+        """Displays the top level list (Roost) that should include the bat sound directories"""
         # alter buttons for Roost directory
         dpg.configure_item(self.RoostDirButton, show=False)
         dpg.configure_item(self.RoostAddDirButton, show=True)
@@ -133,7 +133,7 @@ class FileDialog():
         dpg.set_value(self.CurrentDirectoryText, "Home")
         
     def AddRoost_callback(self, sender, app_data, user_data):
-        #print(f"AddRoost_callback {sender=} {app_data=} {user_data=}")
+        """Add a bat sound directory to the top level list (Roost)"""
         newDir = dpg.get_value(self.RoostAddDirInputText)
         if os.path.isdir(newDir):
             self.RoostDirs.append(newDir)
@@ -155,7 +155,7 @@ class FileDialog():
     def DisplayDir(self, dir):
         #print(f"DisplayDir {dir=}")
         if self.IsRoostDir == True:
-            # add extra buttons for ordinary directories
+            # descending from top so add extra buttons for ordinary directories
             dpg.configure_item(self.RoostDirButton, show=True)
             dpg.configure_item(self.RoostAddDirButton, show=False)
             dpg.configure_item(self.RoostAddDirInputText, show=False)
@@ -170,7 +170,8 @@ class FileDialog():
         self.DisplayFiles(files)
         dpg.set_value(self.CurrentDirectoryText, dir)
         
-    def DisplayFiles(self, paths):        
+    def DisplayFiles(self, paths):
+        """Displays a list sound files and directories as a selectable table including specialised sound file info"""        
         global LastRowSelected
         dpg.delete_item(self.table, children_only=True, slot=1) # remove rows
         self.sorted = False # now replacing any sorting
@@ -221,6 +222,7 @@ class FileDialog():
                 nRow += 1
                 
     def TableRow_selected(self, sender, app_data, user_data):
+        """Selecting a table row list a directory or selects a sound file"""
         global LastRowSelected # fixes bug getting old value of self
         table = user_data[0]; nRow = user_data[1]; filepath = user_data[2]
         #print(f"TableRow_selected {nRow=} {filepath=}")
@@ -236,7 +238,7 @@ class FileDialog():
             # do not add code as will stop selecting rows or buttons
             
     def LoadFileSelected_callback(self):
-        print(f"LoadFileSelected_callback {self.selectedFile=}")
+        """Selected file or directory goes to the main display"""
         if self.loadCallback is not None:
             dpg.configure_item(self.window, show=False)
             if self.selectedFile is not None:
@@ -246,8 +248,7 @@ class FileDialog():
             self.selectedDir = self.selectedFile = None
     
     def LoadFileComparison_callback(self):
-        """Comparision goes to a second display"""
-        print(f"LoadFileSelected_callback ")
+        """Selected file goes to a second display for comparision"""
         if self.loadCallback is not None:
             dpg.configure_item(self.window, show=False)
             if self.selectedFile is not None:
@@ -255,6 +256,7 @@ class FileDialog():
             self.selectedDir = self.selectedFile = None
                 
     def Dir_selected(self, sender, app_data, user_data):
+        """Directory row button pressed to select it instead of the normal listing action"""
         global LastRowSelected # fixes bug getting old value of self
         table = user_data[0]; nRow = user_data[1]; filepath = user_data[2]
         self.selectedDir = filepath
@@ -277,7 +279,7 @@ class FileDialog():
         print(f"Dir_selected {self.selectedDir=}")
     
     def UpDir_callback(self):
-        #print(f"UpDir_callback ")
+        """Go back to listing the previous directory"""
         if len(self.history) > 0: self.history.pop()
         if len(self.history) == 0: self.DisplayRoost()
         else: self.DisplayDir(self.history[-1])
@@ -317,6 +319,7 @@ class FileDialog():
                    
         
     def resize_handler(self, sender, app_data, user_data):
+        """Handle user resizing the display"""
         windowHeight = dpg.get_item_height(self.window)
         tableHeight = dpg.get_item_height(self.table)
         correctTableHeight = windowHeight - 75
@@ -326,16 +329,7 @@ class FileDialog():
     
     
     def sort_callback(self, sender, sort_specs):
-        # sort_specs scenarios:
-        #   1. no sorting -> sort_specs == None
-        #   2. single sorting -> sort_specs == [[column_id, direction]]
-        #   3. multi sorting -> sort_specs == [[column_id, direction], [column_id, direction], ...]
-        #
-        # notes:
-        #   1. direction is ascending if == 1
-        #   2. direction is ascending if == -1
-
-        print(f"sort_callback {sender=} {sort_specs=}")
+        """Column header selected to sort on column"""
         if sort_specs is None: return # no sorting case
         rows = dpg.get_item_children(sender, 1)
         cols = dpg.get_item_children(sender, 0)

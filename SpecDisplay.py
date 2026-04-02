@@ -133,6 +133,7 @@ class SpecDisplay():
         self.LoadFile(filepath, titleExtra, minT)  
 
     def GenerateSpectrum(self):
+        """Genenertes the coloured spectrum used in the spectrogram, DearPyGui does not allow access to standard spectrums"""
         colours = []
         for x in range(0, 256):
             r = 0; g = 0; b = 0
@@ -146,6 +147,7 @@ class SpecDisplay():
         return colours
         
     def GenerateYtickLabels(self):
+        """Generates standard frequency labels"""
         x = 0
         YtickLabels = list([])
         for y in range(25):
@@ -156,7 +158,7 @@ class SpecDisplay():
         return tuple(YtickLabels)
         
     def RememberDirectory(self, dir, f):
-        print(f"RememberDirectory {dir=} {f=}")
+        """When a single file is loaded this keeps track of the rest of the directory and the files position in it"""
         # will include files with no classified calls
         self.dirFiles = utils.ListAudioFiles(dir, TimeExpanded=True)
         i = 0
@@ -167,9 +169,11 @@ class SpecDisplay():
             i += 1
     
     def ActiveDisplay_click(self):
+        """User has requested this display is the active display for arrow keys etc"""
         self.activeButtonCallback()
     
     def ShowActiveDisplay(self, active=True):
+        """Feedback to user on which is active display for arrow keys etc"""
         if active: 
             dpg.set_item_label(self.activeDisplayText, "Active Display for:\nfile drops and arrow keys")
             dpg.bind_item_theme(self.activeDisplayText, self.greenText_theme) 
@@ -183,16 +187,17 @@ class SpecDisplay():
         self.DisplaySpectogram()    
     
     def MinSlider_callback(self, sender, app_data, user_data):
-        print(f"MinSlider_callback {app_data=}")
+        """Slider sets the black to coloured boundary"""
         self.minPercent = app_data
         self.DisplaySpectogram(UpdateMin= False, sound=False)
 
     def MaxSlider_callback(self, sender, app_data, user_data):
-        print(f"MaxSlider_callback {app_data=}")
+        """Slider sets the max coloured boundary, all above will be that colour"""
         self.maxPercent = app_data
         self.DisplaySpectogram(UpdateMin= False, sound=False)
         
     def ShowSpeciesCombo_changed(self, sender, app_data, user_data):
+        """Allows user to find highest probable of a species in a long file"""
         sl = self.SpeciesLanguage
         if sl == "EnglishAbbrev": sl = "English"
         id = self.SpeciesNames.index[self.SpeciesNames[sl]==app_data].tolist()
@@ -212,6 +217,7 @@ class SpecDisplay():
         dpg.set_value(self.ScrollBar, self.minT) 
 
     def LoadFile(self, filepath, titleExtra="", minT=None):
+        """Loads the summary data for the whole sound file"""
         self.Status("")
         filename = os.path.basename(os.path.splitext(filepath)[0])
         if self.SoundFile is not None: self.SoundFile.close()
@@ -258,6 +264,7 @@ class SpecDisplay():
             self.Status(f"Sample rate = {self.sample_rate / 1000:.1f}kHz FILE NOT ULTRASONIC")
         
     def LoadFileSegment(self):
+        """Loads just the data needed for the current spectrogram"""
         print(f"LoadFileSegment {self.minT=} {self.maxT=} {self.minF=} {self.maxF=} ")
         nSamples = int(self.sample_rate * (self.maxT - self.minT))
         self.SoundFile.seek(int(self.sample_rate * self.minT))
@@ -316,6 +323,7 @@ class SpecDisplay():
         return spectrogram, waveformTensor[0].numpy()
     
     def RectOnSpec(self, startPoint, endPoint):
+        """Draws the selection rectangle in the spectrogram, as ordinary DearPyGui drawing is hidden by Spectrogram"""
         npSpec = numpy.copy(self.npSpec)
         freqPerPixel = (self.maxF - self.minF) /self.freqBins #1
         timePerPixel = (self.maxT - self.minT) / self.timeSteps #2
@@ -402,6 +410,7 @@ class SpecDisplay():
             self.DisplaySpectogram(UpdateMin= False, sound = False)    
     
     def SetClassifyLabel(self, result):
+        """Displays the BatDetect2 call summary for the sound file being displayed"""
         if len(result) > 0:
             dpg.set_value(self.ClassifyLabel, result)
             if result == "No summary file":
@@ -453,6 +462,7 @@ class SpecDisplay():
             sounddevice.play(Recording, replayRate)
 
     def saveSound_click(self):
+        """Saves sound being displayed in spectrogram, expanding it to the user selected rate"""
         file,_ = os.path.splitext(self.file)
         if dpg.get_value(self.PlaySpeedCombo) == "1/10":
             filepath = os.path.join(self.dir, file + f"_{round(self.minT*1000)}ms_{self.species}_TE.wav")
@@ -466,6 +476,7 @@ class SpecDisplay():
             self.Status(f"Normal speed audio saved as '{filepath}'") 
         
     def DownSample(self, arr, downscale_factor):
+        """Downsamples sound as sample rate too high to play"""
         total_elements = arr.shape[0]
         odd_elements = total_elements % downscale_factor
         #remove odd elements so no numpy reshaping error
@@ -478,6 +489,7 @@ class SpecDisplay():
         return downsampled_arr
         
     def PlaySoundAndProgress(self, recording, SampleRate, speed):
+        """Starts playing sound in external process in time with vertical line cursor on spectrogram"""
         print(f"PlaySoundAndProgress {len(recording)=} {recording[0]=}{SampleRate=} {speed=}")
         if self.soundLine is not None:
             self.soundLine = None
@@ -507,6 +519,7 @@ class SpecDisplay():
         self.SoundStartTime = float(time.perf_counter()) + 0.2 # fudge factor
         
     def UpdateSoundLine(self, plot):
+        """Move vertical line cursor on spectrogram to current sound olaying"""
         if self.soundLine is not None:
             try:
                 dpg.delete_item(self.soundLine) 
