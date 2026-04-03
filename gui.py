@@ -141,9 +141,6 @@ class MainWindow():
         # Initialise display from last time closed down
         self.classify = Classifier()
         if sys.platform.startswith("win"): DragAndDrop.set_drop(self.FileDrop)
-        if not os.path.isdir(config['dir']):
-            self.Status(f"Directory {config['dir']} NO LONGER EXISTS", error=True)
-            return
         self.SpecDisplay1.dir = config['dir']; self.SpecDisplay1.file = config['file']
         if len(config['echoMeterDir']) > 0:
             self.LoadEchoMeterDir(config['echoMeterDir'])
@@ -675,9 +672,8 @@ class MainWindow():
     def LoadClassifiedFile(self, f, display, minT=None):
         print(f"LoadClassifiedFile {f=} {minT=}") 
         dir = os.path.dirname(f); file = os.path.basename(f)
-        callsCsvPath = os.path.join(dir,"ann", file + ".csv")
-        callsJsonPath = os.path.join(dir,"ann", file + ".json")
-        if not os.path.isfile(callsCsvPath) and not os.path.isfile(callsJsonPath):
+        callsCsvPath = os.path.join(dir,"ann", file+".csv")
+        if not os.path.isfile(callsCsvPath):
             print(f"LoadClassifiedFile {callsCsvPath=} not found")
             self.Status(f"Classifying file {f}")
             results = self.classify.File(f, debug=True)
