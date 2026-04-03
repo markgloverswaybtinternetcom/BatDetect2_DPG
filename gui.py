@@ -294,7 +294,7 @@ class MainWindow():
             else: self.ActiveDisplay.minT = self.ActiveDisplay.duration - self.Range
         else: self.ActiveDisplay.minT += self.Range; self.ActiveDisplay.maxT += self.Range
         self.ActiveDisplay.DisplaySpectogram()
-        print(f"RightKey_pressed {self.lastRow=} {self.ActiveDisplay.minT=} {self.FileMinTs[self.lastRow]=}")
+        print(f"RightKey_pressed {self.lastRow=} {self.ActiveDisplay.minT=}")
         if self.FilesDF is not None: self.FileMinTs[self.lastRow] = self.ActiveDisplay.minT
         dpg.set_value(self.ActiveDisplay.ScrollBar, self.ActiveDisplay.minT) 
     
