@@ -12,10 +12,11 @@ class BatCalls():
         self.CallsNP = None
         
     def fromCSV(self, callsCsvPath):
-        """"Load annotation information from BatDetect2 classifier CSV file"""
+        """"Load annotation information from old BatDetect2 classifier CSV file and generate summay of contents"""
         with open(callsCsvPath, mode ='r')as file:
             csvLines = csv.reader(file)
-            summaryDict = {}; arr = []
+            summaryDict = {}
+            arr = []
             i = 0;
             for row in csvLines: 
                 if i>0: # first line column titles
@@ -77,10 +78,11 @@ class BatCalls():
         return species, exception
 
     def fromJSON(self, filepath):
-        """"Load annotation information from a JSON file in format that the BatDetect2 uses for traiing models"""
+        """"Load annotation information from a JSON file in format that the BatDetect2 uses for traiing models and generate summay of contents"""
         print(f"fromJSON {filepath=}")
         with open(filepath, 'r') as file:
             jsonData = json.load(file)
+            summaryDict = {}
             self.CallsNP = None
             for call in jsonData['annotation']:
                 id = self.LatinIdx[call["class"]]; ct = self.CallTypes.index(call["event"]); t1 = float(call["start_time"]); t2 = float(call["end_time"]); 
@@ -89,6 +91,22 @@ class BatCalls():
                     self.CallsNP = numpy.array([[ id, t1, t2, f1, f2, p1, p2, ct]], dtype=numpy.float32) 
                 else:
                     self.CallsNP = numpy.append(self.CallsNP, numpy.array([[ id, t1, t2, f1, f2, p1, p2, ct]], dtype=numpy.float32), axis=0)
+                prob = p1 * p2
+                if id in summaryDict:
+                    min = summaryDict[id][1]; max = summaryDict[id][2];
+                    if prob < min: min = prob
+                    if prob > max: max = prob
+                    summaryDict[id] = [summaryDict[id][0]+1, min, max]
+                else:
+                    summaryDict[id] = [1, prob, prob] 
+                        
+        summary = ""
+        for id, val in summaryDict.items():
+            species = self.SpeciesNames.loc[id][self.SpeciesLanguage]
+            if val[0] == 1: summary += f"{species} 1 call {val[1]:.0%}, "
+            else: summary += f"{species} {val[0]} calls {val[2]:.0%}-{val[1]:.0%}, "
+        self.CallsNP = numpy.array(arr, dtype='f')
+        return summary
                 
     def toJSON(self, callsJsonPath):
         """"Save annotation information to a JSON file in format that the BatDetect2 uses for traiing models"""

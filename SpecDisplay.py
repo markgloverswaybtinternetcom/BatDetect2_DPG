@@ -117,9 +117,13 @@ class SpecDisplay():
             titleExtra = f"file {self.dirIndex +1} of {len(self.dirFiles)}"
         self.dir = dir; self.file = file
         if self.classifyEnabled:            
-            callsCsvPath = os.path.join(dir,"ann", file+".csv")
-            if os.path.isfile(callsCsvPath):
+            callsJsonPath = os.path.join(dir,"ann", file + ".json")
+            callsCsvPath = os.path.join(dir,"ann", file + ".csv")
+            if os.path.isfile(callsJsonPath):
+               summary = self.calls.fromJSON(callsJsonPath)
+            elif os.path.isfile(callsCsvPath):
                 summary = self.calls.fromCSV(callsCsvPath)
+                
                 self.SetClassifyLabel(summary)                
                 speciesComboList = self.calls.GetSpeciesList()
                 if len(speciesComboList) > 1:
