@@ -250,7 +250,7 @@ class MainWindow():
             else: row = self.lastRow -1
             self.ScrollToRow(row)
             user_data = [self.FileTable,  self.FilesDF, row, row]
-            print(f"UpKey_pressed {row +1} of {self.NumFiles}")
+            print(f"UpKey_pressed {row +1} ")
             self.TableRow_selected(0, [], user_data)
         elif self.ActiveDisplay.dirIndex > 0:
             self.ActiveDisplay.dirIndex -= 1
@@ -268,7 +268,7 @@ class MainWindow():
             self.ScrollToRow(row)
             if row < len(self.FilesDF):
                 user_data = [self.FileTable,  self.FilesDF, row, row]
-                print(f"DownKey_pressed {row +1} of {self.NumFiles}")
+                print(f"DownKey_pressed {row +1} ")
                 self.TableRow_selected(0, [], user_data)      
         elif self.ActiveDisplay.dirIndex < len(self.ActiveDisplay.dirFiles) -1:
             self.ActiveDisplay.dirIndex += 1
