@@ -75,8 +75,11 @@ class Classifier():
         predictions = []; spec_feats = []
         info = soundfile.info(audio_file)
         file_samp_rate = info.samplerate
-        orig_samp_rate = file_samp_rate * (config.get("time_expansion") or 1)
-        sampling_rate, audio_full = au.load_audio( audio_file, time_exp_fact=config.get("time_expansion", 1) or 1,  target_samp_rate=config["target_samp_rate"], scale=config["scale_raw_audio"], max_duration=config.get("max_duration"))
+        filename = os.path.basename(os.path.splitext(audio_file)[0])
+        if filename.endswith("TE"): timeExpFact = 10
+        else: timeExpFact = 1
+        orig_samp_rate = file_samp_rate * timeExpFact
+        sampling_rate, audio_full = au.load_audio( audio_file, time_exp_fact=timeExpFact,  target_samp_rate=config["target_samp_rate"], scale=config["scale_raw_audio"], max_duration=config.get("max_duration"))
 
         # loop through larger file and split into chunks
         # BatDetect2 TODO: fix so that it overlaps correctly and takes care of duplicate detections at borders
@@ -97,7 +100,7 @@ class Classifier():
         predictions, spec_feats, cnn_feats, spec_slices = du._merge_results(predictions, spec_feats, [], [])
 
         # convert results to a dictionary in the right format
-        calls = du.convert_results(file_id=os.path.basename(audio_file), time_exp=config.get("time_expansion", 1) or 1,
+        calls = du.convert_results(file_id=os.path.basename(audio_file), time_exp=1, # assume display also expanding
             duration=audio_full.shape[0] / float(sampling_rate), params=config, predictions=predictions,
             spec_feats=spec_feats, cnn_feats=[], spec_slices=[], nyquist_freq=orig_samp_rate / 2)
         return calls
