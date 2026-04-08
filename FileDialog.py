@@ -221,6 +221,20 @@ class FileDialog():
                     dpg.bind_item_theme(cell_sr, self.size_alignt)                  
                 nRow += 1
                 
+    def FindFileInTable(self, filepath):
+        filename = os.path.basename(filepath)
+        rows = dpg.get_item_children(self.table, 1)
+        nRow = 0
+        for row in rows:
+            fCell = dpg.get_item_children(row, 1)[1]
+            f = dpg.get_item_label(fCell)
+            if f == filename: break
+            nRow += 1
+        else:
+            print(colorama.Fore.RED +  f"FindFileInTable {filepath=} NOT FOUND" + colorama.Fore.RESET)            
+            return None
+        return nRow
+                
     def TableRow_selected(self, sender, app_data, user_data):
         """Selecting a table row list a directory or selects a sound file"""
         global LastRowSelected # fixes bug getting old value of self
@@ -233,6 +247,9 @@ class FileDialog():
             self.DisplayDir(filepath)
         else:
             self.selectedFile = filepath
+            if self.sorted:
+                # if sorted nRow is wrong, so must find filename
+                nRow = self.FindFileInTable(filepath)
             dpg.highlight_table_row(table, nRow, color=[0,100,0]) 
             LastRowSelected = nRow 
             # do not add code as will stop selecting rows or buttons
@@ -265,14 +282,7 @@ class FileDialog():
                 
         if self.sorted:
             # if sorted nRow is wrong, so must find filename
-            filename = os.path.basename(filepath)
-            rows = dpg.get_item_children(table, 1)
-            nRow = 0
-            for row in rows:
-                fCell = dpg.get_item_children(row, 1)[1]
-                f = dpg.get_item_label(fCell)
-                if f == filename: break
-                nRow += 1
+            nRow = self.FindFileInTable(filepath)
         dpg.highlight_table_row(table, nRow, color=[0,100,0])
         LastRowSelected = nRow
         dpg.configure_item(self.SplitLongWavs, show=True)
