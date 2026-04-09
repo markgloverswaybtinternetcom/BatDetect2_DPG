@@ -79,6 +79,20 @@ class MainWindow():
                 dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, BACKGROUND_COLOUR, category=dpg.mvThemeCat_Core)
                 dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, BACKGROUND_COLOUR, category=dpg.mvThemeCat_Core)
                 dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 0 ,0), category=dpg.mvThemeCat_Core)
+        with dpg.theme() as self.green_align_right:
+            with dpg.theme_component(dpg.mvButton):
+                dpg.add_theme_style(dpg.mvStyleVar_ButtonTextAlign, 1.00, category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_Button, BACKGROUND_COLOUR, category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, BACKGROUND_COLOUR, category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, BACKGROUND_COLOUR, category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_Text, (0, 255 ,0), category=dpg.mvThemeCat_Core)
+        with dpg.theme() as self.yellow_align_right:
+            with dpg.theme_component(dpg.mvButton):
+                dpg.add_theme_style(dpg.mvStyleVar_ButtonTextAlign, 1.00, category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_Button, BACKGROUND_COLOUR, category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, BACKGROUND_COLOUR, category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, BACKGROUND_COLOUR, category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 255 ,0), category=dpg.mvThemeCat_Core)
         dpg.bind_item_theme(self.StatusLabel, self.align_right)
         with dpg.font_registry():
             default_font = dpg.add_font("./Resources/Swansea-q3pd.ttf", config["font"])
@@ -502,14 +516,15 @@ class MainWindow():
                     self.resize_handler(0, None, None)"""                  
                 self.LabelStartPlot = None   
 
-    def Status(self, txt, error=False):
+    def Status(self, txt, error=False, theme=None):
         if error:
             if self.StatusLabel is not None:
                 dpg.bind_item_theme(self.StatusLabel, self.red_align_right)
                 dpg.set_item_label(self.StatusLabel, txt)
             chime.error()
         else:
-            dpg.bind_item_theme(self.StatusLabel, self.align_right)
+            if theme == None: dpg.bind_item_theme(self.StatusLabel, self.align_right)
+            else: dpg.bind_item_theme(self.StatusLabel, theme)
             dpg.set_item_label(self.StatusLabel, txt)
 
     def FileDrop(self, data, keys):
@@ -552,13 +567,13 @@ class MainWindow():
                 self.Status("Single files only on second display", error=True)
                 return
             display = self.SpecDisplay2
+            # not space for file table need to keep track of position in directory
             self.MultiFile = False
+            self.SpecDisplay1.RememberDirectory(self.SpecDisplay1.dir, os.path.join(self.SpecDisplay1.dir, self.SpecDisplay1.file))
             dpg.configure_item(self.SpecDisplay2.topGroup, show=True)
-            #self.activeButton2()
         else:
             print(f"LoadFileOrDir Use normal Window")
             display= self.SpecDisplay1
-            #self.activeButton1()
         dpg.set_value(display.ClassifyLabel, "")
         self.FilesDF = None
         if os.path.isdir(f):
@@ -571,7 +586,7 @@ class MainWindow():
             dpg.configure_item(self.SpecDisplay2.topGroup, show=False)
             if os.path.basename(f).startswith("Session_"):
                 print(f"LoadFileOrDir single echometer directory {f} found")
-                self.Status(f"Classifying single echo meter session at {f}")
+                self.Status(f"Classifying single echo meter session at {f}", theme=self.yellow_align_right)
                 self.LoadEchoMeterDir(f)
                 config['echoMeterDir'] = f
             elif os.path.isfile(dirResults_file):
@@ -587,11 +602,11 @@ class MainWindow():
                 self.LoadEchoMeterDir(f)
                 config['echoMeterDir'] = f
             elif self.LoadBtoPipelineResults(f):
-                self.Status(f"'{f}' BTO Pipeline results loaded")
+                self.Status(f"'{f}' BTO Pipeline results loaded", theme=self.green_align_right)
                 return
             else:
                 self.ClassifyDir(f)
-                self.Status(f"Classified directory {f}")
+                self.Status(f"Classified directory {f}", theme=self.green_align_right)
             self.resize_handler(0, None, None)
         elif os.path.isfile(f):
             if display == self.SpecDisplay1: self.MultiFile = False; 
@@ -646,11 +661,11 @@ class MainWindow():
         dpg.configure_item(self.AssignSpeciesCombo, show=True)
         dpg.configure_item(self.saveMapButton, show=True)   
         self.echoMeterDir = f
-        self.Status("All Echo Meter files Classified, select file")                 
+        self.Status("All Echo Meter files Classified, select file", theme=self.green_align_right)                 
     
     def SaveMap_click(self):
         resultFile = self.echoMeter.SaveMap(GpsFilesDF=self.FilesDF)
-        self.Status(f"Map saved as {resultFile}")             
+        self.Status(f"Map saved as {resultFile}", theme=self.green_align_right)             
             
     def AssignSpeciesCombo_changed(self, sender, app_data, user_data):
         species = app_data;      
@@ -675,10 +690,10 @@ class MainWindow():
         callsCsvPath = os.path.join(dir,"ann", file+".csv")
         if not os.path.isfile(callsCsvPath):
             print(f"LoadClassifiedFile {callsCsvPath=} not found")
-            self.Status(f"Classifying file {f}")
+            self.Status(f"Classifying file {f}", theme=self.yellow_align_right)
             results = self.classify.File(f, debug=True)
             if len(results) > 0:
-                self.Status(f"Classified file {f}")
+                self.Status(f"Classified file {f}", theme=self.green_align_right)
         display.LoadClassifiedFile(f, not self.MultiFile, minT)                     
                 
     def ClassifyDir(self, dir_path):
@@ -693,17 +708,17 @@ class MainWindow():
             for column in self.FilesDF.columns: 
                 dpg.add_table_column(label=column, parent=self.FileTable)
             r = 0;
-            self.Status(f"Classifying '{os.path.basename(dir_path)}'") 
+            self.Status(f"Classifying '{os.path.basename(dir_path)}'", theme=self.yellow_align_right) 
             for index, audio_file in enumerate(files): 
                 result = classify.File(audio_file)
                 if len(result) > 0: 
                     self.AddToFileTable(audio_file, result, r)
                     r += 1
-                self.Status(f"file {index +1} of {len(files)} Classified") 
+                self.Status(f"file {index +1} of {len(files)} Classified", theme=self.yellow_align_right) 
             dirResults_file = os.path.join(dir_path, "BatDetect2 Results.csv")
             self.FilesDF.write_csv(dirResults_file)
             self.FileMinTs = [0.0] * len(self.FilesDF)
-            self.Status(f"'{os.path.basename(dir_path)}' files all Classified, select file") 
+            self.Status(f"'{os.path.basename(dir_path)}' files all Classified, select file", theme=self.green_align_right) 
             self.lastRow = None
             config["file"] = ""
                 
@@ -858,7 +873,7 @@ class MainWindow():
             nRow += 1            
     def SaveMap_clicked(self):
         resultFile = self.echoMeter.SaveMap(GpsFilesDF=self.FilesDF)
-        self.Status(f"Map saved as {resultFile}") 
+        self.Status(f"Map saved as {resultFile}", theme=self.green_align_right) 
 
 if __name__ == '__main__':
     import dearpygui.dearpygui as dpg
