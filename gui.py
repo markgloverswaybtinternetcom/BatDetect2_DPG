@@ -455,65 +455,18 @@ class MainWindow():
                 labelMaxT = max(self.LabelStartPlot[0], plotPos[0])#sec
                 labelMaxF = max(self.LabelStartPlot[1], plotPos[1])#kHz
                 
-                if self.EditMode == "Source":
+                if self.EditMode == "Source" or self.EditMode == "Train":
                     # edit original file annotations
                     print("label_release_handler Source")
                     display.calls.Insert(self.AssignSpeciesID, self.AssignCallTypeID, labelMinT, labelMaxT, labelMinF, labelMaxF)
                     callsCsvPath = os.path.join(self.SpecDisplay1.dir, "ann", f"{self.SpecDisplay1.file}.csv")
                     display.calls.toCSV(callsCsvPath)
-                    display.DisplaySpectogram(UpdateMin= False, sound = False)
-
-                elif self.EditMode == "Train" and display == self.SpecDisplay1:
-                    # generate classifier training annotations
-                    print("label_release_handler Train")
-                    id = self.AssignSpeciesID; ct = self.AssignCallTypeID
-                    if self.SpecDisplay1.CallsNP is None: # empty array
-                        self.SpecDisplay1.CallsNP = numpy.array([[id, labelMinT, labelMaxT, labelMinF/1000, labelMaxF/1000, 1.0, ct]]) 
-                    else:
-                        self.SpecDisplay1.CallsNP = numpy.append(self.SpecDisplay1.CallsNP, numpy.array([[id, labelMinT, labelMaxT, labelMinF/1000, labelMaxF/1000, 1.0, ct]]), axis = 0)  
-                    callsJsonPath = os.path.join(self.SpecDisplay1.dir, "ann", f"{self.SpecDisplay1.file}.json")
-                    self.SpecDisplay1.calls.toJSON(callsJsonPath)
-                    display.DisplaySpectogram(UpdateMin= False, sound = False)
-                        
-                elif self.EditMode == "Species Ref" and display == self.SpecDisplay1:
-                    # generate reference sheet file and annotations
-                    print("label_release_handler Species Ref")
-                    # append to source classifier csv at current location using Pandas
-                    callsWavPath = os.path.join("Resources", "SpeciesRef", "ann", f"{self.SpeciesNames[self.FullSpeciesLanguage].iloc[self.AssignSpeciesID]}.wav")
-                    callsCsvPath = callsWavPath + ".csv"
-                    callLength = labelMaxT - labelMinT; 
-                    startSample = int((labelMinT - self.SpecDisplay1.minT) * self.SpecDisplay1.sample_rate)
-                    endSample = int((labelMaxT - self.SpecDisplay1.minT) * self.SpecDisplay1.sample_rate)
-                    sample = self.SpecDisplay1.Recording[startSample : endSample]
-                    callAudio = self.bandpass(sample, [labelMinF, labelMaxF], self.SpecDisplay1.sample_rate) # remove background noise
-                    if self.SpecDisplay1.sample_rate != STD_SAMPLING:
-                        callAudio = scipy.signal.resample(callAudio, int(len(callAudio) * STD_SAMPLING / self.SpecDisplay1.sample_rate))
-                    
-                    if os.path.exists(callsCsvPath):
-                        callsDF = pandas.read_csv(callsCsvPath)
-                        lastCall = callsDF.iloc[-1]
-                        nRow = int(lastCall['id']) +1
-                        space = 0.05
-                        labelMinT = lastCall['end_time'] + space
-                        labelMaxT = labelMinT + callLength
-                        sampleRate, audio = scipy.io.wavfile.read(callsWavPath)
-                        # audio append gap and selected audio
-                        silentAudio = numpy.zeros(int(space * STD_SAMPLING))
-                        audio = numpy.concatenate((audio, silentAudio, callAudio))
-                        scipy.io.wavfile.write(callsWavPath, sampleRate, audio)
-                    else:
-                        labelMinT = 0; labelMaxT = callLength
-                        nRow = 0
-                        scipy.io.wavfile.write(callsWavPath, STD_SAMPLING, callAudio)
-                    
-                    self.SetActiveDisplayN(displayN)
-                    self.SpecDisplay2.calls.Insert(self.AssignSpeciesID, self.AssignCallTypeID, labelMinT, labelMaxT, labelMinF, labelMaxF)
-                    self.SpecDisplay2.calls.toCSV(callsCsvPath)
-                    self.SpecDisplay2.DisplaySpectogram(UpdateMin= False, sound = False)
-
-                    """self.SpecDisplay2.ConvertDFtoNP(callsDF)
-                    self.SpecDisplay2.LoadFile(callsWavPath)
-                    self.resize_handler(0, None, None)"""                  
+                    trainDir = os.path.join(self.SpecDisplay1.dir, "train")
+                    if not os.path.isdir(trainDir):
+                        os.makedirs(trainDir)
+                    callsJsonPath = os.path.join(trainDir, f"{self.SpecDisplay1.file}.json")
+                    display.calls.toJSON(callsJsonPath)
+                    display.DisplaySpectogram(UpdateMin= False, sound = False)      
                 self.LabelStartPlot = None   
 
     def Status(self, txt, error=False, theme=None):
