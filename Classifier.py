@@ -62,6 +62,9 @@ class Classifier():
                 preds_df = results_df[["det_prob", "start_time",  "end_time", "high_freq", "low_freq", "class", "class_prob", "event"]]
                 preds_df.to_csv(op_path + ".csv", sep=",")
                 summary = self.GetDfSummary(preds_df)
+                #create file for training as well
+                with open(op_path + ".json", "w", encoding="utf-8") as jsonfile:
+                    json.dump(results["pred_dict"], jsonfile, indent=2)
             else:
                 with open(op_path + ".csv", "w") as f:
                     f.write("id,det_prob,start_time,end_time,high_freq,low_freq,class,class_prob\n")

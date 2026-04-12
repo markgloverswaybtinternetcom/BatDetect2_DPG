@@ -20,7 +20,7 @@ class BatCalls():
             for row in csvLines: 
                 if i>0: # first line column titles
                     species = row[6]
-                    if species == "Barbastellus barbastellus": species = "Barbastella barbastellus" #batdetect2 latine error
+                    if species == "Barbastellus barbastellus": species = "Barbastella barbastellus" #batdetect2 latin error
                     id = self.LatinIdx[species]; p1 = float(row[1]); p2 = float(row[7])
                     if len(row) > 8: ct = self.CallTypes.index(row[8])
                     else: ct = 0
@@ -98,7 +98,7 @@ class BatCalls():
             id = self.SpeciesNames["Latin"][int(call[0])]; t1=f"{call[1]:.4f}"; t2=f"{call[2]:.4f}"; f1=f"{call[3]*1000:.0f}"
             f2=f"{call[4]*1000:.0f}"; p1 = f"{call[5]:.3f}"; p2 = f"{call[6]:.3f}"; ct = self.CallTypes[int(call[7])]
             annotationValues.append({'class': id, 'class_prob': prob, 'det_prob': prob, 'end_time': t2, 'event': callType, 'high_freq': f2, 'individual': '-1','low_freq': f1, 'start_time': t1})
-        thisdict = {"annotated": False, "annotation": annotationValues, "class_name": id, "duration": self.duration, "id": self.file, "issued": False, "notes": "Automatically generated.", "time_exp": 1}
+        thisdict = {"annotated": True, "annotation": annotationValues, "class_name": id, "duration": self.duration, "id": self.file, "issued": False, "notes": "Automatically generated.", "time_exp": 1}
         with open(callsJsonPath, "w", encoding="utf-8") as jsonfile:
             json.dump(thisdict, jsonfile, indent=2, sort_keys=True)
 
