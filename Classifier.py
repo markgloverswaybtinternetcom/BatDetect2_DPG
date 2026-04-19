@@ -55,6 +55,13 @@ class Classifier():
         summary = ""
         if len(results) > 0:
             result_list = results["pred_dict"]["annotation"] # save csv file - if there are predictions
+            if "SRD0" in op_path:
+                # Smith Robotics Device Demeter has interference at Horseshoe frequency
+                Demeter_result_list = []
+                for call in result_list:
+                    if call['class'] != 'Rhinolophus ferrumequinum':
+                        Demeter_result_list.append(call)
+                result_list = Demeter_result_list
             results_df = pandas.DataFrame(result_list)
             results_df["file_name"] = results["pred_dict"]["id"] # add file name as a column
             results_df.index.name = "id" # rename index column   
