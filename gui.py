@@ -561,6 +561,9 @@ class MainWindow():
                 self.ClassifyDir(f)
                 self.Status(f"Classified directory {f}", theme=self.green_align_right)
             self.resize_handler(0, None, None)
+            user_data = [self.FileTable,  self.FilesDF, 0, 0]
+            self.TableRow_selected(0, [], user_data)
+            self.ScrollToRow(0)
         elif os.path.isfile(f):
             if display == self.SpecDisplay1: self.MultiFile = False; 
             self.LoadClassifiedFile(f, display)
