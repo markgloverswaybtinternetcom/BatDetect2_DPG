@@ -503,7 +503,7 @@ class SpecDisplay():
         soundfile.write(temp, recording, int(SampleRate)) 
             
         if sys.platform.startswith("win"):        
-            self.SoundProcess = subprocess.Popen(['./wavplayer/sounder.exe', temp] )  
+            self.SoundProcess = subprocess.Popen(['./wavplayer/wavplay.exe', temp] )  
         elif sys.platform.startswith("linux"):
             self.SoundProcess = subprocess.Popen(['./wavplayer/wavplay', temp] )  
         else:
