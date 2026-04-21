@@ -41,7 +41,7 @@ class MainWindow():
                 self.LowFilterCombo = dpg.add_combo(label="Low Filter", 
                     items=("> 0 kHz", "> 5 kHz", "> 10 kHz", "> 15 kHz", "> 20 kHz", "> 25 kHz", "> 30 kHz", "> 35 kHz", "> 40 kHz", "> 50 kHz", "> 60 kHz"), 
                     width=95*config["scale"],  callback=self.LowFilterListBox_changed)
-                self.HighFilterCombo = dpg.add_combo(label="High Filter", items=("< 125 kHz", "< 100 kHz", "< 80 kHz", "< 60 kHz"), 
+                self.HighFilterCombo = dpg.add_combo(label="High Filter", items=("< 125 kHz", "< 100 kHz", "< 80 kHz", "< 70 kHz", "< 60 kHz", "< 50 kHz", "< 40 kHz"), 
                     width=95*config["scale"], callback=self.HighFilterListBox_changed)
                 self.SpeciesLanguageCombo = dpg.add_combo(label="Species Language", items=("Latin","LatinAbbrev", "English", "EnglishAbbrev", "None"),
                     width=115*config["scale"], default_value=self.SpeciesLanguage, callback=self.SpeciesLanguageCombo_changed)
