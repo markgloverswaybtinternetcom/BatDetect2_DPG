@@ -2,10 +2,9 @@ import dearpygui.dearpygui as dpg
 import sys, os, subprocess, utils
 if sys.platform.startswith("win"): 
     import DearPyGui_DragAndDrop as DragAndDrop
-import numpy, soundfile, sounddevice, time, warnings, json, scipy, wakepy, json, colorama
-import re, multiprocessing, ctypes, math, torchaudio, torch, torchaudio_filters, traceback, webbrowser, chime, Classifier
+import numpy, soundfile, sounddevice, time, warnings, json, wakepy, json, colorama
+import re, multiprocessing, ctypes, math, torchaudio, torch, torchaudio_filters, traceback, webbrowser, chime
 import pandas, polars
-import scipy.signal, scipy.io.wavfile # filter for ref calls
 from screeninfo import get_monitors
 from SpecDisplay import SpecDisplay
 from FileDialog import FileDialog
@@ -33,9 +32,9 @@ class MainWindow():
             self.Range = float(config["Range"]);
             self.SpecDisplay2 = SpecDisplay(self.mainWindow, config, parentSelf=self, activeButtonCallback=self.activeButton2, showDisplay=False, showAmp=False)
             self.ActiveDisplay = self.SpecDisplay1 = SpecDisplay(self.mainWindow, config, parentSelf=self, activeButtonCallback=self.activeButton1)                   
-
+            self.FileDialog = FileDialog(self.FileDialog_Finished)
             with dpg.group(horizontal=True, height=BUTTON_HT * config["scale"]):               
-                SelectFileButton = dpg.add_button(label="Open Dir/File ...", height=-1, callback=self.FileDialog_Show)
+                SelectFileButton = dpg.add_button(label="Open Dir/File ...", height=-1, callback=self.FileDialog.Show)
                 self.RangeCombo = dpg.add_combo(label="Range", items=("0.25s", "0.5s", "1.0s", "2.0s", "5.0s", "10s", "15s"), 
                     width=60*config["scale"], default_value=f"{self.SpecDisplay1.Range}s", callback=self.RangeListbox_changed)
                 self.LowFilterCombo = dpg.add_combo(label="Low Filter", 
@@ -52,7 +51,6 @@ class MainWindow():
                 self.AssignCallTypeCombo = dpg.add_combo(label="Call Type", items=self.CallTypes, width=110*config["scale"], 
                     default_value=self.CallTypes[self.AssignCallTypeID], callback=self.AssignCallTypeCombo_changed)
                 self.saveMapButton = dpg.add_button(label="Save Map", show=False, height=-1, callback=self.SaveMap_click)
-                
                 self.HelpButton = dpg.add_button(label="Help", width=60*config["scale"], callback=self.HelpButton_pressed)                     
             with dpg.table(policy=dpg.mvTable_SizingFixedFit, scrollY=True, height=config["height"] * 0.2) as self.FileTable:
                 dpg.add_table_column(label="Filename")
@@ -60,8 +58,6 @@ class MainWindow():
 
             self.StatusLabel = dpg.add_button(width=-1, height=STATUS_HT * config["scale"])
             sys.excepthook = self.notify_exception
-            
-            self.FileDialog = FileDialog(self.FileDialog_Finished)
         
         # style for the GUI elements
         BACKGROUND_COLOUR = (0,0,0)
@@ -128,7 +124,8 @@ class MainWindow():
                 dpg.add_theme_color(dpg.mvThemeCol_Header, (0, 0, 0, 0), category=dpg.mvThemeCat_Core)
         with dpg.theme() as self.line_theme:
            with dpg.theme_component(dpg.mvLineSeries):
-                  dpg.add_theme_color(dpg.mvPlotCol_Line, (200, 200, 200, 255), category=dpg.mvThemeCat_Plots)                
+                  dpg.add_theme_color(dpg.mvPlotCol_Line, (200, 200, 200, 255), category=dpg.mvThemeCat_Plots)     
+        # apply style to individual elements
         dpg.bind_item_theme(SelectFileButton, greenButton_theme)
         dpg.bind_item_theme(self.FileTable, table_theme)
         dpg.bind_item_theme(self.saveMapButton, magentaButton_theme)
@@ -201,13 +198,11 @@ class MainWindow():
         self.EditModeListbox_changed(None, self.EditMode, None)
 
     def notify_exception(self, type, value, tb):
+        """Make user aware of any exception using sound and GUI status line"""
         traceback_details = "\n".join(traceback.extract_tb(tb).format())
         msg = f"caller: {' '.join(sys.argv)}\n{type}: {value}\n{traceback_details}"
         print(colorama.Fore.RED + msg + colorama.Fore.RESET)
         self.Status("EXCEPTION see console", error=True)
-        
-    def FileDialog_Show(self):
-        self.FileDialog.Show()
 
     def FileDialog_Finished(self, f, displayN):
         print(f"FileDialog_Finished {f=} {displayN=}")
@@ -215,10 +210,11 @@ class MainWindow():
         self.SetActiveDisplayN(displayN)
         
     def HelpButton_pressed(self):
+        """HTML help page on request or if default configuration"""
         webbrowser.open_new_tab(os.path.join("file:", os.getcwd(), "help.html"))
         
     def ScrollToRow(self, row): 
-        """DearPyGUI does not provide a good table function to do this"""
+        """DearPyGUI does not provide a good table function to do this, need to guess pixel movement"""
         y = dpg.get_y_scroll(self.FileTable)
         yMax = dpg.get_y_scroll_max(self.FileTable)
         rowSize = yMax/len(self.FilesDF)
@@ -228,6 +224,7 @@ class MainWindow():
         dpg.set_y_scroll(self.FileTable, pxl)
 
     def resize_handler(self, sender, app_data, user_data):
+        """Resize GUI elements in proportion to fill window"""
         config["height"] = dpg.get_viewport_height()
         config["width"] = dpg.get_viewport_width()
         pos = dpg.get_viewport_pos()
@@ -238,9 +235,9 @@ class MainWindow():
         if self.MultiFile: 
             dpg.configure_item(self.FileTable, show=True)
             topHeight = 0.8 * config["height"]
-            dpg.configure_item(self.FileTable, height = config["height"] - topHeight)           
+            dpg.configure_item(self.FileTable, height = config["height"] - topHeight)        
         else:
-            dpg.configure_item(self.FileTable, show=False)
+            dpg.configure_item(self.FileTable, show=False)       
             topHeight = config["height"]
         
         if dpg.get_item_configuration(self.SpecDisplay2.topGroup)['show']:
@@ -250,13 +247,14 @@ class MainWindow():
             dpg.configure_item(self.SpecDisplay2.bottomGroup, show=True)
             dpg.configure_item(self.SpecDisplay1.topGroup, height=specHeight)
             dpg.configure_item(self.SpecDisplay2.topGroup, height=specHeight)
-        else:
-            specHeight = topHeight - (AMP_HT + SCROLL_HT + 2*BUTTON_HT + STATUS_HT+ HEADER ) * config["scale"] - SPACING *6
-            #print(f"resize_handler 1 display {specHeight=}")
-            dpg.configure_item(self.SpecDisplay1.ampPlot, show=True)
-            dpg.configure_item(self.SpecDisplay1.topGroup, height=specHeight) 
+        elif dpg.get_item_configuration(self.SpecDisplay1.topGroup)['show']:
+                specHeight = topHeight - (AMP_HT + SCROLL_HT + 2*BUTTON_HT + STATUS_HT+ HEADER ) * config["scale"] - SPACING *6
+                #print(f"resize_handler 1 display {specHeight=}")
+                dpg.configure_item(self.SpecDisplay1.ampPlot, show=True)
+                dpg.configure_item(self.SpecDisplay1.topGroup, height=specHeight)  
         
     def UpKey_pressed(self, sender, app_data, user_data):
+        """Display previous file in FileTable or directory"""
         print(f"UpKey_pressed {self.MultiFile=} {self.lastRow=} {self.ActiveDisplay.dirIndex=}")
         if self.ActiveDisplay == self.SpecDisplay1 and self.MultiFile:
             print(f"UpKey_pressed TableRow")
@@ -274,6 +272,7 @@ class MainWindow():
             self.LoadClassifiedFile(self.ActiveDisplay.dirFiles[self.ActiveDisplay.dirIndex], self.ActiveDisplay)
                 
     def DownKey_pressed(self, sender, app_data, user_data):
+        """Display next file in FileTable or directory"""
         print(f"UpKey_pressed {self.MultiFile=} {self.lastRow=} {self.ActiveDisplay.dirIndex=}")
         if self.ActiveDisplay == self.SpecDisplay1 and self.MultiFile:
             print(f"DownKey_pressed TableRow")
@@ -292,6 +291,7 @@ class MainWindow():
             self.LoadClassifiedFile(self.ActiveDisplay.dirFiles[self.ActiveDisplay.dirIndex], self.ActiveDisplay)
              
     def LeftKey_pressed(self, sender, app_data, user_data):
+        """Display previous screenfull of spectrogram and sound in current file"""
         print(f"LeftKey_pressed {self.Range=}")        
         if self.ActiveDisplay.minT - self.Range < 0: self.ActiveDisplay.maxT = self.Range; self.ActiveDisplay.minT = 0
         else: self.ActiveDisplay.minT -= self.Range; self.ActiveDisplay.maxT -= self.Range
@@ -301,6 +301,7 @@ class MainWindow():
         dpg.set_value(self.ActiveDisplay.ScrollBar, self.ActiveDisplay.minT) 
 
     def RightKey_pressed(self, sender, app_data, user_data):
+        """Display next screenfull of spectrogram and sound in current file"""
         print(f"RightKey_pressed {self.Range=}")
         if self.ActiveDisplay.maxT + self.Range > self.ActiveDisplay.duration: 
             self.ActiveDisplay.maxT = self.ActiveDisplay.duration
@@ -313,12 +314,14 @@ class MainWindow():
         dpg.set_value(self.ActiveDisplay.ScrollBar, self.ActiveDisplay.minT) 
     
     def zoom_drag_handler(self, sender, app_data, user_data):
+        """Record start of zoom"""
         display = self.WhichDisplay()
         if display is not None and display.ZoomStart is None:
             display.ZoomStart = dpg.get_plot_mouse_pos()
             print(f"zoom_drag_handler {display.ZoomStart=}")
     
     def WhichDisplay(self):
+        """Find out which display cursor is in"""
         if self.FileDialog.Shown(): return None
         mousePos = dpg.get_mouse_pos()
         plotPos1 = dpg.get_item_pos(self.SpecDisplay1.specPlot)
@@ -332,8 +335,8 @@ class MainWindow():
             display = self.SpecDisplay2
         return display
         
-    
     def zoom_release_handler(self, sender, app_data, user_data):
+        """Implement zoom for power and amplitude auxiliary displays"""
         display = self.WhichDisplay()
         if display is not None and display.ZoomStart is not None:
             plotPos = dpg.get_plot_mouse_pos()
@@ -400,14 +403,8 @@ class MainWindow():
                 self.lastMousePlotPos = mousePlotPos
                 self.lastMousePos = mousePos
 
-    def bandpass(self, data: numpy.ndarray, edges: list[float], sample_rate: float, poles: int = 5):
-        sos = scipy.signal.butter(poles, edges, 'bandpass', fs=sample_rate, output='sos')
-        print(f"bandpass {len(data)=} second-order filter coefficients {len(sos)=}")
-        filtered_data = scipy.signal.sosfiltfilt(sos, data, padtype=None) ### ValueError: The length of the input vector x must be greater than padlen, which is 33
-        return filtered_data
-
-
     def label_drag_handler(self, sender, app_data, user_data):
+        """Record start of call selection"""
         if self.LabelStartPlot is None:
             self.LabelDragDisplay = self.WhichDisplay()
             if self.LabelDragDisplay is not None:
@@ -437,6 +434,7 @@ class MainWindow():
                 self.LabelDragDisplay.RectOnSpec(self.LabelStartPlot, dpg.get_plot_mouse_pos())
 
     def label_release_handler(self, sender, app_data, user_data):
+        """Implement call selection editing"""
         if self.EditMode == "None": 
             # finished drag scrolling
             self.LabelStartPlot = None
@@ -470,6 +468,7 @@ class MainWindow():
                 self.LabelStartPlot = None   
 
     def Status(self, txt, error=False, theme=None):
+        """Alters the status line at the bottom of the window"""
         if error:
             if self.StatusLabel is not None:
                 dpg.bind_item_theme(self.StatusLabel, self.red_align_right)
@@ -481,9 +480,11 @@ class MainWindow():
             dpg.set_item_label(self.StatusLabel, txt)
 
     def FileDrop(self, data, keys):
+        """Implement file or directory drop for Windows platform"""
         print(f"FileDrop {data=}, {keys=}")
         displayN = 1
         if len(keys) > 0: 
+            # key held down while dragging load in compare display
             print(f"FileDrop self.SpecDisplay2")
             displayN = 2;
             self.SetActiveDisplayN(2)
@@ -491,29 +492,29 @@ class MainWindow():
         f = data[0]
         self.LoadFileOrDir(f, displayN)
     
-    def SetActiveDisplay(self, display):
-        self.ActiveDisplay = display
-        display.ShowActiveDisplay(True)
-        if display == self.SpecDisplay1: self.SpecDisplay2.ShowActiveDisplay(False)
-        else: self.SpecDisplay1.ShowActiveDisplay(False)
-
     def SetActiveDisplayN(self, displayN):
+        """Make the display N active for arrow keys of file drops"""
         if displayN == 1:
+            # main display
             self.ActiveDisplay = self.SpecDisplay1
             self.SpecDisplay1.ShowActiveDisplay(True)
             self.SpecDisplay2.ShowActiveDisplay(False)
         else:
+            # compare display
             self.ActiveDisplay = self.SpecDisplay2
             self.SpecDisplay2.ShowActiveDisplay(True)
             self.SpecDisplay1.ShowActiveDisplay(False)
             
     def activeButton2(self):
+        """Make the compare display (2) active for arrow keys of file drops"""
         self.SetActiveDisplayN(2)
         
     def activeButton1(self):
+        """Make the main display (1) active for arrow keys of file drops"""
         self.SetActiveDisplayN(1)
             
     def LoadFileOrDir(self, f, displayN):
+        """Load a file or directory classifying if needed"""
         if displayN == 2:
             print(f"LoadFileOrDir Use Ref SpecDisplay 2")
             if os.path.isdir(f):
@@ -573,7 +574,9 @@ class MainWindow():
         else: self.Status("NO FILE OR DIRECTOY", error=True)
  
     def LoadBtoPipelineResults(self, f):
+        """Loads BTO pipeline results instead of BatDetect2 file summary"""
         match = None
+        #look for pattern of BTO results - this pattern may change inf future
         for filename in os.listdir(f):
             match = re.match(r".*-results_\d+\.csv$", filename)
             if match: break
@@ -620,10 +623,12 @@ class MainWindow():
         self.Status("All Echo Meter files Classified, select file", theme=self.green_align_right)                 
     
     def SaveMap_click(self):
+        """Saves the HTML map of recording locations with links to time expanded files"""
         resultFile = self.echoMeter.SaveMap(GpsFilesDF=self.FilesDF)
         self.Status(f"Map saved as {resultFile}", theme=self.green_align_right)             
             
     def AssignSpeciesCombo_changed(self, sender, app_data, user_data):
+        """Allows the call species to be altered or added"""
         species = app_data;      
         self.AssignSpeciesID = self.SpeciesNames[self.SpeciesNames[self.FullSpeciesLanguage] == species].index.values[0]
         #used in numpy array 
@@ -636,11 +641,13 @@ class MainWindow():
             self.echoMeter.SaveEchoMeterDir(self.FilesDF)
 
     def AssignCallTypeCombo_changed(self, sender, app_data, user_data):
+        """So the call type can be altered from the default echolocation the only one BatDetect2 knows"""
         callType = app_data
         self.AssignCallTypeID = self.CallTypes.index(callType) #used in numpy array
         print(f"AssignCallTypeCombo {callType=} {self.AssignCallTypeID=}")        
                 
     def LoadClassifiedFile(self, f, display, minT=None):
+        """Claissify a single if it is not already classified using BatDetect2"""
         print(f"LoadClassifiedFile {f=} {minT=}") 
         dir = os.path.dirname(f); file = os.path.basename(f)
         callsCsvPath = os.path.join(dir,"ann", file+".csv")
@@ -653,9 +660,9 @@ class MainWindow():
         display.LoadClassifiedFile(f, not self.MultiFile, minT)                     
                 
     def ClassifyDir(self, dir_path):
-        with wakepy.keep.running():
+        """Claissify whole directory using BatDetect2"""
+        with wakepy.keep.running(): # stop PC sleeping
             config["dir"] = dir_path
-            classify = Classifier()
             files = utils.ListAudioFiles(dir_path, TimeExpanded=False)
             # process files
             dpg.delete_item(self.FileTable, children_only=True, slot=0) # remove columns
@@ -666,7 +673,7 @@ class MainWindow():
             r = 0;
             self.Status(f"Classifying '{os.path.basename(dir_path)}'", theme=self.yellow_align_right) 
             for index, audio_file in enumerate(files): 
-                result = classify.File(audio_file)
+                result = self.classify.File(audio_file)
                 if len(result) > 0: 
                     self.AddToFileTable(audio_file, result, r)
                     r += 1
@@ -696,6 +703,7 @@ class MainWindow():
         dpg.configure_item(self.AssignCallTypeCombo, show=showAssign)
 
     def SpeciesLanguageCombo_changed(self, sender, app_data, user_data):
+        """Alters language of species call annotation and combo boxes"""
         print(f"SpeciesLanguageCombo_changed {sender=} {app_data=} {user_data=}")
         self.SpeciesLanguage = self.SpecDisplay1.SpeciesLanguage = self.SpecDisplay2.SpeciesLanguage = self.SpecDisplay1.calls.SpeciesLanguage = self.SpecDisplay2.calls.SpeciesLanguage = app_data
         self.AbbrevSpeciesLanguage = self.FullSpeciesLanguage = self.SpeciesLanguage
@@ -712,23 +720,27 @@ class MainWindow():
             self.SpecDisplay2.DisplaySpectogram(UpdateMin= False, sound = False)
         
     def LowFilterListBox_changed(self, sender, app_data, user_data):
+        """Filters low frequencies in sound and spectrogram no longer displays these frequencies"""
         self.SpecDisplay1.minF = self.SpecDisplay2.minF = int(app_data.split()[1])
         print(f"LowFilterListBox_changed {sender=} {app_data=} {user_data=} {self.SpecDisplay1.minF=}")
         self.SpecDisplay1.DisplaySpectogram(UpdateMin= False, sound = False)
         self.SpecDisplay2.DisplaySpectogram(UpdateMin= False, sound = False)
     
     def HighFilterListBox_changed(self, sender, app_data, user_data):
+        """Filters high frequencies in sound and spectrogram no longer displays these frequencies"""
         self.SpecDisplay1.maxF = self.SpecDisplay2.maxF = int(app_data.split()[1])
         print(f"FilterListBox_changed {sender=} {app_data=} {user_data=} {self.SpecDisplay1.maxF=}")
         self.SpecDisplay1.DisplaySpectogram(UpdateMin= False, sound = False)
         self.SpecDisplay2.DisplaySpectogram(UpdateMin= False, sound = False)
 
     def RangeListbox_changed(self, sender, app_data, user_data):
+        """Alters scale of Spectrogram displayed"""
         self.Range = float(app_data.rstrip("s"))
         self.SpecDisplay1.Range_changed(self.Range)
         self.SpecDisplay2.Range_changed(self.Range)
         
     def TableRow_selected(self, sender, app_data, user_data):
+        """Displays and plays selected file"""
         table = user_data[0]; df = user_data[1]; dfRow = user_data[2]; gRow = user_data[3]
         print(f"TableRow_selected {dfRow=} {gRow=} {self.lastRow=}")
         self.FileTableRow = dfRow
@@ -742,21 +754,23 @@ class MainWindow():
         file = df[dfRow, "Filename"] 
         self.lastRow = gRow
         self.LoadClassifiedFile(os.path.join(self.SpecDisplay1.dir,file), self.SpecDisplay1, self.FileMinTs[dfRow])
-                
+
     def AddToFileTable(self, filename, result, r):
+        """Loads file table with clasification summary of each file as it is classified"""
         file = os.path.basename(filename)
         new_row = polars.DataFrame({ "Filename": [file], "Bat Call": [result]})
         self.FilesDF.extend(new_row)
         with dpg.table_row(parent=self.FileTable, height=ROW_PXL * config["scale"]):
             dpg.add_selectable(label=file, callback=self.TableRow_selected, span_columns=True, user_data=[self.FileTable, self.FilesDF, r, r])
-            amDate = utils.FileDate(result)
-            if len(amDate) > 0: result = f"{a} ({amDate})"
+            dt = utils.FileDate(result)
+            if dt is not None: result = f"{a} ({dt.strftime("%d/%m/%Y %H:%M:%S")})"
             dpg.add_selectable(label=result, callback=self.TableRow_selected, span_columns=True, user_data=[self.FileTable,  self.FilesDF, r, r])
             ysm = dpg.get_y_scroll_max(self.FileTable)
             if ysm > 0: 
                 dpg.set_y_scroll(self.FileTable, ysm)
                 
     def LoadBatDetectTable(self, table, dir, loadBatDetect2=True):
+        """Loads file table with clasification summary of each file if already classified"""
         print(f"LoadBatDetectTable {table=} {dir=}")
         config["echoMeterDir"] = ""
         if loadBatDetect2:
@@ -781,9 +795,9 @@ class MainWindow():
                         nRow -= 1
                         break # ignore file that does not exist
                     tRow = dpg.add_table_row(parent=table, height=ROW_PXL * config["scale"])
-                    amDate = utils.FileDate(a)
-                    if len(amDate) > 0:
-                        a = f"{a} ({amDate})"
+                    dt = utils.FileDate(a)
+                    if dt is not None:
+                        a = f"{a} ({dt.strftime("%d/%m/%Y %H:%M:%S")})"
                         dpg.add_selectable(label=a, parent=tRow, callback=self.TableRow_selected, span_columns=True, user_data=[table, df, nFile, nRow])
                     else:
                         dpg.add_selectable(label=a, parent=tRow, callback=self.TableRow_selected, span_columns=True, user_data=[table, df, nFile, nRow])
@@ -796,6 +810,7 @@ class MainWindow():
         self.FileMinTs = [0.0] * len(self.FilesDF)
 
     def LoadGpsTable(self, table, dir_path):
+        """Loads file table from EchoMeter GPS based recordings the per file species classification is unreliable"""
         self.echoMeter = EchoMeter(self)
         self.FilesDF = self.echoMeter.LoadEchoMeterDir(dir_path)
         nRows, nCols = self.FilesDF.shape
@@ -849,6 +864,7 @@ if __name__ == '__main__':
         except Exception as e:
             print(colorama.Fore.RED + f"Error reading {CONFIG_FILE} {e}" + colorama.Fore.RESET)
     if config is None:
+        # creates default configuration
         other = None
         for s in get_monitors():
             if s.is_primary == False: other = s        
@@ -875,6 +891,7 @@ if __name__ == '__main__':
     dpg.show_viewport()
     dpg.set_primary_window(TITLE.replace(" ", ""), True)
     
+    # DearPyGui rendering loop
     while dpg.is_dearpygui_running():
         main.SpecDisplay1.UpdateSoundLine(main.SpecDisplay1.specPlot)
         main.SpecDisplay2.UpdateSoundLine(main.SpecDisplay2.specPlot)

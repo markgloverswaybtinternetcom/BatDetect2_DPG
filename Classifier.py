@@ -89,7 +89,7 @@ class Classifier():
         if filename.endswith("TE"): timeExpFact = 10
         else: timeExpFact = 1
         orig_samp_rate = file_samp_rate * timeExpFact
-        sampling_rate, audio_full = au.load_audio( audio_file, time_exp_fact=timeExpFact,  target_samp_rate=config["target_samp_rate"], scale=config["scale_raw_audio"], max_duration=config.get("max_duration"))
+        sampling_rate, audio_full = au.load_audio(audio_file, time_exp_fact=timeExpFact,  target_samp_rate=config["target_samp_rate"], scale=config["scale_raw_audio"], max_duration=config.get("max_duration"))
 
         # loop through larger file and split into chunks
         # BatDetect2 TODO: fix so that it overlaps correctly and takes care of duplicate detections at borders
