@@ -46,7 +46,7 @@ class BatCalls():
     def DisplayAnnotations(self, plot, minT, maxT):
         """"Displays annotations on a spectrogram as a label"""
         dpg.delete_item(plot, children_only=True, slot=0) # remove annotations
-        species = ""
+        bestSpecies = ""; bestProb = 0
         exception = ""
         if self.CallsNP is not None and self.CallsNP.shape[0] > 0:
             i = 0; abbrev= ""
@@ -61,6 +61,10 @@ class BatCalls():
                         
                     if self.SpeciesLanguage != "None":
                         species =  self.SpeciesNames.loc[id][self.SpeciesLanguage]
+                        if p1 * p2 < 0.3: species += '?'
+                        if p1 * p2 > bestProb:
+                            bestSpecies = species
+                            bestProb = p1 * p2
                         if ct > 0: l = species.replace(" ","\n") + '\n' + self.CallTypes[ct]
                         else: l = species.replace(" ","\n")
 
@@ -74,7 +78,7 @@ class BatCalls():
                         #print(f"DisplayAnnotations added {i} plot_annotations")
             else:
                 exception = f"{len(calls)} calls - Too many to label"
-        return species, exception
+        return bestSpecies, exception
 
     def fromJSON(self, filepath):
         """"Load annotation information from a JSON file in format that the BatDetect2 uses for traiing models"""
