@@ -545,9 +545,10 @@ class MainWindow():
                 config['echoMeterDir'] = f
             elif os.path.isfile(dirResults_file):
                 self.LoadBatDetectTable(self.FileTable, f)
-                user_data = [self.FileTable,  self.FilesDF, 0, 0]
-                self.TableRow_selected(0, [], user_data)
-                self.ScrollToRow(0)
+                if self.FilesDF.height > 0:
+                    user_data = [self.FileTable,  self.FilesDF, 0, 0]
+                    self.TableRow_selected(0, [], user_data)
+                    self.ScrollToRow(0)
                 config["echoMeterDir"] = ""
                 self.Status(f"{f} files already Classified")
             elif any(x.startswith("Session_") for x in os.listdir(f)):
@@ -562,9 +563,10 @@ class MainWindow():
                 self.ClassifyDir(f)
                 self.Status(f"Classified directory {f}", theme=self.green_align_right)
             self.resize_handler(0, None, None)
-            user_data = [self.FileTable,  self.FilesDF, 0, 0]
-            self.TableRow_selected(0, [], user_data)
-            self.ScrollToRow(0)
+            if self.FilesDF.height > 0:
+                user_data = [self.FileTable,  self.FilesDF, 0, 0]
+                self.TableRow_selected(0, [], user_data)
+                self.ScrollToRow(0)
         elif os.path.isfile(f):
             if display == self.SpecDisplay1: self.MultiFile = False; 
             self.LoadClassifiedFile(f, display)

@@ -471,7 +471,8 @@ class SpecDisplay():
             self.Status(f"Time expanded audio saved as '{filepath}'") 
         else:
             file,_ = os.path.splitext(self.file)
-            filepath = os.path.join(self.dir, file + f"_{round(self.minT*1000)}ms_{self.species}.wav")
+            if self.species.endswith("?"): filepath = os.path.join(self.dir, file + f"_{round(self.minT*1000)}ms_unknown.wav")
+            else: filepath = os.path.join(self.dir, file + f"_{round(self.minT*1000)}ms_{self.species}.wav")
             soundfile.write(filepath, self.Recording, self.sample_rate) 
             self.Status(f"Normal speed audio saved as '{filepath}'") 
         
