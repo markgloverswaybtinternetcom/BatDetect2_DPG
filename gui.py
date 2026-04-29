@@ -4,7 +4,7 @@ if sys.platform.startswith("win"):
     import DearPyGui_DragAndDrop as DragAndDrop
 import numpy, soundfile, sounddevice, time, warnings, json, wakepy, json, colorama
 import re, multiprocessing, ctypes, math, torchaudio, torch, torchaudio_filters, traceback, webbrowser, chime
-import pandas, polars
+import pandas, polars, dearpygui
 from screeninfo import get_monitors
 from SpecDisplay import SpecDisplay
 from FileDialog import FileDialog
@@ -24,6 +24,7 @@ class MainWindow():
         self.lastRow = self.FileTableRow = self.FilesDF = self.SoundProcess = self.soundLine = self.lastMousePlotPos = self.calls = None
         self.MultiFile = config["MultiFile"]
         print(f"MainWindow ___init__ {torch.cuda.is_available()=}")       
+        print(f"MainWindow ___init__ {dearpygui.__version__=}")       
 
         with dpg.window(label=TITLE.replace(" ", ""), width=-1, height=-1, pos=(0, 0), tag=TITLE.replace(" ", "")) as self.mainWindow:
             self.EditMode = config["EditMode"]; 
