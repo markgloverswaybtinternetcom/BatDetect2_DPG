@@ -465,7 +465,8 @@ class SpecDisplay():
         """Saves sound being displayed in spectrogram, expanding it to the user selected rate"""
         file,_ = os.path.splitext(self.file)
         if dpg.get_value(self.PlaySpeedCombo) == "1/10":
-            filepath = os.path.join(self.dir, file + f"_{round(self.minT*1000)}ms_{self.species}_TE.wav")
+            if self.species.endswith("?"): filepath = os.path.join(self.dir, file + f"_{round(self.minT*1000)}ms_unknown_TE.wav")
+            else: filepath = os.path.join(self.dir, file + f"_{round(self.minT*1000)}ms_{self.species}_TE.wav")
             loud = self.Recording * 10
             soundfile.write(filepath, loud, round(self.sample_rate / 10)) 
             self.Status(f"Time expanded audio saved as '{filepath}'") 

@@ -4,7 +4,7 @@ if sys.platform.startswith("win"):
     import DearPyGui_DragAndDrop as DragAndDrop
 import numpy, soundfile, sounddevice, time, warnings, json, wakepy, json, colorama
 import re, multiprocessing, ctypes, math, torchaudio, torch, torchaudio_filters, traceback, webbrowser, chime
-import pandas, polars, dearpygui
+import pandas, polars
 from screeninfo import get_monitors
 from SpecDisplay import SpecDisplay
 from FileDialog import FileDialog
@@ -24,7 +24,6 @@ class MainWindow():
         self.lastRow = self.FileTableRow = self.FilesDF = self.SoundProcess = self.soundLine = self.lastMousePlotPos = self.calls = None
         self.MultiFile = config["MultiFile"]
         print(f"MainWindow ___init__ {torch.cuda.is_available()=}")       
-        print(f"MainWindow ___init__ {dearpygui.__version__=}")       
 
         with dpg.window(label=TITLE.replace(" ", ""), width=-1, height=-1, pos=(0, 0), tag=TITLE.replace(" ", "")) as self.mainWindow:
             self.EditMode = config["EditMode"]; 
@@ -171,7 +170,8 @@ class MainWindow():
                 self.LoadBatDetectTable(self.FileTable, self.SpecDisplay1.dir)
             else:
                 self.LoadBtoPipelineResults(self.SpecDisplay1.dir)
-            if len(config["file"]) > 0:
+            if len(config["file"]) > 0 and self.FilesDF is not None:
+                print(f"MainWindow MultiFile {self.SpecDisplay1.dir=} {config["file"]=} {self.FilesDF=}")
                 matching_rows = (self.FilesDF.with_row_count("row_nr").filter(polars.col("Filename") == config["file"]).select("row_nr").to_series().to_list())
                 print(f"MainWindow {config["file"]=}, {matching_rows=}")
                 if len(matching_rows) > 0:
