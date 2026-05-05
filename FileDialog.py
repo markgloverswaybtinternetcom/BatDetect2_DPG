@@ -44,9 +44,9 @@ class FileDialog():
                 borders_innerV=True, reorderable=True, hideable=True, scrollX=True, scrollY=True, sortable=True, callback=self.sort_callback) as self.table:
                 dpg.add_table_column(label=' ', init_width_or_weight=4)
                 dpg.add_table_column(label='Name', init_width_or_weight=110)
-                dpg.add_table_column(label='Date', init_width_or_weight=30)
                 dpg.add_table_column(label='Length', init_width_or_weight=15)
                 dpg.add_table_column(label='Sample Rate', init_width_or_weight=25)
+                dpg.add_table_column(label='Date', init_width_or_weight=30)
             with dpg.group(horizontal=False):
                 with dpg.group(horizontal=True):
                     self.RoostDirButton = dpg.add_image_button(ico_home, label="Bat Recording Dirs", callback=self.DisplayRoost)
@@ -194,20 +194,19 @@ class FileDialog():
                     dpg.add_selectable(label=name, parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
                 else:
                     dpg.add_selectable(label=name, parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
-                    creation_time = datetime.datetime.fromtimestamp(os.path.getmtime(entry))
-                    dpg.add_selectable(label=creation_time.strftime("%d/%m/%Y %H:%M"), parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
-                    dpg.add_selectable(label="", parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
                     if len(self.history) > 0: 
                         selectDir = dpg.add_selectable(label="Select Dir", parent=tRow, callback=self.Dir_selected, user_data=[self.table, nRow, entry])
                         dpg.bind_item_theme(selectDir, self.greenText_theme)
+                    else: dpg.add_selectable(label="", parent=tRow, callback=self.Dir_selected, user_data=[self.table, nRow, entry])
+                    dpg.add_selectable(label="", parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
+                    creation_time = datetime.datetime.fromtimestamp(os.path.getmtime(entry))
+                    dpg.add_selectable(label=creation_time.strftime("%d/%m/%Y %H:%M"), parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
                 nRow += 1
             elif os.path.isfile(entry) and (entry.lower().endswith(".wav") or entry.lower().endswith(".mp3")):
                 tRow = dpg.add_table_row(parent=self.table)
                 dpg.add_selectable(label="", parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
                 file_selectable = dpg.add_selectable(label=name, parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
                 #print(f"DisplayFiles {name=} {nRow=}")
-                creation_time = datetime.datetime.fromtimestamp(os.path.getmtime(entry))
-                dpg.add_selectable(label=creation_time.strftime("%d/%m/%Y %H:%M"), parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
                 if entry.lower().endswith(".wav"):
                     duration, sample_rate = WavUtil.WavDetails(entry)
                 else:
@@ -219,6 +218,11 @@ class FileDialog():
                     cell_sr = dpg.add_selectable(label=f"{sample_rate / 1000} kHz", parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
                     dpg.bind_item_theme(cell_length, self.size_alignt)
                     dpg.bind_item_theme(cell_sr, self.size_alignt)                  
+                else:
+                    dpg.add_selectable(label="", parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
+                    dpg.add_selectable(label="", parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
+                creation_time = datetime.datetime.fromtimestamp(os.path.getmtime(entry))
+                dpg.add_selectable(label=creation_time.strftime("%d/%m/%Y %H:%M"), parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
                 nRow += 1
                 
     def FindFileInTable(self, filepath):
