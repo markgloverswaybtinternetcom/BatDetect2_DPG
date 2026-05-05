@@ -25,6 +25,7 @@ class SpecDisplay():
     def __init__(self, parent, config, parentSelf, activeButtonCallback, showDisplay=True, showAmp=True):
         self.SpeciesNames = parentSelf.SpeciesNames
         self.SpeciesLanguage = parentSelf.SpeciesLanguage
+        self.CallTypes = parentSelf.CallTypes
         self.Status = parentSelf.Status
         self.classifyEnabled = True
         sys.excepthook = self.notify_exception
@@ -41,7 +42,7 @@ class SpecDisplay():
         self.timeStep = self.Range = float(config["Range"]) 
         self.soundProgressBar = self.heatSeries = self.ampSeries = self.psdSeries = self.ZoomStart = self.LabelStartPlot = None
         self.maxPercent = 100; self.minPercent = 0
-        self.calls = BatCalls(parentSelf)
+        self.calls = BatCalls(self)
         
         specHeight = config["height"] * 0.8 - (AMP_HT + SCROLL_HT + 2*BUTTON_HT + STATUS_HT / 2+ HEADER ) * config["scale"] - SPACING *7
         with dpg.group(horizontal=True, show=showDisplay, height=specHeight) as self.topGroup:

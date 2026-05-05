@@ -10,6 +10,7 @@ class BatCalls():
         self.CallTypes = parentSelf.CallTypes
         self.LatinIdx = dict(zip(self.SpeciesNames["Latin"], self.SpeciesNames.index)) 
         self.CallsNP = None
+        self.parent = parentSelf
         
     def fromCSV(self, callsCsvPath):
         """"Load annotation information from BatDetect2 classifier CSV file"""
@@ -98,11 +99,15 @@ class BatCalls():
         """"Save annotation information to a JSON file in format that the BatDetect2 uses for traiing models"""
         print(f"CallNPtoJSON {callsJsonPath=}")
         annotationValues = []
+        maxId = ""; maxIdProb = 0.0
         for call in self.CallsNP:
             id = self.SpeciesNames["Latin"][int(call[0])]; t1=f"{call[1]:.4f}"; t2=f"{call[2]:.4f}"; f1=f"{call[3]*1000:.0f}"
-            f2=f"{call[4]*1000:.0f}"; p1 = f"{call[5]:.3f}"; p2 = f"{call[6]:.3f}"; ct = self.CallTypes[int(call[7])]
-            annotationValues.append({'class': id, 'class_prob': prob, 'det_prob': prob, 'end_time': t2, 'event': callType, 'high_freq': f2, 'individual': '-1','low_freq': f1, 'start_time': t1})
-        thisdict = {"annotated": True, "annotation": annotationValues, "class_name": id, "duration": self.duration, "id": self.file, "issued": False, "notes": "Automatically generated.", "time_exp": 1}
+            f2=f"{call[4]*1000:.0f}"; p1 = f"{call[5]:.3f}"; idProb = call[6]; p2 = f"{idProb:.3f}"; ct = self.CallTypes[int(call[7])]
+            annotationValues.append({'class': id, 'class_prob': p2, 'det_prob': p1, 'end_time': t2, 'event': ct, 'high_freq': f2, 'individual': '-1','low_freq': f1, 'start_time': t1})
+            if idProb > maxIdProb: 
+                maxIdProb = idProb
+                maxId = id
+        thisdict = {"annotated": True, "annotation": annotationValues, "class_name": maxId, "duration":  self.parent.duration, "id":  self.parent.file, "issued": False, "notes": "Automatically generated.", "time_exp": 1}
         with open(callsJsonPath, "w", encoding="utf-8") as jsonfile:
             json.dump(thisdict, jsonfile, indent=2, sort_keys=True)
 

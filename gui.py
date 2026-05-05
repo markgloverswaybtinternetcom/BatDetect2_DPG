@@ -171,7 +171,6 @@ class MainWindow():
             else:
                 self.LoadBtoPipelineResults(self.SpecDisplay1.dir)
             if len(config["file"]) > 0 and self.FilesDF is not None:
-                print(f"MainWindow MultiFile {self.SpecDisplay1.dir=} {config["file"]=} {self.FilesDF=}")
                 matching_rows = (self.FilesDF.with_row_count("row_nr").filter(polars.col("Filename") == config["file"]).select("row_nr").to_series().to_list())
                 print(f"MainWindow {config["file"]=}, {matching_rows=}")
                 if len(matching_rows) > 0:
