@@ -35,6 +35,6 @@ def FileDate(a):
         #Pettersson ###YYYY-MM-DD_HH_MM_SS###.wav       ### maybe missing
         #Apodemus Pippyg and Pipistrelle mini WAV GUANO Metadata 
         #Titley WAV GUANO Metadata 
-        return None
+        return ""
             
 
