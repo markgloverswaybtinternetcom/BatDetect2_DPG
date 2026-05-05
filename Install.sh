@@ -18,7 +18,6 @@ uv add chime
 uv add wakepy
 uv add psutil
 uv add mutagen
-uv add batdetect2
 sudo apt-get install libasound-dev portaudio19-dev libportaudio2 libportaudiocpp0
 chmod u+x ./run.sh
 echo '[Desktop Entry]' > ~/Desktop/dpg.desktop

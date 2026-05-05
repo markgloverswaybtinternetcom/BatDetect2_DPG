@@ -2,7 +2,7 @@ import dearpygui.dearpygui as dpg
 import sys, os, subprocess, utils
 if sys.platform.startswith("win"): 
     import DearPyGui_DragAndDrop as DragAndDrop
-import numpy, soundfile, sounddevice, time, warnings, json, wakepy, json, colorama
+import numpy, soundfile, sounddevice, time, warnings, json, wakepy, json, colorama, datetime
 import re, multiprocessing, ctypes, math, torchaudio, torch, torchaudio_filters, traceback, webbrowser, chime
 import pandas, polars
 from screeninfo import get_monitors
@@ -763,9 +763,9 @@ class MainWindow():
         new_row = polars.DataFrame({ "Filename": [file], "Bat Call": [result]})
         self.FilesDF.extend(new_row)
         with dpg.table_row(parent=self.FileTable, height=ROW_PXL * config["scale"]):
+            dt = utils.FileDate(file)
+            if isinstance(dt, datetime.datetime): file = f"{file} ({dt.strftime("%d/%m/%Y %H:%M:%S")})"
             dpg.add_selectable(label=file, callback=self.TableRow_selected, span_columns=True, user_data=[self.FileTable, self.FilesDF, r, r])
-            dt = utils.FileDate(result)
-            if dt is not None: result = f"{a} ({dt.strftime("%d/%m/%Y %H:%M:%S")})"
             dpg.add_selectable(label=result, callback=self.TableRow_selected, span_columns=True, user_data=[self.FileTable,  self.FilesDF, r, r])
             ysm = dpg.get_y_scroll_max(self.FileTable)
             if ysm > 0: 
@@ -798,7 +798,7 @@ class MainWindow():
                         break # ignore file that does not exist
                     tRow = dpg.add_table_row(parent=table, height=ROW_PXL * config["scale"])
                     dt = utils.FileDate(a)
-                    if dt is not None:
+                    if isinstance(dt, datetime.datetime):
                         a = f"{a} ({dt.strftime("%d/%m/%Y %H:%M:%S")})"
                         dpg.add_selectable(label=a, parent=tRow, callback=self.TableRow_selected, span_columns=True, user_data=[table, df, nFile, nRow])
                     else:

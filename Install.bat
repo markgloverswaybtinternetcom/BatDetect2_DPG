@@ -1,5 +1,7 @@
 powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+REM powershell script installs UV package manager
 setx /M path "%path%;%USERPROFILE%\.local\bin\"
+REM add UV to path
 uv init
 uv add dearpygui
 uv add numpy
@@ -19,7 +21,6 @@ uv add wakepy
 uv add psutil
 uv add sounddevice
 uv add mutagen
-uv add batdetect2
 Resources\create-shortcut --work-dir "%CD%" --icon-file "%CD%\Resources\bat_128px.ico" "%CD%\run.bat" "%USERPROFILE%\Desktop\BatDetect2 DPG.lnk"
 uv run gui.py
 pause

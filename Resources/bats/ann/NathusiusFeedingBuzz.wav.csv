@@ -1,0 +1,14 @@
+id,det_prob,start_time,end_time,high_freq,low_freq,class,class_prob,event
+0,0.842,0.0615,0.0679,67715,39218,Pipistrellus nathusii,0.828,Echolocation
+1,0.867,0.1605,0.1670,70599,39218,Pipistrellus nathusii,0.863,Echolocation
+2,0.864,0.2505,0.2563,68187,39218,Pipistrellus nathusii,0.859,Echolocation
+3,0.738,0.3055,0.3127,75881,39218,Pipistrellus nathusii,0.711,Echolocation
+4,0.569,0.3515,0.3569,74314,40078,Pipistrellus nathusii,0.546,Echolocation
+5,0.543,0.4755,0.4810,48031,41796,Pipistrellus nathusii,0.527,Echolocation
+6,0.800,0.4981,0.6181,59639,28606,Pipistrellus nathusii,0.800,Feeding Buzz
+7,0.765,0.6705,0.6762,54960,39218,Pipistrellus nathusii,0.758,Echolocation
+8,0.794,0.7355,0.7416,57114,39218,Pipistrellus nathusii,0.785,Echolocation
+9,0.532,0.7435,0.7557,62064,55546,Pipistrellus pygmaeus,0.527,Echolocation
+10,0.825,0.8145,0.8219,66109,38359,Pipistrellus nathusii,0.822,Echolocation
+11,0.723,0.8615,0.8670,59701,40937,Pipistrellus nathusii,0.718,Echolocation
+12,0.807,0.9515,0.9585,64654,37500,Pipistrellus nathusii,0.798,Echolocation
