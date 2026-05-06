@@ -35,7 +35,9 @@ class RunResults(TypedDict):
     cnn_feats: NotRequired[List[np.ndarray]]
     cnn_feat_names: NotRequired[List[str]]
     spec_slices: NotRequired[List[np.ndarray]]
-    
+
+################ detector_utils #############################
+
 def load_model(model_path: str = DEFAULT_MODEL_PATH, load_weights: bool = True, device: Optional[torch.device] = None, weights_only: bool = True) -> Tuple[DetectionModel, ModelParameters]:
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -60,7 +62,9 @@ def x_coord_to_sample(x_pos: int) -> int:
     n_step = n_fft - n_overlap
     x_pos = int(x_pos / RESIZE_FACTOR)
     return int((x_pos * n_step) + n_overlap)
-    
+
+################ audio_utils #############################
+
 def pad_audio(audio: numpy.ndarray, samplerate: int = TARGET_SAMPLERATE_HZ, window_duration: float = FFT_WIN_LENGTH_S,
     window_overlap: float = FFT_OVERLAP, resize_factor: float = RESIZE_FACTOR, divide_factor: int = SPEC_DIVIDE_FACTOR, fixed_width: Optional[int] = None):
     spec_width = compute_spectrogram_width(audio.shape[0])
@@ -149,19 +153,8 @@ def compute_spectrogram(audio: numpy.ndarray, sampling_rate: int, device: torch.
     else:  spec_np = None
     return duration, spec, spec_np
 
-    ### detector_utils
-def iterate_over_chunks(audio: numpy.ndarray, samplerate: int, chunk_size: float) -> Iterator[Tuple[float, numpy.ndarray]]:
-    nsamples = audio.shape[0]
-    duration_full = nsamples / samplerate
-    num_chunks = int(numpy.ceil(duration_full / chunk_size))
-    for chunk_id in range(num_chunks):
-        chunk_start = chunk_size * chunk_id
-        chunk_length = int(samplerate * chunk_size)
-        start_sample = chunk_id * chunk_length
-        end_sample = numpy.minimum((chunk_id + 1) * chunk_length, nsamples)
-        yield chunk_start, audio[start_sample:end_sample]
-        
 ############################ detector.post_process###########################
+
 def x_coords_to_time(x_pos: float, sampling_rate: int, fft_win_length: float, fft_overlap: float) -> float:
     nfft = int(fft_win_length * sampling_rate)
     noverlap = int(fft_overlap * nfft)
@@ -190,10 +183,6 @@ def get_topk_scores(scores, K):
     return topk_scores, topk_ys, topk_xs
 
 def run_nms(outputs: ModelOutput, sampling_rate: numpy.ndarray) -> Tuple[List[PredictionResults], List[numpy.ndarray]]:
-    """Run non-maximum suppression on the output of the model.
-    Model outputs processed are expected to have a batch dimension.
-    Each element of the batch is processed independently. 
-    The result is a pair of lists, one for the predictions and one for the features"""
     pred_det, pred_size, pred_class, _, features = outputs
     pred_det_nms = non_max_suppression(pred_det, NMS_KERNEL_SIZE)
     freq_rescale = (MAX_FREQ_HZ - MIN_FREQ_HZ) / pred_det.shape[-2]
@@ -236,8 +225,20 @@ def run_nms(outputs: ModelOutput, sampling_rate: numpy.ndarray) -> Tuple[List[Pr
         preds.append(pred)  # type: ignore
 
     return preds, feats
+    
+################ detector_utils #############################
 
-
+def iterate_over_chunks(audio: numpy.ndarray, samplerate: int, chunk_size: float) -> Iterator[Tuple[float, numpy.ndarray]]:
+    nsamples = audio.shape[0]
+    duration_full = nsamples / samplerate
+    num_chunks = int(numpy.ceil(duration_full / chunk_size))
+    for chunk_id in range(num_chunks):
+        chunk_start = chunk_size * chunk_id
+        chunk_length = int(samplerate * chunk_size)
+        start_sample = chunk_id * chunk_length
+        end_sample = numpy.minimum((chunk_id + 1) * chunk_length, nsamples)
+        yield chunk_start, audio[start_sample:end_sample]
+        
 def _process_spectrogram(spec: torch.Tensor, samplerate: int, model: DetectionModel, modelParams) -> Tuple[PredictionResults, numpy.ndarray]:
     # evaluate model
     with torch.no_grad():
@@ -323,8 +324,8 @@ def convert_results(file_id: str, time_exp: float, duration: float, params: Resu
     results: RunResults = {"pred_dict": pred_dict}
     return results
 
-    
-    ### audio_utils
+############## audio_utils ######################
+
 def load_audio(path: AudioPath, time_exp_fact: float, target_samp_rate: int) -> Tuple[int, numpy.ndarray ]:
     audio_raw, file_sampling_rate = librosa.load(path, sr=None, dtype=numpy.float32)
     
@@ -340,117 +341,6 @@ def load_audio(path: AudioPath, time_exp_fact: float, target_samp_rate: int) -> 
         audio_raw = librosa.resample(audio_raw, orig_sr=sampling_rate_old, target_sr=sampling_rate, res_type="polyphase")
     return sampling_rate, audio_raw
 
-    
-    ### detector.compute_features
-    
-def compute_duration(prediction: types.Prediction, **_,) -> float:
-    return round(prediction["end_time"] - prediction["start_time"], 5)
-
-def compute_low_freq(prediction: types.Prediction, **_) -> float:
-    return int(prediction["low_freq"])
-
-def compute_high_freq(prediction: types.Prediction, **_) -> float:
-    return int(prediction["high_freq"])
-
-def compute_bandwidth(prediction: types.Prediction, **_) -> float:
-    return int(prediction["high_freq"] - prediction["low_freq"])
-
-def convert_int_to_freq(spec_ind, spec_height, min_freq, max_freq):
-    spec_ind = spec_height - spec_ind
-    return round((spec_ind / float(spec_height)) * (max_freq - min_freq) + min_freq, 2)
-    
-def compute_max_power_bb(prediction: types.Prediction, spec: Optional[np.ndarray] = None, min_freq: int = MIN_FREQ_HZ,  max_freq: int = MAX_FREQ_HZ, **_,) -> float:
-    if spec is None:
-        return numpy.nan
-    x_start = max(0, prediction["x_pos"])
-    x_end = min(spec.shape[1] - 1, prediction["x_pos"] + prediction["bb_width"])
-    # y low is the lowest freq but it will have a higher value due to array
-    # starting at 0 at top
-    y_low = min(spec.shape[0] - 1, prediction["y_pos"])
-    y_high = max(0, prediction["y_pos"] - prediction["bb_height"])
-    spec_bb = spec[y_high:y_low, x_start:x_end]
-    power_per_freq_band = numpy.sum(spec_bb, axis=1)
-    try:
-        max_power_ind = numpy.argmax(power_per_freq_band)
-    except ValueError:
-        # If the call is too short, the bounding box might be empty.
-        # In this case, return NaN.
-        return numpy.nan
-    return int(convert_int_to_freq(y_high + max_power_ind, spec.shape[0], min_freq, max_freq))
-
-def compute_max_power(prediction: types.Prediction, spec: Optional[np.ndarray] = None, min_freq: int = MIN_FREQ_HZ, max_freq: int = MAX_FREQ_HZ, **_) -> float:
-    if spec is None:
-        return numpy.nan
-    x_start = max(0, prediction["x_pos"])
-    x_end = min(spec.shape[1] - 1, prediction["x_pos"] + prediction["bb_width"])
-    spec_call = spec[:, x_start:x_end]
-    power_per_freq_band = numpy.sum(spec_call, axis=1)
-    max_power_ind = numpy.argmax(power_per_freq_band)
-    return int(convert_int_to_freq(max_power_ind, spec.shape[0], min_freq, max_freq))
-
-def compute_max_power_first(prediction: types.Prediction, spec: Optional[np.ndarray] = None, min_freq: int = MIN_FREQ_HZ, max_freq: int = MAX_FREQ_HZ, **_) -> float:
-    if spec is None:
-        return numpy.nan
-    x_start = max(0, prediction["x_pos"])
-    x_end = min(spec.shape[1] - 1, prediction["x_pos"] + prediction["bb_width"])
-    spec_call = spec[:, x_start:x_end]
-    first_half = spec_call[:, : int(spec_call.shape[1] / 2)]
-    power_per_freq_band = numpy.sum(first_half, axis=1)
-    max_power_ind = numpy.argmax(power_per_freq_band)
-    return int(convert_int_to_freq(max_power_ind, spec.shape[0], min_freq, max_freq))
-
-
-def compute_max_power_second(prediction: types.Prediction, spec: Optional[np.ndarray] = None, min_freq: int = MIN_FREQ_HZ, max_freq: int = MAX_FREQ_HZ, **_) -> float:
-    if spec is None:
-        return numpy.nan
-    x_start = max(0, prediction["x_pos"])
-    x_end = min(spec.shape[1] - 1, prediction["x_pos"] + prediction["bb_width"])
-    spec_call = spec[:, x_start:x_end]
-    second_half = spec_call[:, int(spec_call.shape[1] / 2) :]
-    power_per_freq_band = numpy.sum(second_half, axis=1)
-    max_power_ind = numpy.argmax(power_per_freq_band)
-    return int(convert_int_to_freq(max_power_ind, spec.shape[0], min_freq, max_freq))
-
-def compute_call_interval(prediction: types.Prediction, previous: Optional[types.Prediction] = None, **_) -> float:
-    if previous is None:
-        return numpy.nan
-    return round(prediction["start_time"] - previous["end_time"], 5)
-
-FEATURES: Dict[str, types.FeatureExtractor] = {
-    "duration": compute_duration,
-    "low_freq_bb": compute_low_freq,
-    "high_freq_bb": compute_high_freq,
-    "bandwidth": compute_bandwidth,
-    "max_power_bb": compute_max_power_bb,
-    "max_power": compute_max_power,
-    "max_power_first": compute_max_power_first,
-    "max_power_second": compute_max_power_second,
-    "call_interval": compute_call_interval}
-
-def get_feats(spec: numpy.ndarray, pred_nms: types.PredictionResults, params: types.FeatureExtractionParameters):
-    num_detections = len(pred_nms["det_probs"])
-    features = numpy.empty((num_detections, len(FEATURES)), dtype=numpy.float32)
-    previous = None
-
-    for row in range(num_detections):
-        prediction: types.Prediction = {
-            "det_prob": float(pred_nms["det_probs"][row]),
-            "class_prob": pred_nms["class_probs"][:, row],
-            "start_time": float(pred_nms["start_times"][row]),
-            "end_time": float(pred_nms["end_times"][row]),
-            "low_freq": float(pred_nms["low_freqs"][row]),
-            "high_freq": float(pred_nms["high_freqs"][row]),
-            "x_pos": int(pred_nms["x_pos"][row]),
-            "y_pos": int(pred_nms["y_pos"][row]),
-            "bb_width": int(pred_nms["bb_width"][row]),
-            "bb_height": int(pred_nms["bb_height"][row])}
-
-        for col, feature in enumerate(FEATURES.values()):
-            features[row, col] = feature(prediction, previous=previous, spec=spec, **params)
-        previous = prediction
-    return features
-    
-    
 class Classifier():
     """Uses BatDetect2 lower level code without modification any modifications are in this class"""
     def __init__(self): 

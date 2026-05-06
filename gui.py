@@ -746,7 +746,7 @@ class MainWindow():
         table = user_data[0]; df = user_data[1]; dfRow = user_data[2]; gRow = user_data[3]
         print(f"TableRow_selected {dfRow=} {gRow=} {self.lastRow=}")
         self.FileTableRow = dfRow
-        if len(config["echoMeterDir"]) > 0:
+        if len(config["echoMeterDir"]) > 0 and  not (self.FilesDF[dfRow, "SessionName"] in self.echoMeterDir):
             self.SpecDisplay1.dir = os.path.join(self.echoMeterDir, self.FilesDF[dfRow, "SessionName"])
         try:
             if self.lastRow is not None:
@@ -843,7 +843,9 @@ class MainWindow():
                         dpg.bind_item_theme(speciesCell, self.magentaText_theme)
                     else: 
                         dpg.add_selectable(label=str(a), callback=self.TableRow_selected, span_columns=True, user_data=[table, self.FilesDF, r, nRow])
-            nRow += 1            
+            nRow += 1
+        self.FileMinTs = [0.0] * len(self.FilesDF)
+            
     def SaveMap_clicked(self):
         resultFile = self.echoMeter.SaveMap(GpsFilesDF=self.FilesDF)
         self.Status(f"Map saved as {resultFile}", theme=self.green_align_right) 

@@ -20,7 +20,9 @@ class EchoMeter():
         gpsBatFilePath = os.path.join(self.echoMeterPath, "GpsBatCallFiles.csv")
         if os.path.exists(gpsBatFilePath):
             self.GpsFilesDF = polars.read_csv(gpsBatFilePath)
+            print(f"LoadEchoMeterDir {gpsBatFilePath} exists {self.GpsFilesDF=}")
         else:
+            print(f"LoadEchoMeterDir creating empty self.GpsFilesDF")
             self.GpsFilesDF = polars.DataFrame(schema=[("SessionName", polars.Utf8), ("Filename", polars.Utf8), ("DateTime", polars.Utf8), 
                 ("Lat", polars.Float64), ("Long", polars.Float64), ("Class", polars.Utf8), ("Abbrev", polars.Utf8), ("Species", polars.Utf8) ]) # Utf8 = string
             if not os.path.exists(self.TE_DirPath):
@@ -29,7 +31,7 @@ class EchoMeter():
         basename = os.path.basename(echoMeterPath)
         if basename.startswith("Session_"):
             # single directory
-            if basename not in self.GpsFilesDF["SessionName"].values:
+            if basename not in self.GpsFilesDF["SessionName"].to_list():
                 self.DecodeSession(echoMeterPath)
                 self.GpsFilesDF.write_csv(os.path.join(self.echoMeterPath, 'GpsBatCallFiles.csv'))
         else:
