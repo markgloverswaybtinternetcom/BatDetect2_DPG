@@ -455,8 +455,8 @@ class Classifier():
     """Uses BatDetect2 lower level code without modification any modifications are in this class"""
     def __init__(self): 
         args = {'cnn_features': False, 'spec_features': False, 'quiet': False, 'save_preds_if_empty': False, 'model_path': DEFAULT_MODEL_PATH}
-        self.model, self.modelParams = load_model(DEFAULT_MODEL_PATH) 
         code_dir = os.path.dirname(os.path.abspath(__file__))
+        self.model, self.modelParams = load_model(os.path.join(code_dir, DEFAULT_MODEL_PATH)) 
         speciesNames = pandas.read_csv(os.path.join(code_dir, "Resources", "SpeciesNames.csv"))
         config = None
         configFile = os.path.join(code_dir, "gui_Config.json")
