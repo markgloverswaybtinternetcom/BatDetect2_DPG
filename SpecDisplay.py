@@ -125,13 +125,14 @@ class SpecDisplay():
                 speciesComboList = self.calls.GetSpeciesList()
                 if len(speciesComboList) > 1:
                     dpg.configure_item(self.showSpeciesCombo,  items=speciesComboList)
+                    dpg.configure_item(self.showSpeciesCombo, default_value="")
                     dpg.configure_item(self.showSpeciesCombo, show=True)
                 else:
                     dpg.configure_item(self.showSpeciesCombo, show=False)            
             else:
                 dpg.set_value(self.ClassifyLabel, "No bat calls found")
                 dpg.configure_item(self.ClassifyLabel, color=(200, 0, 0, 255))
-        self.LoadFile(filepath, titleExtra, minT)  
+        self.LoadFile(filepath, titleExtra, minT) 
 
     def GenerateSpectrum(self):
         """Genenertes the coloured spectrum used in the spectrogram, DearPyGui does not allow access to standard spectrums"""
