@@ -164,9 +164,10 @@ class FileDialog():
             dpg.configure_item(self.loadCompareButton, show=True) 
             dpg.configure_item(self.WavMetadataButton, show=True)
             self.IsRoostDir = False
-        files = []
-        for f in os.listdir(dir): 
-            if f != "ann": files.append(os.path.join(dir, f))
+        files = [os.path.join(dir, f) for f in os.listdir(dir) if f != "ann"]
+        files.sort(key=os.path.getctime, reverse=True)
+        """for f in os.listdir(dir): 
+            if f != "ann": files.append(os.path.join(dir, f))"""
         self.DisplayFiles(files)
         dpg.set_value(self.CurrentDirectoryText, dir)
         
@@ -350,6 +351,7 @@ class FileDialog():
         column_id = sort_specs[0][0]
         i = cols.index(column_id)
         colLabel = dpg.get_item_label(column_id)
+        print(f"sort_callback {sort_specs=} {colLabel=}")
 
         # create a list that can be sorted based on first cell value, keeping track of row and value used to sort
         sortable_list = []

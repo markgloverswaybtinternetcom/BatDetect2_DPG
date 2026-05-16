@@ -119,7 +119,7 @@ class SpecDisplay():
         self.dir = dir; self.file = file
         if self.classifyEnabled:            
             callsCsvPath = os.path.join(dir,"ann", file+".csv")
-            if os.path.isfile(callsCsvPath):
+            if os.path.isfile(callsCsvPath) and self.SpeciesLanguage != 'None':
                 summary = self.calls.fromCSV(callsCsvPath)
                 self.SetClassifyLabel(summary)                
                 speciesComboList = self.calls.GetSpeciesList()
@@ -130,7 +130,7 @@ class SpecDisplay():
                 else:
                     dpg.configure_item(self.showSpeciesCombo, show=False)            
             else:
-                dpg.set_value(self.ClassifyLabel, "No bat calls found")
+                if self.SpeciesLanguage != 'None': dpg.set_value(self.ClassifyLabel, "No bat calls found")
                 dpg.configure_item(self.ClassifyLabel, color=(200, 0, 0, 255))
         self.LoadFile(filepath, titleExtra, minT) 
 
