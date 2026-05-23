@@ -3,7 +3,7 @@ from Classifier import Classifier
 import argparse, utils
 """Colour coded Command line run classifier using BatDetect2"""
 
-def FileDrop(f):
+def FileDrop(f, deleteNoCallFiles):
     """Classify a directory or file"""
     if os.path.isdir(f):
         dirResults_file = os.path.join(f, "BatDetect2 Results.csv")
@@ -11,7 +11,7 @@ def FileDrop(f):
             print(f"FileDrop {dirResults_file=} found")
             print(f"{f} files already Classified")
         else:
-            ClassifyDir(f)
+            ClassifyDir(f, deleteNoCallFiles)
     elif os.path.isfile(f):
         dir = os.path.dirname(f); file = os.path.basename(f); callsCsvPath = os.path.join(dir, "ann", file + ".csv")
         if not os.path.isfile(callsCsvPath):
@@ -20,7 +20,7 @@ def FileDrop(f):
             print(f"Classified file {f}")
         else: print("NO FILE OR DIRECTOY")
 
-def ClassifyDir(dir_path):
+def ClassifyDir(dir_path, deleteNoCallFiles=False):
     """Classify a directory, this may take some time so stop sleeping"""
     with wakepy.keep.running():
         classify = Classifier()
@@ -28,12 +28,14 @@ def ClassifyDir(dir_path):
         FilesDF = polars.DataFrame(schema=[("Filename", polars.Utf8), ("Bat Call", polars.Utf8)]) # Utf8 = string
         length = len(files)
         for index, audio_file in enumerate(files): 
-            result = classify.File(audio_file)
+            result = classify.File(audio_file, annEmpty=not deleteNoCallFiles)
             file = os.path.basename(audio_file)
             if len(result) > 0: 
                 r = len(FilesDF)
                 new_row = polars.DataFrame({"Filename": [file], "Bat Call": [result]})
-                FilesDF = FilesDF.extend(new_row)                
+                FilesDF = FilesDF.extend(new_row)
+            elif deleteNoCallFiles:
+                os.remove(audio_file)
             print(f"file {index +1} of {length} Classified", end='\r')
         # create a summary file
         dirResults_file = os.path.join(dir_path, "BatDetect2 Results.csv")
@@ -42,7 +44,8 @@ def ClassifyDir(dir_path):
 
 parser = argparse.ArgumentParser(description="Bat call classifier")
 parser.add_argument("Pathname", help="The directory or filename that needs clasifying.")
+parser.add_argument("--delete", action="store_true", help="Delete audio with no classified calls")
 args = parser.parse_args()
-FileDrop(args.Pathname)
+FileDrop(args.Pathname, args.delete)
 
 
