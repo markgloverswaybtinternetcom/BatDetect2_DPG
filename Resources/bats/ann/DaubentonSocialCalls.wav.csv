@@ -1,0 +1,18 @@
+id,det_prob,start_time,end_time,high_freq,low_freq,class,class_prob,event
+0,0.546,0.0035,0.0074,47051,33203,Myotis daubentonii,0.485,Echolocation
+1,0.623,0.1315,0.1356,55300,34921,Myotis daubentonii,0.596,Echolocation
+2,0.524,0.2085,0.2119,55243,35781,Myotis daubentonii,0.443,Echolocation
+3,0.545,0.2565,0.2616,57554,29765,Myotis daubentonii,0.518,Echolocation
+4,0.595,0.3855,0.3892,56877,34921,Myotis daubentonii,0.525,Echolocation
+5,0.582,0.4785,0.4828,59623,34921,Myotis daubentonii,0.478,Echolocation
+6,0.573,0.5355,0.5406,57804,28906,Myotis daubentonii,0.527,Echolocation
+7,0.598,0.5985,0.6027,56722,34921,Myotis daubentonii,0.54,Echolocation
+8,0.608,0.6255,0.6306,54774,31484,Myotis daubentonii,0.566,Echolocation
+9,0.628,0.6565,0.6605,56724,34921,Myotis daubentonii,0.569,Echolocation
+10,0.589,0.7145,0.7191,58697,28046,Myotis daubentonii,0.542,Echolocation
+11,0.567,0.7385,0.7434,63219,34062,Myotis daubentonii,0.506,Echolocation
+12,0.616,0.8055,0.8112,57186,30625,Myotis daubentonii,0.544,Echolocation
+13,0.608,0.8605,0.8655,58390,33203,Myotis daubentonii,0.556,Echolocation
+14,0.596,0.8955,0.9011,60672,28906,Myotis daubentonii,0.542,Echolocation
+15,0.566,0.9285,0.9337,62335,28906,Myotis daubentonii,0.525,Echolocation
+16,0.592,0.9925,0.9978,64962,28906,Myotis daubentonii,0.566,Echolocation

@@ -1,0 +1,198 @@
+{
+  "id": "DaubentonSocialCalls.wav",
+  "annotated": false,
+  "issues": false,
+  "notes": "Automatically generated.",
+  "time_exp": 1,
+  "duration": 1.0,
+  "annotation": [
+    {
+      "start_time": 0.0035,
+      "end_time": 0.0074,
+      "low_freq": 33203,
+      "high_freq": 47051,
+      "class": "Myotis daubentonii",
+      "class_prob": 0.485,
+      "det_prob": 0.546,
+      "individual": "-1",
+      "event": "Echolocation"
+    },
+    {
+      "start_time": 0.1315,
+      "end_time": 0.1356,
+      "low_freq": 34921,
+      "high_freq": 55300,
+      "class": "Myotis daubentonii",
+      "class_prob": 0.596,
+      "det_prob": 0.623,
+      "individual": "-1",
+      "event": "Echolocation"
+    },
+    {
+      "start_time": 0.2085,
+      "end_time": 0.2119,
+      "low_freq": 35781,
+      "high_freq": 55243,
+      "class": "Myotis daubentonii",
+      "class_prob": 0.443,
+      "det_prob": 0.524,
+      "individual": "-1",
+      "event": "Echolocation"
+    },
+    {
+      "start_time": 0.2565,
+      "end_time": 0.2616,
+      "low_freq": 29765,
+      "high_freq": 57554,
+      "class": "Myotis daubentonii",
+      "class_prob": 0.518,
+      "det_prob": 0.545,
+      "individual": "-1",
+      "event": "Echolocation"
+    },
+    {
+      "start_time": 0.3855,
+      "end_time": 0.3892,
+      "low_freq": 34921,
+      "high_freq": 56877,
+      "class": "Myotis daubentonii",
+      "class_prob": 0.525,
+      "det_prob": 0.595,
+      "individual": "-1",
+      "event": "Echolocation"
+    },
+    {
+      "start_time": 0.4785,
+      "end_time": 0.4828,
+      "low_freq": 34921,
+      "high_freq": 59623,
+      "class": "Myotis daubentonii",
+      "class_prob": 0.478,
+      "det_prob": 0.582,
+      "individual": "-1",
+      "event": "Echolocation"
+    },
+    {
+      "start_time": 0.5355,
+      "end_time": 0.5406,
+      "low_freq": 28906,
+      "high_freq": 57804,
+      "class": "Myotis daubentonii",
+      "class_prob": 0.527,
+      "det_prob": 0.573,
+      "individual": "-1",
+      "event": "Echolocation"
+    },
+    {
+      "start_time": 0.5985,
+      "end_time": 0.6027,
+      "low_freq": 34921,
+      "high_freq": 56722,
+      "class": "Myotis daubentonii",
+      "class_prob": 0.54,
+      "det_prob": 0.598,
+      "individual": "-1",
+      "event": "Echolocation"
+    },
+    {
+      "start_time": 0.6255,
+      "end_time": 0.6306,
+      "low_freq": 31484,
+      "high_freq": 54774,
+      "class": "Myotis daubentonii",
+      "class_prob": 0.566,
+      "det_prob": 0.608,
+      "individual": "-1",
+      "event": "Echolocation"
+    },
+    {
+      "start_time": 0.6565,
+      "end_time": 0.6605,
+      "low_freq": 34921,
+      "high_freq": 56724,
+      "class": "Myotis daubentonii",
+      "class_prob": 0.569,
+      "det_prob": 0.628,
+      "individual": "-1",
+      "event": "Echolocation"
+    },
+    {
+      "start_time": 0.7145,
+      "end_time": 0.7191,
+      "low_freq": 28046,
+      "high_freq": 58697,
+      "class": "Myotis daubentonii",
+      "class_prob": 0.542,
+      "det_prob": 0.589,
+      "individual": "-1",
+      "event": "Echolocation"
+    },
+    {
+      "start_time": 0.7385,
+      "end_time": 0.7434,
+      "low_freq": 34062,
+      "high_freq": 63219,
+      "class": "Myotis daubentonii",
+      "class_prob": 0.506,
+      "det_prob": 0.567,
+      "individual": "-1",
+      "event": "Echolocation"
+    },
+    {
+      "start_time": 0.8055,
+      "end_time": 0.8112,
+      "low_freq": 30625,
+      "high_freq": 57186,
+      "class": "Myotis daubentonii",
+      "class_prob": 0.544,
+      "det_prob": 0.616,
+      "individual": "-1",
+      "event": "Echolocation"
+    },
+    {
+      "start_time": 0.8605,
+      "end_time": 0.8655,
+      "low_freq": 33203,
+      "high_freq": 58390,
+      "class": "Myotis daubentonii",
+      "class_prob": 0.556,
+      "det_prob": 0.608,
+      "individual": "-1",
+      "event": "Echolocation"
+    },
+    {
+      "start_time": 0.8955,
+      "end_time": 0.9011,
+      "low_freq": 28906,
+      "high_freq": 60672,
+      "class": "Myotis daubentonii",
+      "class_prob": 0.542,
+      "det_prob": 0.596,
+      "individual": "-1",
+      "event": "Echolocation"
+    },
+    {
+      "start_time": 0.9285,
+      "end_time": 0.9337,
+      "low_freq": 28906,
+      "high_freq": 62335,
+      "class": "Myotis daubentonii",
+      "class_prob": 0.525,
+      "det_prob": 0.566,
+      "individual": "-1",
+      "event": "Echolocation"
+    },
+    {
+      "start_time": 0.9925,
+      "end_time": 0.9978,
+      "low_freq": 28906,
+      "high_freq": 64962,
+      "class": "Myotis daubentonii",
+      "class_prob": 0.566,
+      "det_prob": 0.592,
+      "individual": "-1",
+      "event": "Echolocation"
+    }
+  ],
+  "class_name": "Myotis daubentonii"
+}
