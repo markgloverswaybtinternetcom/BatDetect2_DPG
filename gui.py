@@ -44,12 +44,14 @@ class MainWindow():
                     width=95*config["scale"], callback=self.HighFilterListBox_changed)
                 self.SpeciesLanguageCombo = dpg.add_combo(label="Species Language", items=("Latin","LatinAbbrev", "English", "EnglishAbbrev", "None"),
                     width=115*config["scale"], default_value=self.SpeciesLanguage, callback=self.SpeciesLanguageCombo_changed)
-                self.EditCombo = dpg.add_combo(label="Edit", items=("None", "Source", "Species Ref", "Train"), width=100*config["scale"], 
+                self.EditCombo = dpg.add_combo(label="Edit", items=("None", "Source"), width=100*config["scale"], 
                     default_value=self.EditMode, callback=self.EditModeListbox_changed)
                 self.AssignSpeciesCombo = dpg.add_combo(label="Assign Species", width=180 * config["scale"], callback=self.AssignSpeciesCombo_changed)
                 self.AssignCallTypeID = 0
                 self.AssignCallTypeCombo = dpg.add_combo(label="Call Type", items=self.CallTypes, width=110*config["scale"], 
                     default_value=self.CallTypes[self.AssignCallTypeID], callback=self.AssignCallTypeCombo_changed)
+                self.TruncateFileEnd = dpg.add_button(label="Truncate File", show=False, height=-1, callback=self.TruncateFileEnd_click)
+                self.DeleteFile = dpg.add_button(label="Delete File", show=False, height=-1, callback=self.DeleteFile_click)
                 self.saveMapButton = dpg.add_button(label="Save Map", show=False, height=-1, callback=self.SaveMap_click)
                 self.HelpButton = dpg.add_button(label="Help", width=60*config["scale"], callback=self.HelpButton_pressed)                     
             with dpg.table(policy=dpg.mvTable_SizingFixedFit, scrollY=True, height=config["height"] * 0.2) as self.FileTable:
@@ -133,6 +135,8 @@ class MainWindow():
         dpg.bind_item_theme(self.AssignSpeciesCombo, self.magentaText_theme)
         dpg.bind_item_theme(self.AssignCallTypeCombo, self.magentaText_theme)
         dpg.bind_item_theme(self.SpeciesLanguageCombo, orangeText_theme)
+        dpg.bind_item_theme(self.TruncateFileEnd, magentaButton_theme)
+        dpg.bind_item_theme(self.DeleteFile, magentaButton_theme)
         
         # mouse and keyboard handlers
         with dpg.item_handler_registry(tag="main resize handler") as resize_handler:
@@ -191,7 +195,7 @@ class MainWindow():
         if len(config["file"]) > 0:
             lastFile = os.path.join(config["dir"], config["file"])
             if os.path.isfile(lastFile):
-                self.LoadClassifiedFile(lastFile, self.SpecDisplay1, config["minT"])
+                self.LoadClassifiedFile(lastFile, self.SpecDisplay1, minT=config["minT"])
             else:
                 self.Status(f"LAST FILE '{lastFile}' NO LONGER EXISTS", error=True)
         self.SpeciesLanguageCombo_changed(None, self.SpeciesLanguage, None)
@@ -204,9 +208,10 @@ class MainWindow():
         print(colorama.Fore.RED + msg + colorama.Fore.RESET)
         self.Status("EXCEPTION see console", error=True)
 
-    def FileDialog_Finished(self, f, displayN):
+    def FileDialog_Finished(self, f, displayN, nRow, dirList):
         print(f"FileDialog_Finished {f=} {displayN=}")
-        self.LoadFileOrDir(f, displayN)
+        # nRow, dirList set by FileDialog in same order as displayed
+        self.LoadFileOrDir(f, displayN, nRow, dirList)
         self.SetActiveDisplayN(displayN)
         
     def HelpButton_pressed(self):
@@ -302,12 +307,12 @@ class MainWindow():
 
     def RightKey_pressed(self, sender, app_data, user_data):
         """Display next screenfull of spectrogram and sound in current file"""
-        print(f"RightKey_pressed {self.Range=}")
         if self.ActiveDisplay.maxT + self.Range > self.ActiveDisplay.duration: 
             self.ActiveDisplay.maxT = self.ActiveDisplay.duration
-            if self.ActiveDisplay.minT - self.Range < 0: self.ActiveDisplay.maxT = self.Range; self.ActiveDisplay.minT = 0            
+            if self.ActiveDisplay.maxT - self.Range < 0: self.ActiveDisplay.maxT = self.Range; self.ActiveDisplay.minT = 0            
             else: self.ActiveDisplay.minT = self.ActiveDisplay.duration - self.Range
         else: self.ActiveDisplay.minT += self.Range; self.ActiveDisplay.maxT += self.Range
+        print(f"RightKey_pressed {self.Range=} {self.ActiveDisplay.duration=} {self.ActiveDisplay.minT=} {self.ActiveDisplay.maxT=}")
         self.ActiveDisplay.DisplaySpectogram()
         print(f"RightKey_pressed {self.lastRow=} {self.ActiveDisplay.minT=}")
         if self.FilesDF is not None: self.FileMinTs[self.lastRow] = self.ActiveDisplay.minT
@@ -453,16 +458,15 @@ class MainWindow():
                 labelMaxT = max(self.LabelStartPlot[0], plotPos[0])#sec
                 labelMaxF = max(self.LabelStartPlot[1], plotPos[1])#kHz
                 
-                if self.EditMode == "Source" or self.EditMode == "Train":
+                if self.EditMode == "Source":
                     # edit original file annotations
                     print("label_release_handler Source")
-                    display.calls.Insert(self.AssignSpeciesID, self.AssignCallTypeID, labelMinT, labelMaxT, labelMinF, labelMaxF)
-                    callsCsvPath = os.path.join(self.SpecDisplay1.dir, "ann", f"{self.SpecDisplay1.file}.csv")
+                    if self.AssignSpeciesID == -1:
+                        display.calls.Delete(labelMinT, labelMaxT, labelMinF, labelMaxF)
+                    else: display.calls.Insert(self.AssignSpeciesID, self.AssignCallTypeID, labelMinT, labelMaxT, labelMinF, labelMaxF)
+                    callsCsvPath = os.path.join(display.dir, "ann", f"{display.file}.csv")
                     display.calls.toCSV(callsCsvPath)
-                    trainDir = os.path.join(self.SpecDisplay1.dir, "train")
-                    if not os.path.isdir(trainDir):
-                        os.makedirs(trainDir)
-                    callsJsonPath = os.path.join(trainDir, f"{self.SpecDisplay1.file}.json")
+                    callsJsonPath = os.path.join(display.dir, "ann", f"{display.file}.json")
                     display.calls.toJSON(callsJsonPath)
                     display.DisplaySpectogram(UpdateMin= False, sound = False)      
                 self.LabelStartPlot = None   
@@ -513,7 +517,7 @@ class MainWindow():
         """Make the main display (1) active for arrow keys of file drops"""
         self.SetActiveDisplayN(1)
             
-    def LoadFileOrDir(self, f, displayN):
+    def LoadFileOrDir(self, f, displayN, nRow=None, dirList=None):
         """Load a file or directory classifying if needed"""
         if displayN == 2:
             print(f"LoadFileOrDir Use Ref SpecDisplay 2")
@@ -569,7 +573,7 @@ class MainWindow():
                 self.ScrollToRow(0)
         elif os.path.isfile(f):
             if display == self.SpecDisplay1: self.MultiFile = False; 
-            self.LoadClassifiedFile(f, display)
+            self.LoadClassifiedFile(f, display, nRow=nRow, dirList=dirList)
             dpg.configure_item(self.saveMapButton, show=False)  
             config["echoMeterDir"] = ""
             self.resize_handler(0, None, None)
@@ -631,8 +635,9 @@ class MainWindow():
             
     def AssignSpeciesCombo_changed(self, sender, app_data, user_data):
         """Allows the call species to be altered or added"""
-        species = app_data;      
-        self.AssignSpeciesID = self.SpeciesNames[self.SpeciesNames[self.FullSpeciesLanguage] == species].index.values[0]
+        species = app_data; 
+        if species == "DELETE": self.AssignSpeciesID = -1
+        else: self.AssignSpeciesID = self.SpeciesNames[self.SpeciesNames[self.FullSpeciesLanguage] == species].index.values[0]
         #used in numpy array 
         print(f"AssignSpeciesCombo_changed {self.AssignSpeciesID=} {self.FileTableRow=} {len(config["echoMeterDir"])=}")
         
@@ -641,14 +646,30 @@ class MainWindow():
             self.FilesDF[row, "Species"] = species # immutable???
             dpg.configure_item(self.GpsSpeciesCells[row], label=species)
             self.echoMeter.SaveEchoMeterDir(self.FilesDF)
-
+    
+    def TruncateFileEnd_click(self):
+        self.SpecDisplay1.TruncateFile(self.SpecDisplay1.maxT)
+        callsCsvPath = os.path.join(self.SpecDisplay1.dir, "ann", f"{self.SpecDisplay1.file}.csv")
+        self.SpecDisplay1.calls.toCSV(callsCsvPath)
+        callsJsonPath = os.path.join(self.SpecDisplay1.dir, "ann", f"{self.SpecDisplay1.file}.json")
+        self.SpecDisplay1.calls.toJSON(callsJsonPath)
+        
+    def DeleteFile_click(self):
+        self.SpecDisplay1.DeleteFile()
+        callsCsvPath = os.path.join(self.SpecDisplay1.dir, "ann", f"{self.SpecDisplay1.file}.csv")
+        if os.path.exists(callsCsvPath): os.remove(callsCsvPath)
+        callsJsonPath = os.path.join(self.SpecDisplay1.dir, "ann", f"{self.SpecDisplay1.file}.json")
+        if os.path.exists(callsJsonPath): os.remove(callsJsonPath)
+        del self.ActiveDisplay.dirFiles[self.ActiveDisplay.dirIndex]
+        self.DownKey_pressed(self.DeleteFile, 0, 0)
+    
     def AssignCallTypeCombo_changed(self, sender, app_data, user_data):
         """So the call type can be altered from the default echolocation the only one BatDetect2 knows"""
         callType = app_data
         self.AssignCallTypeID = self.CallTypes.index(callType) #used in numpy array
         print(f"AssignCallTypeCombo {callType=} {self.AssignCallTypeID=}")        
                 
-    def LoadClassifiedFile(self, f, display, minT=None):
+    def LoadClassifiedFile(self, f, display, nRow=None, dirList=None, minT=None):
         """Claissify a single if it is not already classified using BatDetect2"""
         print(f"LoadClassifiedFile {f=} {minT=}") 
         dir = os.path.dirname(f); file = os.path.basename(f)
@@ -659,7 +680,7 @@ class MainWindow():
             results = self.classify.File(f, debug=True)
             if len(results) > 0:
                 self.Status(f"Classified file {f}", theme=self.green_align_right)
-        display.LoadClassifiedFile(f, not self.MultiFile, minT)                     
+        display.LoadClassifiedFile(f, rememberDir=not self.MultiFile, nRow=nRow, dirList=dirList, minT=minT)                     
                 
     def ClassifyDir(self, dir_path):
         """Claissify whole directory using BatDetect2"""
@@ -695,14 +716,10 @@ class MainWindow():
             if self.EditMode == "None": showAssign = False
             else: 
                 showAssign = True
-                if self.EditMode == "Train": 
-                    self.SpecDisplay1.classifyEnabled = False
-                    callsJsonPath = os.path.join(self.SpecDisplay1.dir, "ann", f"{self.SpecDisplay1.file}.json")
-                    if os.path.isfile(callsJsonPath):
-                        self.SpecDisplay1.calls.fromJSON(callsJsonPath)
-                    self.SpecDisplay1.DisplaySpectogram(UpdateMin= False, sound = False)
         dpg.configure_item(self.AssignSpeciesCombo, show=showAssign)
         dpg.configure_item(self.AssignCallTypeCombo, show=showAssign)
+        dpg.configure_item(self.TruncateFileEnd, show=showAssign)
+        dpg.configure_item(self.DeleteFile, show=showAssign)
 
     def SpeciesLanguageCombo_changed(self, sender, app_data, user_data):
         """Alters language of species call annotation and combo boxes"""
@@ -715,6 +732,7 @@ class MainWindow():
         elif self.SpeciesLanguage == "English": self.AbbrevSpeciesLanguage = "EnglishAbbrev"
         if self.SpeciesLanguage != "None":
             sortedSpecies = list(self.SpeciesNames.sort_values(by=["bat",self.FullSpeciesLanguage], ascending=[False,True])[self.FullSpeciesLanguage])
+            sortedSpecies.insert(0, "DELETE")
         else: sortedSpecies = []
         dpg.configure_item(self.AssignSpeciesCombo, items=sortedSpecies)
         if sender is not None:
@@ -755,7 +773,7 @@ class MainWindow():
         dpg.highlight_table_row(table, gRow, color=[0,100,0])
         file = df[dfRow, "Filename"] 
         self.lastRow = gRow
-        self.LoadClassifiedFile(os.path.join(self.SpecDisplay1.dir,file), self.SpecDisplay1, self.FileMinTs[dfRow])
+        self.LoadClassifiedFile(os.path.join(self.SpecDisplay1.dir,file), self.SpecDisplay1, minT=self.FileMinTs[dfRow])
 
     def AddToFileTable(self, filename, result, r):
         """Loads file table with clasification summary of each file as it is classified"""

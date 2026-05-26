@@ -252,21 +252,29 @@ class FileDialog():
             self.DisplayDir(filepath)
         else:
             self.selectedFile = filepath
+            self.selectedDir = os.path.dirname(filepath)
             if self.sorted:
                 # if sorted nRow is wrong, so must find filename
-                nRow = self.FindFileInTable(filepath)
+                self.nRow = self.FindFileInTable(filepath)
             dpg.highlight_table_row(table, nRow, color=[0,100,0]) 
-            LastRowSelected = nRow 
+            LastRowSelected = self.nRow = nRow 
             # do not add code as will stop selecting rows or buttons
+   
+    def GetDirList(self):
+        dirList = []
+        for row in dpg.get_item_children(self.table, 1):
+            filenameCell = dpg.get_item_children(row, 1)[1]
+            dirList.append(os.path.join(self.selectedDir, dpg.get_item_label(filenameCell)))
+        return dirList
             
     def LoadFileSelected_callback(self):
         """Selected file or directory goes to the main display"""
         if self.loadCallback is not None:
             dpg.configure_item(self.window, show=False)
             if self.selectedFile is not None:
-                self.loadCallback(self.selectedFile, 1)
+                self.loadCallback(self.selectedFile, 1, self.nRow, self.GetDirList())
             elif self.selectedDir is not None:
-                self.loadCallback(self.selectedDir, 1)
+                self.loadCallback(self.selectedDir, 1, None, None)
             self.selectedDir = self.selectedFile = None
     
     def LoadFileComparison_callback(self):
@@ -274,7 +282,7 @@ class FileDialog():
         if self.loadCallback is not None:
             dpg.configure_item(self.window, show=False)
             if self.selectedFile is not None:
-                self.loadCallback(self.selectedFile, 2)
+                self.loadCallback(self.selectedFile, 2, self.nRow, self.GetDirList())
             self.selectedDir = self.selectedFile = None
                 
     def Dir_selected(self, sender, app_data, user_data):

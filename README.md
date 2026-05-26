@@ -155,7 +155,9 @@ Any files longer than 5 seconds will be split into smaller files. The pipeline o
  *   Right click drag to select area of call. Unfortunately you will not get the same feedback as when zooming. 
  
 The annotation should be added and any included calls deleted. 
+Species of  'DELETE' will just delete an area of calls.
 The new classification will be retained in the 'ann' directory. 
+The end of recorded files is usually noise the 'Truncate File' will remove contents after the current displays. The 'Delete File' will remove the current file and display the next.' 
 
 
 #### Display of wav file metadata

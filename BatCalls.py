@@ -81,6 +81,12 @@ class BatCalls():
                 exception = f"{len(calls)} calls - Too many to label"
         return bestSpecies, exception
 
+    def TruncateCalls(self, maxT):
+        indices = numpy.where(self.CallsNP[:, 1] < maxT)[0]
+        print(f"TruncateCalls {len(indices)=} {self.CallsNP.shape=}")
+        self.CallsNP = self.CallsNP[indices]
+        print(f"TruncateCalls {self.CallsNP.shape=}")
+        
     def fromJSON(self, filepath):
         """"Load annotation information from a JSON file in format that the BatDetect2 uses for traiing models"""
         print(f"fromJSON {filepath=}")
@@ -141,6 +147,18 @@ class BatCalls():
         print(f"BatCalls.Insert before{len(self.CallsNP)=}")
         self.CallsNP = numpy.array(arr, dtype='f')
         print(f"BatCalls.Insert after{len(self.CallsNP)=}")
+        
+    def Delete(self, callTmin, callTmax, callFmin, callFmax):
+        print(f"Delete {callTmin=} {callTmax=} {callFmin=} {callFmax=}")
+        arr = []
+        if self.CallsNP is not None:
+            for call in self.CallsNP:
+                id=int(call[0]); t1=call[1]; t2=call[2]; f1=call[3]; f2=call[4]; p1=call[5]; p2=call[6]; ct=int(call[7])
+                if t2 < callTmin or f1 > callFmax or t1 > callTmax or t2 < callTmin:
+                    arr.append([id, t1, t2, f1, f2, p1, p2, ct]) # exclude overlapped calls
+        print(f"BatCalls.Delete before{len(self.CallsNP)=}")
+        self.CallsNP = numpy.array(arr, dtype='f')
+        print(f"BatCalls.Delete after{len(self.CallsNP)=}")
         
     def FindFirstConsecutive(self):
         minT = 0

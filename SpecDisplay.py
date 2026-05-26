@@ -109,12 +109,18 @@ class SpecDisplay():
         dpg.bind_item_theme(self.MaxSlider, maxSlider_theme)
         self.classify = Classifier()
 
-    def LoadClassifiedFile(self, filepath, rememberDir=True, minT=None):
+    def LoadClassifiedFile(self, filepath, nRow=None, dirList=None, rememberDir=True, minT=None):
         titleExtra = ""
         dir = os.path.dirname(filepath); file = os.path.basename(filepath)
         if rememberDir: 
-            if self.dir != dir or self.dirIndex is None:
-                self.RememberDirectory(dir, filepath)
+            if nRow is None:
+                if self.dir != dir or self.dirIndex is None:
+                    self.RememberDirectory(dir, filepath)
+            else:
+                # directory set by FileDialog in same order as displayed
+                self.dirIndex = nRow
+                self.dirFiles = dirList
+            print(f"LoadClassifiedFile rememberDir {nRow=} {self.dir=} {dir=} {dirList=} {self.dirIndex=} {self.dirFiles=}")
             titleExtra = f"file {self.dirIndex +1} of {len(self.dirFiles)}"
         self.dir = dir; self.file = file
         if self.classifyEnabled:            
@@ -169,6 +175,7 @@ class SpecDisplay():
                 self.dirIndex = i; 
                 break
             i += 1
+        print(f"RememberDirectory {self.dirIndex=} {self.dirFiles=}")
     
     def ActiveDisplay_click(self):
         """User has requested this display is the active display for arrow keys etc"""
@@ -218,6 +225,13 @@ class SpecDisplay():
         self.DisplaySpectogram()
         dpg.set_value(self.ScrollBar, self.minT) 
 
+    def UpdateScrollBar(self):
+        dpg.configure_item(self.ScrollBar, max_value=self.duration - self.Range) 
+        dpg.configure_item(self.ScrollBar, format=f"%.03f of {self.duration:.3f} secs")         
+        dpg.set_item_label(self.ScrollBar, f" of {self.duration}") 
+        dpg.set_value(self.ScrollBar, self.minT) 
+        
+ 
     def LoadFile(self, filepath, titleExtra="", minT=None):
         """Loads the summary data for the whole sound file"""
         self.Status("")
@@ -241,10 +255,7 @@ class SpecDisplay():
         if userPath.lower() in filepath.lower():
             dpg.set_item_label(self.specPlot, f"Spectrogram of {filepath[len(userPath)+1:]} {utils.FileDate(filename)} {titleExtra}")
         else: dpg.set_item_label(self.specPlot, f"Spectrogram of {filepath} {utils.FileDate(filename)} {titleExtra}")
-        dpg.configure_item(self.ScrollBar, max_value=self.duration - self.Range) 
-        dpg.configure_item(self.ScrollBar, format=f"%.03f of {self.duration:.3f} secs")         
-        dpg.set_item_label(self.ScrollBar, f" of {self.duration}") 
-        dpg.set_value(self.ScrollBar, self.minT) 
+        self.UpdateScrollBar()
         grabSize = self.sliderWidth * self.Range / self.duration
         with dpg.theme() as slider_theme:
             with dpg.theme_component(dpg.mvSliderFloat):
@@ -264,6 +275,20 @@ class SpecDisplay():
         self.DisplaySpectogram()
         if self.sample_rate < 45000:
             self.Status(f"Sample rate = {self.sample_rate / 1000:.1f}kHz FILE NOT ULTRASONIC")
+    
+    def TruncateFile(self, maxT):
+        self.SoundFile.seek(0)
+        frames_to_read = int(maxT * self.sample_rate)
+        fileData =  self.SoundFile.read(frames_to_read)
+        soundfile.write(os.path.join(self.dir, self.file), fileData, self.sample_rate)
+        self.duration = maxT
+        self.calls.TruncateCalls(maxT)
+        self.UpdateScrollBar()
+        
+    def DeleteFile(self):
+        self.SoundFile.close()
+        f = os.path.join(self.dir, self.file)
+        if os.path.exists(f): os.remove(f)
         
     def LoadFileSegment(self):
         """Loads just the data needed for the current spectrogram"""
@@ -346,7 +371,7 @@ class SpecDisplay():
         if not dpg.get_item_configuration(self.topGroup)['show']: return
         if self.lastMousePlotPos is not None: 
             self.lastMousePos = self.lastMousePlotPos = None
-        #print(f"DisplaySpectogram {self.minT=:.3f}, {self.maxT=:.3f}, {self.minF=}, {self.maxF=}") 
+        print(f"DisplaySpectogram {self.minT=:.3f}, {self.maxT=:.3f}, {self.minF=}, {self.maxF=}") 
         self.zoomed = False
         spectrogram, self.Recording = self.LoadFileSegment()
         self.ZoomRecording = None
