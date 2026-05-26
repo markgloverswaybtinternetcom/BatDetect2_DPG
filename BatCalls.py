@@ -114,6 +114,7 @@ class BatCalls():
                 maxIdProb = idProb
                 maxId = id
         thisdict = {"annotated": True, "annotation": annotationValues, "class_name": maxId, "duration":  self.parent.duration, "id":  self.parent.file, "issued": False, "notes": "Automatically generated.", "time_exp": 1}
+        print(f"toJSON {thisdict=}")
         with open(callsJsonPath, "w", encoding="utf-8") as jsonfile:
             json.dump(thisdict, jsonfile, indent=2, sort_keys=True)
 
