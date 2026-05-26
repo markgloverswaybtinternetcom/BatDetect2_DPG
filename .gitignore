@@ -3,6 +3,7 @@ __pycache__/
 *.py[oc]
 build/
 dist/
+test/
 wheels/
 *.egg-info
 Resources/temp.wav

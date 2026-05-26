@@ -4,9 +4,9 @@ import ClassifierConstants as c
 
 warnings.filterwarnings("ignore", category=UserWarning)
     
-def load_set_of_anns(ann_file_dir, wav_path):
+def load_set_of_anns(wav_path):
     # load the annotations
-    files = glob.glob(os.path.join(ann_file_dir,  "*.json"), recursive=True)
+    files = glob.glob(os.path.join(wav_path, "ann", "*.json"), recursive=True)
     anns = []
     print(f"load_anns_from_path {len(files)=}")
     for ff in files:
@@ -21,7 +21,7 @@ def load_set_of_anns(ann_file_dir, wav_path):
     for ann in anns:
         print(f"load_set_of_anns {ann["file_path"]=}")
         for aa in ann["annotation"]:
-            class_names_all.append(aa["class"])
+            class_names_all.append(aa["class"] + "-" + aa["event"])
     class_names, class_cnts = numpy.unique(class_names_all, return_counts=True)
     class_inv_freq = class_cnts.sum() / (len(class_names) * class_cnts.astype(numpy.float32))
     print("Class count:")
@@ -30,25 +30,12 @@ def load_set_of_anns(ann_file_dir, wav_path):
         print(str(cc).ljust(5) + class_names[cc].ljust(str_len) + str(class_cnts[cc]))
     return anns, class_names.tolist(), class_inv_freq 
 
-def mk_dir(path):
-    if not os.path.isdir(path):
-        os.makedirs(path)
-
-def get_params(make_dirs=False, exps_dir="../../experiments/"):
+def get_params():
     params = {}
-    params["model_name"] = "Net2DFast" 
     now_str = datetime.datetime.now().strftime("%Y_%m_%d__%H_%M_%S")
     model_name = now_str + ".pth.tar"
-    params["experiment"] = os.path.join(exps_dir, now_str, "")
-    params["model_file_name"] = os.path.join(params["experiment"], model_name)
+    params["model_file_name"] = model_name
     params["class_names"] = []
-    # create directories
-    if make_dirs:
-        print("Model name : " + params["model_name"])
-        print("Model file : " + params["model_file_name"])
-        print("Experiment : " + params["experiment"])
-        mk_dir(params["experiment"])
-        mk_dir(os.path.dirname(params["model_file_name"]))
     return params
 
 #batdetect2.train.audio_dataloader AudioLoader
@@ -125,8 +112,8 @@ def time_to_x_coords(time_in_file: float, samplerate: float = c.TARGET_SAMPLERAT
     nfft = numpy.floor(window_duration * samplerate)  # int() uses floor
     noverlap = numpy.floor(window_overlap * nfft)
     return (time_in_file * samplerate - noverlap) / (nfft - noverlap)
-    
-def generate_gt_heatmaps(spec_op_shape: Tuple[int, int], sampling_rate: int, ann: AnnotationGroup, class_names) -> Tuple[numpy.ndarray, numpy.ndarray, numpy.ndarray, AnnotationGroup]:
+
+def ground_truth_heatmaps(spec_op_shape: Tuple[int, int], sampling_rate: int, ann: AnnotationGroup, class_names) -> Tuple[numpy.ndarray, numpy.ndarray, numpy.ndarray, AnnotationGroup]:
     # spec may be resized on input into the network
     num_classes = len(class_names)
     op_height = spec_op_shape[0]
@@ -226,24 +213,20 @@ class AudioLoader(torch.utils.data.Dataset):
         print(f"AudioLoader __init__ {len(data_anns_ip)=}")
         for ii in range(len(data_anns_ip)):
             dd = copy.deepcopy(data_anns_ip[ii])
-
             # filter out unused annotation here
             filtered_annotations = []
             for ii, aa in enumerate(dd["annotation"]):  #### list indices must be integers or slices, not str ####
                 if "individual" in aa.keys():
                     aa["individual"] = int(aa["individual"])
-
                     # if only one call labeled it has to be from the same individual
                     if len(dd["annotation"]) == 1:
                         aa["individual"] = 0
-
                 # convert class name into class label
                 if aa["class"] in self.params["class_names"]:
                     print(f"AudioLoader __init__ {params["class_names"]=} {aa["class"]=}")
                     aa["class_id"] = self.params["class_names"].index(aa["class"])
                 else:
                     aa["class_id"] = -1
-
                 filtered_annotations.append(aa)
 
             dd["annotation"] = filtered_annotations
@@ -348,7 +331,7 @@ class AudioLoader(torch.utils.data.Dataset):
             outputs["spec_for_viz"] = torch.from_numpy(spec_for_viz).unsqueeze(0)
 
         # create ground truth heatmaps
-        (outputs["y_2d_det"],  outputs["y_2d_size"], outputs["y_2d_classes"], ann_aug) = generate_gt_heatmaps(spec_op_shape, sampling_rate, ann, self.params["class_names"])
+        (outputs["y_2d_det"],  outputs["y_2d_size"], outputs["y_2d_classes"], ann_aug) = ground_truth_heatmaps(spec_op_shape, sampling_rate, ann, self.params["class_names"])
 
         # hack to get around requirement that all vectors are the same length in the output batch
         pad_size = self.max_num_anns - len(ann_aug["individual_ids"])
@@ -373,40 +356,6 @@ class AudioLoader(torch.utils.data.Dataset):
 
     def __len__(self):
         return len(self.data_anns)
-
-
-def focal_loss(pred, gt, weights=None, valid_mask=None):
-    """ Focal loss adapted from CornerNet: Detecting Objects as Paired Keypoints
-    pred  (batch x c x h x w)
-    gt    (batch x c x h x w)"""
-    eps = 1e-5
-    beta = 4
-    alpha = 2
-
-    pos_inds = gt.eq(1).float()
-    neg_inds = gt.lt(1).float()
-
-    pos_loss = torch.log(pred + eps) * torch.pow(1 - pred, alpha) * pos_inds
-    neg_loss = (torch.log(1 - pred + eps) * torch.pow(pred, alpha) * torch.pow(1 - gt, beta) * neg_inds
-)
-
-    if weights is not None:
-        pos_loss = pos_loss * weights
-        # neg_loss = neg_loss*weights
-
-    if valid_mask is not None:
-        pos_loss = pos_loss * valid_mask
-        neg_loss = neg_loss * valid_mask
-
-    pos_loss = pos_loss.sum()
-    neg_loss = neg_loss.sum()
-
-    num_pos = pos_inds.float().sum()
-    if num_pos == 0:
-        loss = -neg_loss
-    else:
-        loss = -(pos_loss + neg_loss) / num_pos
-    return loss
 
 def compute_pre_rec(gts, preds, eval_mode, class_of_interest, num_classes, threshold,  ignore_start_end):
     """Computes precision and recall. Assumes that each file has been exhaustively
@@ -589,78 +538,53 @@ def evaluate_predictions(gts, preds, class_names, detection_overlap, ignore_star
     det_results.update(res_file)
 
     return det_results
-    
-def standardize_low_freq(data, class_of_interest):
-    # address the issue of highly variable low frequency annotations
-    # this often happens for contstant frequency calls
-    # for the class of interest sets the low and high freq to be the dataset mean
-    low_freqs = []
-    high_freqs = []
-    for dd in data:
-        for aa in dd["annotation"]:
-            if aa["class"] == class_of_interest:
-                low_freqs.append(aa["low_freq"])
-                high_freqs.append(aa["high_freq"])
 
-    low_mean = numpy.mean(low_freqs)
-    high_mean = numpy.mean(high_freqs)
-    assert low_mean < high_mean
-
-    print("\nStandardizing low and high frequency for:")
-    print(class_of_interest)
-    print("low:  ", round(low_mean, 2))
-    print("high: ", round(high_mean, 2))
-
-    # only set the low freq, high stays the same,  assumes that low_mean < high_mean
-    for dd in data:
-        for aa in dd["annotation"]:
-            if aa["class"] == class_of_interest:
-                aa["low_freq"] = low_mean
-                if aa["high_freq"] < low_mean:
-                    aa["high_freq"] = high_mean
-
-    return data
-    
-class AverageMeter(object):
-    """Computes and stores the average and current value"""
-
-    def __init__(self):
-        self.reset()
-
-    def reset(self):
-        self.val = 0
-        self.avg = 0
-        self.sum = 0
-        self.count = 0
-
-    def update(self, val, n=1):
-        self.val = val
-        self.sum += val * n
-        self.count += n
-        self.avg = self.sum / self.count
+def focal_loss(pred, gt, weights=None, valid_mask=None):
+    """ Focal loss adapted from CornerNet: Detecting Objects as Paired Keypoints
+    pred  (batch x c x h x w)
+    gt    (batch x c x h x w)"""
+    eps = 1e-5
+    beta = 4
+    alpha = 2
+    pos_inds = gt.eq(1).float()
+    neg_inds = gt.lt(1).float()
+    pos_loss = torch.log(pred + eps) * torch.pow(1 - pred, alpha) * pos_inds
+    neg_loss = (torch.log(1 - pred + eps) * torch.pow(pred, alpha) * torch.pow(1 - gt, beta) * neg_inds)
+    if weights is not None:
+        pos_loss = pos_loss * weights
+    if valid_mask is not None:
+        pos_loss = pos_loss * valid_mask
+        neg_loss = neg_loss * valid_mask
+    pos_loss = pos_loss.sum()
+    neg_loss = neg_loss.sum()
+    num_pos = pos_inds.float().sum()
+    if num_pos == 0:
+        loss = -neg_loss
+    else:
+        loss = -(pos_loss + neg_loss) / num_pos
+    return loss
 
 def bbox_size_loss(pred_size, gt_size):
     """Bounding box size loss. Only compute loss where there is a bounding box."""
     gt_size_mask = (gt_size > 0).float()
     return torch.nn.functional.l1_loss(pred_size * gt_size_mask, gt_size, reduction="sum") / (gt_size_mask.sum() + 1e-5)
 
-def loss_fun(outputs, gt_det, gt_size, gt_class, det_criterion, class_inv_freq):
-    # detection loss
-    loss = c.DET_LOSS_WEIGHT * det_criterion(outputs.pred_det, gt_det)
-    # bounding box size loss   
-    loss += c.SIZE_LOSS_WEIGHT * bbox_size_loss(outputs.pred_size, gt_size)
-    # classification loss
+def loss_fun(outputs, gt_det, gt_size, gt_class, class_inv_freq):
+    detectionLoss = c.DET_LOSS_WEIGHT * focal_loss(outputs.pred_det, gt_det)  
+    boundingBoxSizeLoss = c.SIZE_LOSS_WEIGHT * bbox_size_loss(outputs.pred_size, gt_size)
     valid_mask = (gt_class[:, :-1, :, :].sum(1) > 0).float().unsqueeze(1)
     p_class = outputs.pred_class[:, :-1, :]
-    loss += c.CLASS_LOSS_WEIGHT * det_criterion(p_class, gt_class[:, :-1, :], valid_mask=valid_mask)
-    return loss
+    classLoss = c.CLASS_LOSS_WEIGHT * focal_loss(p_class, gt_class[:, :-1, :], valid_mask=valid_mask)
+    print(f"loss_fun {gt_class=} {class_inv_freq=} {gt_size=} {gt_det=} {detectionLoss=} {boundingBoxSizeLoss=} {classLoss=}")
+    return detectionLoss + boundingBoxSizeLoss + classLoss
 
-def train(model, epoch, data_loader, det_criterion, optimizer, scheduler, params):
+def train(model, epoch, data_loader, optimizer, scheduler, params):
     model.train()
-    train_loss = AverageMeter()
     class_inv_freq = torch.from_numpy(numpy.array(params["class_inv_freq"], dtype=numpy.float32)).to(params["device"])
     class_inv_freq = class_inv_freq.unsqueeze(0).unsqueeze(2).unsqueeze(2)
     print("\nEpoch", epoch)
+    sum = 0; 
+    count = 0
     for batch_idx, inputs in enumerate(data_loader):
         data = inputs["spec"].to(params["device"])
         gt_det = inputs["y_2d_det"].to(params["device"])
@@ -668,20 +592,21 @@ def train(model, epoch, data_loader, det_criterion, optimizer, scheduler, params
         gt_class = inputs["y_2d_classes"].to(params["device"])
         optimizer.zero_grad()
         outputs = model(data)
-        loss = loss_fun( outputs, gt_det, gt_size, gt_class, det_criterion, class_inv_freq)
-        train_loss.update(loss.item(), data.shape[0])
+        loss = loss_fun(outputs, gt_det, gt_size, gt_class, class_inv_freq)
+        sum += loss.item() * data.shape[0]
+        count += data.shape[0]
         loss.backward()
         optimizer.step()
         scheduler.step()
         if batch_idx % 50 == 0 and batch_idx != 0:
-            print("[{}/{}]\tLoss: {:.4f}".format(batch_idx * len(data), len(data_loader.dataset), train_loss.avg))
-    print("Train loss          : {:.4f}".format(train_loss.avg))
+            print("[{}/{}]\tLoss: {:.4f}".format(batch_idx * len(data), len(data_loader.dataset), sum / count))
+    print("Train loss          : {:.4f}".format(sum / count))
     res = {}
-    res["train_loss"] = float(train_loss.avg)
+    res["train_loss"] = float(sum / count)
     return res
 
 def main():
-    params = get_params(True)
+    params = get_params()
 
     if torch.cuda.is_available(): params["device"] = "cuda"
     else: params["device"] = "cpu"
@@ -689,14 +614,12 @@ def main():
     # setup arg parser and populate it with exiting parameters - will not work with lists
     parser = argparse.ArgumentParser()
     parser.add_argument("data_dir", type=str, help="Path to root of datasets")
-    parser.add_argument( "ann_dir", type=str, help="Path to extracted annotations")
     for key, val in params.items():
         parser.add_argument("--" + key, type=type(val), default=val)
     params = vars(parser.parse_args())
-   
-    (data_train, params["class_names"], class_inv_freq) = load_set_of_anns(params["ann_dir"], params["data_dir"])
+    (data_train, params["class_names"], class_inv_freq) = load_set_of_anns(params["data_dir"])
     params["class_inv_freq"] = class_inv_freq.tolist()
-
+    
     # train loader
     train_dataset = AudioLoader(data_train, params, is_train=True)
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=c.BATCH_SIZE, shuffle=True, num_workers=c.NUM_WORKERS, pin_memory=True,)
@@ -712,20 +635,19 @@ def main():
 
     optimizer = torch.optim.Adam(model.parameters(), lr=c.LR) 
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, c.NUM_EPOCHS * len(train_loader))
-    det_criterion = focal_loss
 
-    # save parameters to file
-    with open(params["experiment"] + "params.json", "w") as da:
+    # save parameters to file 
+    with open(os.path.join(params["data_dir"], "params.json"), "w") as da:
         json.dump(params, da, indent=2, sort_keys=True)
         
     # main train loop
     for epoch in range(0, c.NUM_EPOCHS + 1):
-        train_loss = train(model, epoch, train_loader, det_criterion, optimizer,  scheduler, params)
+        train_loss = train(model, epoch, train_loader, optimizer,  scheduler, params)
 
     # save trained model
     print("saving model to: " + params["model_file_name"])
     op_state = {"epoch": epoch + 1, "state_dict": model.state_dict(), "params": params}
-    torch.save(op_state, params["model_file_name"])
+    torch.save(op_state, os.path.join(params["data_dir"], params["model_file_name"]))
 
 if __name__ == "__main__":
     main()
