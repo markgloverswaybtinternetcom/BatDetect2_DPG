@@ -28,10 +28,9 @@ def load_model(model_path: str = c.DEFAULT_MODEL_PATH, load_weights: bool = True
     if not os.path.isfile(model_path):
         raise FileNotFoundError("Model file not found.")
     net_params = torch.load(model_path, map_location=device, weights_only=weights_only)
-
     params = net_params["params"]
     model: DetectionModel
-    model = Net2dFast.Net2dFast(params["num_filters"], num_classes=len(params["class_names"]), ip_height=params["ip_height"])
+    model = Net2dFast.Net2dFast(c.NUM_FILTERS, num_classes=len(params["class_names"]), ip_height=params["ip_height"])
 
     if load_weights:
         model.load_state_dict(net_params["state_dict"])
@@ -311,13 +310,11 @@ def convert_results(file_id: str, time_exp: float, duration: float, params: Resu
 ############## audio_utils ######################
 
 def load_audio(path: AudioPath, time_exp_fact: float, target_samp_rate: int) -> Tuple[int, numpy.ndarray ]:
-    print(f"load_audio {path=}")
+    #print(f"load_audio {path=}")
     audio_raw, file_sampling_rate = soundfile.read(path, dtype=numpy.float32)
     if len(audio_raw.shape) > 1:
         raise ValueError("Currently does not handle stereo files")
-        
     sampling_rate = file_sampling_rate * time_exp_fact
-
     # resample - need to do this after correcting for time expansion
     sampling_rate_old = sampling_rate
     sampling_rate = target_samp_rate
@@ -331,6 +328,7 @@ class Classifier():
         args = {'cnn_features': False, 'spec_features': False, 'quiet': False, 'save_preds_if_empty': False, 'model_path': c.DEFAULT_MODEL_PATH}
         code_dir = os.path.dirname(os.path.abspath(__file__))
         self.model, self.modelParams = load_model(os.path.join(code_dir, c.DEFAULT_MODEL_PATH)) 
+        #print(f"Classifier __init__ {self.modelParams=}")
         speciesNames = pandas.read_csv(os.path.join(code_dir, "Resources", "SpeciesNames.csv"))
         config = None
         configFile = os.path.join(code_dir, "gui_Config.json")
@@ -369,13 +367,6 @@ class Classifier():
         summary = ""
         if len(results) > 0:
             result_list = results["pred_dict"]["annotation"] # save csv file - if there are predictions
-            if "SRD0" in op_path:
-                # Smith Robotics Device Demeter has interference at Horseshoe frequency
-                Demeter_result_list = []
-                for call in result_list:
-                    if call['class'] != 'Rhinolophus ferrumequinum':
-                        Demeter_result_list.append(call)
-                result_list = Demeter_result_list
             results_df = pandas.DataFrame(result_list)
             results_df["file_name"] = results["pred_dict"]["id"] # add file name as a column
             results_df.index.name = "id" # rename index column   

@@ -23,7 +23,8 @@ class MainWindow():
         self.lastMousePos = self.LabelStartPlot = self.StatusLabel = self.AssignSpeciesID = self.AssignCallTypeID = None
         self.lastRow = self.FileTableRow = self.FilesDF = self.SoundProcess = self.soundLine = self.lastMousePlotPos = self.calls = None
         self.MultiFile = config["MultiFile"]
-        print(f"MainWindow ___init__ {torch.cuda.is_available()=}")       
+        if torch.cuda.is_available(): colorama.Fore.GREEN + "torch.cuda.is_available" + colorama.Fore.RESET
+        else: colorama.Fore.RED + "torch.cuda is not available" + colorama.Fore.RESET
 
         with dpg.window(label=TITLE.replace(" ", ""), width=-1, height=-1, pos=(0, 0), tag=TITLE.replace(" ", "")) as self.mainWindow:
             self.EditMode = config["EditMode"]; 
@@ -224,8 +225,8 @@ class MainWindow():
         yMax = dpg.get_y_scroll_max(self.FileTable)
         rowSize = yMax/len(self.FilesDF)
         print(f"ScrollToRow {y=} {yMax=} {row=} {len(self.FilesDF)} {rowSize=}")
-        if yMax > 0: pxl = (row) * rowSize
-        else: pxl = (row) * ROW_PXL
+        if yMax > 0: pxl = (row +1) * rowSize
+        else: pxl = (row +1) * ROW_PXL
         dpg.set_y_scroll(self.FileTable, pxl)
 
     def resize_handler(self, sender, app_data, user_data):
