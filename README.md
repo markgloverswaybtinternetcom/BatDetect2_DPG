@@ -12,6 +12,7 @@ It incorporates many of the features recommended for professional bat ecologists
    -   run 'Install.bat' in windows or 'install.sh' on Linux
    -   Windows: right click 'run.bat', select 'Properties',  tick 'Unblock' box and press 'OK'
    -   Linux: chmod u+x run.sh
+   -   GPU: see 'pytorch.org.get-started/locally' install command for PyTorch dependant on CUDA version and your Operating system.
  
  ![](Resources/web_Images/Unblock.png)
  
@@ -25,7 +26,7 @@ and  a desktop short cut is created.
 -   Drag the file onto 'Bat Detect GUI' window
    -   Or press 'Open Dir/File...'
        -   Add top level folders that contain bat recordings (these are remembered)
-       -   Select file (via single click) and press 'Load WAV / Dir in main'
+       -   Select file (via single click) and press 'Load WAV'
 ![](Resources/web_Images/FileDialogue.png)
 The wav file will be classified for bat echolocation call, this will be displayed as annotations on the spectrograph and are retained in the 'ann' subdirectory.
  
@@ -33,8 +34,8 @@ The wav file will be classified for bat echolocation call, this will be displaye
  
    *   Drag the directory onto 'Bat Detect GUI' window
    *   Or press 'Open Dir/File...'
-        *   Add top level folders that contain bat recordings (these are remembered and a Classify.bat file is created, see below)P
-        *    Press 'Select Dir' button at end of directory line and press 'Load WAV / Dir in main'.
+        *   Add top level folders that contain bat recordings (these are remembered and a Classify.bat file is created, see below)
+        *    Press 'Load all WAVs' button when in the directory .
     *   Or in Windows File Explorer drag directory into Classify.bat file. This is quicker as it does not need to display GUI. This file can be copied to be nearer the directory, This file is created in all added top level folders.
     *   Or in Linux terminal type ./classify.sh and drag the folder in to provide the path.
 
@@ -98,24 +99,22 @@ The new area will have its time expanded sound play automatically, this will sto
  ### BTO Pipeline Use
  
  #### Split long files for pipeline
-   *   Press 'Open Dir/File...', navigate to directory
-   *   Press 'Select Dir' button
+   *   Press 'Open Dir/File...', navigate into directory
    *   Press 'Split Long WAVs' button
  
 Any files longer than 5 seconds will be split into smaller files. The pipeline only says there is a species in a file, so it recommends short files of 5 seconds.
  
    #### Load results from pipeline
    *   copy results '.csv' from BTO pipeline email into directory processed
-   *   Press 'Open Dir/File...', navigate to directory
-   *   Press 'Select Dir' button
-   *   Press 'Load WAV / Dir in main' button
+   *   Press 'Open Dir/File...', navigate into directory
+   *   Press 'Load all WAVs' button
  
    The summary should be displayed in a similar way to BatDetect2, but there is no annotation available from the BTO.
 ### Mobile Echo Meter Touch Use
 
  *   Save one or more Echo Meter sessions in a separate directory (from Android Documents>EchoMeter>Recordings)
  *   Drag the directory onto 'Bat Detect GUI' window
- *   Go into the directory and press 'Load WAV / Dir in main'. 
+ *   Go into the directory and press 'Load all WAVs'. 
  A table of the all session contents will be displayed with an Echo Meter and a BatDetect2 classification per WAV file
  *   Check recording classification for most notable species in file, 'Assign species' to any incorrect
  *   Press 'Save Map' to generate HTML map of species locations with hyper-links to time expanded files 

@@ -120,7 +120,6 @@ class SpecDisplay():
                 # directory set by FileDialog in same order as displayed
                 self.dirIndex = nRow
                 self.dirFiles = dirList
-            print(f"LoadClassifiedFile rememberDir {nRow=} {self.dir=} {dir=} {dirList=} {self.dirIndex=} {self.dirFiles=}")
             titleExtra = f"file {self.dirIndex +1} of {len(self.dirFiles)}"
         self.dir = dir; self.file = file
         if self.classifyEnabled:            

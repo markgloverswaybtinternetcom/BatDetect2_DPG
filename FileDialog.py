@@ -32,6 +32,7 @@ class FileDialog():
         self.RoostDirs.extend(drives)
         
         self.history = []
+        self.displayFileActionButtons = self.displayDirActionButtons = False
         hwidth, hheight, _, hdata = dpg.load_image( "Resources/home.png")
         mfwidth, mfheight, _, mfdata = dpg.load_image("Resources/mini_folder.png")
         with dpg.texture_registry():
@@ -53,10 +54,11 @@ class FileDialog():
                     self.RoostAddDirInputText = dpg.add_input_text(hint="Directory full path")
                     self.RoostAddDirButton = dpg.add_button(label="Add Bat Recording Dir", callback=self.AddRoost_callback)
                     self.UpDirButton = dpg.add_button(arrow=True, direction=dpg.mvDir_Up,label="Up Dir", callback=self.UpDir_callback)
-                    self.loadFileButton = dpg.add_button(label="Load WAV / Dir in main", callback=self.LoadFileSelected_callback)
-                    self.loadCompareButton = dpg.add_button(label="Load WAV in comparison", callback=self.LoadFileComparison_callback)
+                    self.loadFileButton = dpg.add_button(label="Load WAV", show=False, callback=self.LoadFileSelected_callback)
+                    self.loadDirButton = dpg.add_button(label="Load all WAVs", show=False, callback=self.LoadDir_callback)
+                    self.loadCompareButton = dpg.add_button(label="Load comparison WAV", show=False, callback=self.LoadFileComparison_callback)
                     self.SplitLongWavs = dpg.add_button(label="Split Long WAVs", show=False, callback=self.SplitLongWavs_callback)
-                    self.WavMetadataButton = dpg.add_button(label="WAV Metadata in Console", callback=self.WavMetadata_callback)                               
+                    self.WavMetadataButton = dpg.add_button(label="WAV Metadata in Console", show=False, callback=self.WavMetadata_callback)                               
         with dpg.item_handler_registry(tag="file dialog resize handler"):
             dpg.add_item_resize_handler(callback=self.resize_handler)
         dpg.bind_item_handler_registry(self.window, "file dialog resize handler")
@@ -90,6 +92,7 @@ class FileDialog():
             with dpg.theme_component(dpg.mvThemeCat_Core):
                 dpg.add_theme_style(dpg.mvStyleVar_SelectableTextAlign, x=1, y=.5) 
         dpg.bind_item_theme(self.loadFileButton, greenButton_theme)
+        dpg.bind_item_theme(self.loadDirButton, greenButton_theme)
         dpg.bind_item_theme(self.loadCompareButton, gbButton_theme)
         dpg.bind_item_theme(self.RoostDirButton, navButton_theme)
         dpg.bind_item_theme(self.RoostAddDirButton, navButton_theme)
@@ -124,10 +127,7 @@ class FileDialog():
         dpg.configure_item(self.RoostAddDirButton, show=True)
         dpg.configure_item(self.RoostAddDirInputText, show=True)
         dpg.configure_item(self.UpDirButton, show=False)
-        dpg.configure_item(self.loadFileButton, show=False)
-        dpg.configure_item(self.loadCompareButton, show=False)
-        dpg.configure_item(self.WavMetadataButton, show=False)
-        
+        self.FileActionButtons(False)        
         self.IsRoostDir = True      
         self.DisplayFiles(self.RoostDirs)
         dpg.set_value(self.CurrentDirectoryText, "Home")
@@ -159,18 +159,26 @@ class FileDialog():
             dpg.configure_item(self.RoostDirButton, show=True)
             dpg.configure_item(self.RoostAddDirButton, show=False)
             dpg.configure_item(self.RoostAddDirInputText, show=False)
-            dpg.configure_item(self.UpDirButton, show=True)
-            dpg.configure_item(self.loadFileButton, show=True)
-            dpg.configure_item(self.loadCompareButton, show=True) 
-            dpg.configure_item(self.WavMetadataButton, show=True)
+            dpg.configure_item(self.UpDirButton, show=True)            
             self.IsRoostDir = False
         files = [os.path.join(dir, f) for f in os.listdir(dir) if f != "ann"]
         files.sort(key=os.path.getctime, reverse=True)
-        """for f in os.listdir(dir): 
-            if f != "ann": files.append(os.path.join(dir, f))"""
         self.DisplayFiles(files)
         dpg.set_value(self.CurrentDirectoryText, dir)
-        
+    
+    def DirActionButtons(self, display = True):
+        if self.displayDirActionButtons != display:
+            dpg.configure_item(self.loadDirButton, show=display)                 
+            dpg.configure_item(self.SplitLongWavs, show=display)
+            self.displayDirActionButtons = display
+            
+    def FileActionButtons(self, selected = True):
+        if self.displayFileActionButtons != selected:
+            dpg.configure_item(self.loadFileButton, show=selected)
+            dpg.configure_item(self.loadCompareButton, show=selected)                    
+            dpg.configure_item(self.WavMetadataButton, show=selected)
+            self.displayFileActionButtons = selected
+            
     def DisplayFiles(self, paths):
         """Displays a list sound files and directories as a selectable table including specialised sound file info"""        
         global LastRowSelected
@@ -178,6 +186,8 @@ class FileDialog():
         self.sorted = False # now replacing any sorting
         LastRowSelected = None
         nRow = 0
+        self.DirActionButtons(False)
+        self.FileActionButtons(False)
         for entry in paths:
             #print(f"DisplayFiles {entry=}")            
             if entry[-1] == "/": # linux dirs
@@ -195,10 +205,7 @@ class FileDialog():
                     dpg.add_selectable(label=name, parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
                 else:
                     dpg.add_selectable(label=name, parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
-                    if len(self.history) > 0: 
-                        selectDir = dpg.add_selectable(label="Select Dir", parent=tRow, callback=self.Dir_selected, user_data=[self.table, nRow, entry])
-                        dpg.bind_item_theme(selectDir, self.greenText_theme)
-                    else: dpg.add_selectable(label="", parent=tRow, callback=self.Dir_selected, user_data=[self.table, nRow, entry])
+                    dpg.add_selectable(label="", parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
                     dpg.add_selectable(label="", parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
                     creation_time = datetime.datetime.fromtimestamp(os.path.getmtime(entry))
                     dpg.add_selectable(label=creation_time.strftime("%d/%m/%Y %H:%M"), parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
@@ -207,9 +214,9 @@ class FileDialog():
                 tRow = dpg.add_table_row(parent=self.table)
                 dpg.add_selectable(label="", parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
                 file_selectable = dpg.add_selectable(label=name, parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
-                #print(f"DisplayFiles {name=} {nRow=}")
                 if entry.lower().endswith(".wav"):
                     duration, sample_rate = WavUtil.WavDetails(entry)
+                    self.DirActionButtons(True)
                 else:
                     audio = MP3(entry)
                     duration = audio.info.length
@@ -253,6 +260,7 @@ class FileDialog():
         else:
             self.selectedFile = filepath
             self.selectedDir = os.path.dirname(filepath)
+            self.FileActionButtons(True)
             if self.sorted:
                 # if sorted nRow is wrong, so must find filename
                 self.nRow = self.FindFileInTable(filepath)
@@ -273,33 +281,20 @@ class FileDialog():
             dpg.configure_item(self.window, show=False)
             if self.selectedFile is not None:
                 self.loadCallback(self.selectedFile, 1, self.nRow, self.GetDirList())
-            elif self.selectedDir is not None:
-                self.loadCallback(self.selectedDir, 1, None, None)
-            self.selectedDir = self.selectedFile = None
+            self.selectedFile = None
     
+    def LoadDir_callback(self):
+        if self.loadCallback is not None:
+            dpg.configure_item(self.window, show=False)
+            self.loadCallback(self.history[-1], 1, None, None)
+        
     def LoadFileComparison_callback(self):
         """Selected file goes to a second display for comparision"""
         if self.loadCallback is not None:
             dpg.configure_item(self.window, show=False)
             if self.selectedFile is not None:
                 self.loadCallback(self.selectedFile, 2, self.nRow, self.GetDirList())
-            self.selectedDir = self.selectedFile = None
-                
-    def Dir_selected(self, sender, app_data, user_data):
-        """Directory row button pressed to select it instead of the normal listing action"""
-        global LastRowSelected # fixes bug getting old value of self
-        table = user_data[0]; nRow = user_data[1]; filepath = user_data[2]
-        self.selectedDir = filepath
-        if LastRowSelected is not None: 
-            dpg.unhighlight_table_row(table, LastRowSelected)
-                
-        if self.sorted:
-            # if sorted nRow is wrong, so must find filename
-            nRow = self.FindFileInTable(filepath)
-        dpg.highlight_table_row(table, nRow, color=[0,100,0])
-        LastRowSelected = nRow
-        dpg.configure_item(self.SplitLongWavs, show=True)
-        print(f"Dir_selected {self.selectedDir=}")
+            self.selectedFile = None
     
     def UpDir_callback(self):
         """Go back to listing the previous directory"""
@@ -321,25 +316,20 @@ class FileDialog():
     
     def SplitLongWavs_callback(self):
         """Utility for BTO Pipeline online classifier, which wants short files as it only has file level granularity"""
-        global LastRowSelected # fixes bug getting old value of self
-        if self.selectedDir is not None:
-            for f in os.listdir(self.selectedDir):
-                f = os.path.join(self.selectedDir, f) 
-                if os.path.isfile(f) and (f.lower().endswith(".wav") or f.lower().endswith(".mp3")):
-                    sf = soundfile.SoundFile(f, 'r')
-                    sample_rate = sf.samplerate
-                    duration = sf.frames / sample_rate
-                    sf.close()
-                    if duration > MAX_SECS:
-                        nSamples = int(MAX_SECS * sample_rate)                    
-                        n=0
-                        for block in soundfile.blocks(f, blocksize=nSamples):
-                            soundfile.write(f"{f.split('.', 1)[0]}_{n}.wav", block, samplerate=sample_rate)
-                            n += 1
-                        os.remove(f)
-            if LastRowSelected is not None: 
-                dpg.unhighlight_table_row(table, LastRowSelected)
-                   
+        for f in os.listdir(self.history[-1]):
+            f = os.path.join(self.history[-1], f) 
+            if os.path.isfile(f) and (f.lower().endswith(".wav") or f.lower().endswith(".mp3")):
+                sf = soundfile.SoundFile(f, 'r')
+                sample_rate = sf.samplerate
+                duration = sf.frames / sample_rate
+                sf.close()
+                if duration > MAX_SECS:
+                    nSamples = int(MAX_SECS * sample_rate)                    
+                    n=0
+                    for block in soundfile.blocks(f, blocksize=nSamples):
+                        soundfile.write(f"{f.split('.', 1)[0]}_{n}.wav", block, samplerate=sample_rate)
+                        n += 1
+                    os.remove(f)                  
         
     def resize_handler(self, sender, app_data, user_data):
         """Handle user resizing the display"""

@@ -8,7 +8,7 @@
     <li>Or press ‘Open Dir/File…’</li>
     <ul>
         <li>Add top level folders that contain bat recordings (these are remembered)</li>
-        <li>Select file (via single click) and press ‘Load WAV / Dir in main’
+        <li>Select file (via single click) and press ‘Load WAV’
         The wav file will be classified for bat echolocation call, 
         <br/>this will be displayed as annotations on the spectrograph in the selected species language and are retained in the ‘ann’ subdirectory.</li>
     </ul>
@@ -21,7 +21,7 @@
     <li>Or press ‘Open Dir/File…’
     <ul>
         <li>Add top level folders that contain bat recordings (these are remembered and a Classify.bat file is created, see below)P</li>
-        <li>Press ‘Select Dir’ button at end of directory line and press ‘Load WAV / Dir in main’.</li>
+        <li>Press 'Load all WAVs' button when in the directory .</li>
     </ul>
     <li>Or in Windows File Explorer drag directory into 'Classify.bat' file. 
         <br/>This is quicker as it does not need to display GUI. The 'Classify.bat' file can be copied to be nearer the directory, and is created in all added top level folders.
@@ -96,17 +96,15 @@
 
 <h4>Split long files for pipeline</h4>
 <ul>
-    <li>Press 'Open Dir/File...', navigate to directory</li>
-    <li>Press 'Select Dir' button</li>
+    <li>Press 'Open Dir/File...', navigate into directory</li>
     <li>Press 'Load WAV / Dir in main' button</li>
     <p>Any files longer than 5 seconds will be split into smaller files. The pipeline only says there is a species in a file, so it recommends short files of 5 seconds.</p>
 </ul>
 
 <h4>Load results from pipeline</h4>
 <ul>
-    <li>Press 'Open Dir/File...', navigate to directory</li>
-    <li>Press 'Select Dir' button</li>
-    <li>Press 'Load WAV / Dir in main' button</li>
+    <li>Press 'Open Dir/File...', navigate into directory</li>
+    <li>Press 'Load all WAVs' button</li>
     <p>The summary should be displayed in a similar way to BatDetect2, but there is no annotation available from the BTO.</p>
 </ul>
 
@@ -114,8 +112,8 @@
 <ul>
     <li>Save one or more Echo Meter sessions in a separate directory (from Android Documents&gt;EchoMeter&gt;Recordings)</li>
     <li>Drag the directory onto ‘Bat Detect GUI’ window</li>
-    <li>Go into the directory and press ‘
-    Load WAV / Dir in main’. <br/>A table of the all session contents will be displayed with an Echo Meter and a BatDetect2 classification per WAV file</li>
+    <li>Go into the directory and press ‘Load all WAVs’. <br/>
+	A table of the all session contents will be displayed with an Echo Meter and a BatDetect2 classification per WAV file</li>
     <li>Check recording classification for most notable species in file, ‘Assign species’ to any incorrect</li>
     <li>Press ‘Save Map’ to generate HTML map of species locations with hyper-links to time expanded files</li>
 </ul>
