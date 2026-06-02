@@ -174,7 +174,6 @@ class SpecDisplay():
                 self.dirIndex = i; 
                 break
             i += 1
-        print(f"RememberDirectory {self.dirIndex=} {self.dirFiles=}")
     
     def ActiveDisplay_click(self):
         """User has requested this display is the active display for arrow keys etc"""

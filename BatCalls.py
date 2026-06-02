@@ -103,7 +103,7 @@ class BatCalls():
                 
     def toJSON(self, callsJsonPath):
         """"Save annotation information to a JSON file in format that the BatDetect2 uses for traiing models"""
-        print(f"CallNPtoJSON {callsJsonPath=}")
+        print(f"toJSON {callsJsonPath=}")
         annotationValues = []
         maxId = ""; maxIdProb = 0.0
         for call in self.CallsNP:
@@ -114,7 +114,6 @@ class BatCalls():
                 maxIdProb = idProb
                 maxId = id
         thisdict = {"annotated": True, "annotation": annotationValues, "class_name": maxId, "duration":  self.parent.duration, "id":  self.parent.file, "issued": False, "notes": "Automatically generated.", "time_exp": 1}
-        print(f"toJSON {thisdict=}")
         with open(callsJsonPath, "w", encoding="utf-8") as jsonfile:
             json.dump(thisdict, jsonfile, indent=2, sort_keys=True)
 
