@@ -1,6 +1,12 @@
 import dearpygui.dearpygui as dpg
 import numpy, json, csv
 
+class NumpyEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, (numpy.float32, numpy.float64)):
+            return float(obj)
+        return super().default(obj)
+
 class BatCalls(): 
     """Annotation information on bat call, uses numpy rather than pandas for speed"""
     
@@ -115,7 +121,7 @@ class BatCalls():
                 maxId = id
         thisdict = {"annotated": True, "annotation": annotationValues, "class_name": maxId, "duration":  self.parent.duration, "id":  self.parent.file, "issued": False, "notes": "Automatically generated.", "time_exp": 1}
         with open(callsJsonPath, "w", encoding="utf-8") as jsonfile:
-            json.dump(thisdict, jsonfile, indent=2, sort_keys=True)
+            json.dump(thisdict, jsonfile, indent=2, sort_keys=True, cls=NumpyEncoder)
 
     def toCSV(self, csvFilePath):
         """"Save annotation information to BatDetect2 classifier CSV file, after manual editing"""
