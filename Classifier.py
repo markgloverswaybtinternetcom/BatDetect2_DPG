@@ -371,7 +371,12 @@ class Classifier():
             results_df["file_name"] = results["pred_dict"]["id"] # add file name as a column
             results_df.index.name = "id" # rename index column   
             if "class_prob" in results_df.columns:  # create a csv file with predicted events
-                preds_df = results_df[["det_prob", "start_time",  "end_time", "high_freq", "low_freq", "class", "class_prob", "event"]]
+                if "-" in results_df.at[0, 'class']:
+                    results_df[['species', 'call_type']] = results_df['class'].str.split('-', expand=True)
+                    df = results_df[["det_prob", "start_time",  "end_time", "high_freq", "low_freq", "species", "class_prob", "call_type"]]
+                    preds_df = df[df["det_prob"] * df["class_prob"] > 0.3]
+                    preds_df.rename(columns={'species': 'class', 'call_type': 'event'}, inplace=True)
+                else: preds_df = results_df[["det_prob", "start_time",  "end_time", "high_freq", "low_freq", "class", "class_prob", "event"]]
                 preds_df.to_csv(op_path + ".csv", sep=",")
                 summary = self.GetDfSummary(preds_df)
                 #create file for training as well

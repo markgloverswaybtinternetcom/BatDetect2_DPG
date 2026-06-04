@@ -385,9 +385,9 @@ def bbox_size_loss(pred_size, gt_size):
 def loss_fun(outputs, gt_det, gt_size, gt_class, class_inv_freq):
     detectionLoss = c.DET_LOSS_WEIGHT * focal_loss(outputs.pred_det, gt_det)  
     boundingBoxSizeLoss = c.SIZE_LOSS_WEIGHT * bbox_size_loss(outputs.pred_size, gt_size)
-    print(f"loss_fun {gt_class[:, :-1, :, :]=}") ######### !!!!!!!!! ALL ZEROS !!!!!!!
+    #print(f"loss_fun {gt_class[:, :-1, :, :]=}") 
     valid_mask = (gt_class[:, :-1, :, :].sum(1) > 0).float().unsqueeze(1) ######### !!!!!!!!!!!!!!! ALL ZEROS !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    print(f"loss_fun {gt_class[:, :-1, :, :].sum(1)=})")
+    #print(f"loss_fun {gt_class[:, :-1, :, :].sum(1)=})")
     p_class = outputs.pred_class[:, :-1, :]
     classLoss = c.CLASS_LOSS_WEIGHT * focal_loss(p_class, gt_class[:, :-1, :], valid_mask=valid_mask)
     print(f"loss_fun Detection={detectionLoss.item():.3f}, Bounding Box={boundingBoxSizeLoss.item():.3f}, class={classLoss.item()}")
