@@ -312,8 +312,7 @@ def convert_results(file_id: str, time_exp: float, duration: float, params: Resu
 def load_audio(path: AudioPath, time_exp_fact: float, target_samp_rate: int) -> Tuple[int, numpy.ndarray ]:
     #print(f"load_audio {path=}")
     audio_raw, file_sampling_rate = soundfile.read(path, dtype=numpy.float32)
-    if len(audio_raw.shape) > 1:
-        raise ValueError("Currently does not handle stereo files")
+    if len(audio_raw.shape) > 1: audio_raw = audio_raw.mean(axis=1) # stereo to mono
     sampling_rate = file_sampling_rate * time_exp_fact
     # resample - need to do this after correcting for time expansion
     sampling_rate_old = sampling_rate
