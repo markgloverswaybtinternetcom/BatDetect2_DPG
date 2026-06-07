@@ -1,10 +1,28 @@
 import pandas, os, sys, torch, colorama, json, utils, time, soundfile, Net2dFast, librosa, librosa.core.spectrum, numpy
 from typing import Any, Union, Protocol, TypedDict
-import ClassifierConstants as c
 
+#### Constants ###
+MIN_PROB = 0.2
+NUM_FILTERS = 128
+TARGET_SAMPLERATE_HZ = 256000
+FFT_WIN_LENGTH_S = 512 / 256000.0
+FFT_OVERLAP = 0.75
+MAX_FREQ_HZ = 120000
+MIN_FREQ_HZ = 10000
+RESIZE_FACTOR = 0.5
+SPEC_DIVIDE_FACTOR = 32
+SPEC_HEIGHT = 256
+DETECTION_THRESHOLD = 0.5
+NMS_KERNEL_SIZE = 9
+NMS_TOP_K_PER_SEC = 200
+SPEC_SCALE = "pcen"
+DENOISE_SPEC_AVG = True
+MAX_SCALE_SPEC = False
+CHUNK_SIZE = 2.0
+DEFAULT_MODEL_PATH = "Net2DFast_UK_same.pth.tar"
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 ########## types ############
-
 class DetectionModel(Protocol):
     num_classes: int
     emb_dim: int
@@ -22,7 +40,7 @@ class RunResults(TypedDict):
 
 ################ detector_utils #############################
 
-def load_model(model_path: str = c.DEFAULT_MODEL_PATH, load_weights: bool = True, device: Optional[torch.device] = None, weights_only: bool = True) -> Tuple[DetectionModel, ModelParameters]:
+def load_model(model_path: str = DEFAULT_MODEL_PATH, load_weights: bool = True, device: Optional[torch.device] = None, weights_only: bool = True) -> Tuple[DetectionModel, ModelParameters]:
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if not os.path.isfile(model_path):
@@ -30,7 +48,7 @@ def load_model(model_path: str = c.DEFAULT_MODEL_PATH, load_weights: bool = True
     net_params = torch.load(model_path, map_location=device, weights_only=weights_only)
     params = net_params["params"]
     model: DetectionModel
-    model = Net2dFast.Net2dFast(c.NUM_FILTERS, num_classes=len(params["class_names"]), ip_height=params["ip_height"])
+    model = Net2dFast.Net2dFast(NUM_FILTERS, num_classes=len(params["class_names"]), ip_height=params["ip_height"])
 
     if load_weights:
         model.load_state_dict(net_params["state_dict"])
@@ -40,16 +58,16 @@ def load_model(model_path: str = c.DEFAULT_MODEL_PATH, load_weights: bool = True
     return model, params
     
 def x_coord_to_sample(x_pos: int) -> int:
-    n_fft = numpy.floor(c.FFT_WIN_LENGTH_S * c.TARGET_SAMPLERATE_HZ)
-    n_overlap = numpy.floor(c.FFT_OVERLAP * n_fft)
+    n_fft = numpy.floor(FFT_WIN_LENGTH_S * TARGET_SAMPLERATE_HZ)
+    n_overlap = numpy.floor(FFT_OVERLAP * n_fft)
     n_step = n_fft - n_overlap
-    x_pos = int(x_pos / c.RESIZE_FACTOR)
+    x_pos = int(x_pos / RESIZE_FACTOR)
     return int((x_pos * n_step) + n_overlap)
 
 ################ audio_utils #############################
 
-def pad_audio(audio: numpy.ndarray, samplerate: int = c.TARGET_SAMPLERATE_HZ, window_duration: float = c.FFT_WIN_LENGTH_S,
-    window_overlap: float = c.FFT_OVERLAP, resize_factor: float = c.RESIZE_FACTOR, divide_factor: int = c.SPEC_DIVIDE_FACTOR, fixed_width: Optional[int] = None):
+def pad_audio(audio: numpy.ndarray, samplerate: int = TARGET_SAMPLERATE_HZ, window_duration: float = FFT_WIN_LENGTH_S,
+    window_overlap: float = FFT_OVERLAP, resize_factor: float = RESIZE_FACTOR, divide_factor: int = SPEC_DIVIDE_FACTOR, fixed_width: Optional[int] = None):
     spec_width = compute_spectrogram_width(audio.shape[0])
 
     if fixed_width:
@@ -92,10 +110,10 @@ def gen_mag_spectrogram(x, fs, ms, overlap_perc):
 
 def generate_spectrogram(audio, sampling_rate, return_spec_for_viz=False, check_spec_size=True):
     # generate spectrogram
-    spec = gen_mag_spectrogram(audio, sampling_rate, c.FFT_WIN_LENGTH_S, c.FFT_OVERLAP)
+    spec = gen_mag_spectrogram(audio, sampling_rate, FFT_WIN_LENGTH_S, FFT_OVERLAP)
     # crop to min/max freq
-    max_freq = round(c.MAX_FREQ_HZ * c.FFT_WIN_LENGTH_S)
-    min_freq = round(c.MIN_FREQ_HZ * c.FFT_WIN_LENGTH_S)
+    max_freq = round(MAX_FREQ_HZ * FFT_WIN_LENGTH_S)
+    min_freq = round(MIN_FREQ_HZ * FFT_WIN_LENGTH_S)
     if spec.shape[0] < max_freq:
         freq_pad = max_freq - spec.shape[0]
         spec = numpy.vstack((numpy.zeros((freq_pad, spec.shape[1]), dtype=spec.dtype), spec))
@@ -105,23 +123,23 @@ def generate_spectrogram(audio, sampling_rate, return_spec_for_viz=False, check_
     spec.clip(min=0, out=spec)
 
     if return_spec_for_viz:
-        log_scaling = (2.0 * (1.0 / sampling_rate) * (1.0 / (numpy.abs(numpy.hanning(int(c.FFT_WIN_LENGTH_S * sampling_rate))) ** 2).sum()))
+        log_scaling = (2.0 * (1.0 / sampling_rate) * (1.0 / (numpy.abs(numpy.hanning(int(FFT_WIN_LENGTH_S * sampling_rate))) ** 2).sum()))
         spec_for_viz = numpy.log1p(log_scaling * spec_cropped).astype(numpy.float32)
     else:
         spec_for_viz = None
     return spec, spec_for_viz
 
 def compute_spectrogram_width(length: int) -> int:
-    n_fft = int(c.FFT_WIN_LENGTH_S * c.TARGET_SAMPLERATE_HZ)
-    n_overlap = int(c.FFT_OVERLAP * n_fft)
+    n_fft = int(FFT_WIN_LENGTH_S * TARGET_SAMPLERATE_HZ)
+    n_overlap = int(FFT_OVERLAP * n_fft)
     n_step = n_fft - n_overlap
     width = (length - n_overlap) // n_step
-    return int(width * c.RESIZE_FACTOR)
+    return int(width * RESIZE_FACTOR)
 
 def compute_spectrogram(audio: numpy.ndarray, sampling_rate: int, device: torch.device, return_np: bool = False) -> Tuple[float, torch.Tensor, Optional[numpy.ndarray]]:
     # pad audio so it is evenly divisible by downsampling factors
     duration = audio.shape[0] / float(sampling_rate)
-    audio = pad_audio(audio, sampling_rate, c.FFT_WIN_LENGTH_S, c.FFT_OVERLAP, c.RESIZE_FACTOR, c.SPEC_DIVIDE_FACTOR)
+    audio = pad_audio(audio, sampling_rate, FFT_WIN_LENGTH_S, FFT_OVERLAP, RESIZE_FACTOR, SPEC_DIVIDE_FACTOR)
     # generate spectrogram
     spec, _ = generate_spectrogram(audio, sampling_rate)
     # convert to pytorch
@@ -129,8 +147,8 @@ def compute_spectrogram(audio: numpy.ndarray, sampling_rate: int, device: torch.
     # add batch and channel dimensions
     spec = spec.unsqueeze(0).unsqueeze(0)
     # resize the spec
-    resize_factor = c.RESIZE_FACTOR
-    spec_op_shape = (int(c.SPEC_HEIGHT * resize_factor), int(spec.shape[-1] * resize_factor))
+    resize_factor = RESIZE_FACTOR
+    spec_op_shape = (int(SPEC_HEIGHT * resize_factor), int(spec.shape[-1] * resize_factor))
     spec = torch.nn.functional.interpolate(spec, size=spec_op_shape,  mode="bilinear", align_corners=False)
     if return_np: spec_np = spec[0, 0, :].cpu().data.numpy()
     else:  spec_np = None
@@ -167,10 +185,10 @@ def get_topk_scores(scores, K):
 
 def run_nms(outputs: ModelOutput, sampling_rate: numpy.ndarray) -> Tuple[List[PredictionResults], List[numpy.ndarray]]:
     pred_det, pred_size, pred_class, _, features = outputs
-    pred_det_nms = non_max_suppression(pred_det, c.NMS_KERNEL_SIZE)
-    freq_rescale = (c.MAX_FREQ_HZ - c.MIN_FREQ_HZ) / pred_det.shape[-2]
-    duration = x_coords_to_time(pred_det.shape[-1], int(sampling_rate[0].item()), c.FFT_WIN_LENGTH_S, c.FFT_OVERLAP)
-    top_k = int(duration * c.NMS_TOP_K_PER_SEC)
+    pred_det_nms = non_max_suppression(pred_det, NMS_KERNEL_SIZE)
+    freq_rescale = (MAX_FREQ_HZ - MIN_FREQ_HZ) / pred_det.shape[-2]
+    duration = x_coords_to_time(pred_det.shape[-1], int(sampling_rate[0].item()), FFT_WIN_LENGTH_S, FFT_OVERLAP)
+    top_k = int(duration * NMS_TOP_K_PER_SEC)
     scores, y_pos, x_pos = get_topk_scores(pred_det_nms, top_k)
     # loop over batch to save outputs
     preds: List[PredictionResults] = []
@@ -178,7 +196,7 @@ def run_nms(outputs: ModelOutput, sampling_rate: numpy.ndarray) -> Tuple[List[Pr
     for num_detection in range(pred_det_nms.shape[0]):
         # get valid indices
         inds_ord = torch.argsort(x_pos[num_detection, :])
-        valid_inds = (scores[num_detection, inds_ord] > c.DETECTION_THRESHOLD)
+        valid_inds = (scores[num_detection, inds_ord] > DETECTION_THRESHOLD)
         valid_inds = inds_ord[valid_inds]
 
         # create result dictionary
@@ -188,10 +206,10 @@ def run_nms(outputs: ModelOutput, sampling_rate: numpy.ndarray) -> Tuple[List[Pr
         pred["y_pos"] = y_pos[num_detection, valid_inds]
         pred["bb_width"] = pred_size[num_detection, 0, pred["y_pos"], pred["x_pos"]]
         pred["bb_height"] = pred_size[num_detection, 1, pred["y_pos"], pred["x_pos"]]
-        pred["start_times"] = x_coords_to_time(pred["x_pos"].float() / c.RESIZE_FACTOR, int(sampling_rate[num_detection].item()), c.FFT_WIN_LENGTH_S, c.FFT_OVERLAP)
-        pred["end_times"] = x_coords_to_time((pred["x_pos"].float() + pred["bb_width"]) / c.RESIZE_FACTOR,
-            int(sampling_rate[num_detection].item()), c.FFT_WIN_LENGTH_S, c.FFT_OVERLAP)
-        pred["low_freqs"] = (pred_size[num_detection].shape[1] - pred["y_pos"].float()) * freq_rescale + c.MIN_FREQ_HZ
+        pred["start_times"] = x_coords_to_time(pred["x_pos"].float() / RESIZE_FACTOR, int(sampling_rate[num_detection].item()), FFT_WIN_LENGTH_S, FFT_OVERLAP)
+        pred["end_times"] = x_coords_to_time((pred["x_pos"].float() + pred["bb_width"]) / RESIZE_FACTOR,
+            int(sampling_rate[num_detection].item()), FFT_WIN_LENGTH_S, FFT_OVERLAP)
+        pred["low_freqs"] = (pred_size[num_detection].shape[1] - pred["y_pos"].float()) * freq_rescale + MIN_FREQ_HZ
         pred["high_freqs"] = (pred["low_freqs"] + pred["bb_height"] * freq_rescale)
 
         # extract the per class votes
@@ -323,10 +341,12 @@ def load_audio(path: AudioPath, time_exp_fact: float, target_samp_rate: int) -> 
 
 class Classifier():
     """Uses BatDetect2 lower level code without modification any modifications are in this class"""
-    def __init__(self): 
-        args = {'cnn_features': False, 'spec_features': False, 'quiet': False, 'save_preds_if_empty': False, 'model_path': c.DEFAULT_MODEL_PATH}
+    def __init__(self, parentSelf=None):
+        if parentSelf is not None: self.Status = parentSelf.Status
+        else: self.Status = None
+        args = {'cnn_features': False, 'spec_features': False, 'quiet': False, 'save_preds_if_empty': False, 'model_path': DEFAULT_MODEL_PATH}
         code_dir = os.path.dirname(os.path.abspath(__file__))
-        self.model, self.modelParams = load_model(os.path.join(code_dir, c.DEFAULT_MODEL_PATH)) 
+        self.model, self.modelParams = load_model(os.path.join(code_dir, DEFAULT_MODEL_PATH)) 
         #print(f"Classifier __init__ {self.modelParams=}")
         speciesNames = pandas.read_csv(os.path.join(code_dir, "Resources", "SpeciesNames.csv"))
         config = None
@@ -344,7 +364,7 @@ class Classifier():
         summaryDict = {}
         for row in df.itertuples():
             id = row[6]; prob = float(row[1]) * float(row[7])
-            if prob > c.MIN_PROB:
+            if prob > MIN_PROB:
                 if id in summaryDict:
                     min = summaryDict[id][1]; max = summaryDict[id][2];
                     if prob < min: min = prob
@@ -389,18 +409,22 @@ class Classifier():
                 f.write("id,det_prob,start_time,end_time,high_freq,low_freq,class,class_prob\n")
         return summary
  
-    def process_file(self, audio_file: str, model: DetectionModel, device: torch.device =c.DEVICE) -> Union[RunResults, Any]:
+    def process_file(self, audio_file: str, model: DetectionModel, device: torch.device=DEVICE) -> Union[RunResults, Any]:
         """Replaces function of same name in BatDetect2"""
         predictions = []; spec_feats = []
-        info = soundfile.info(audio_file)
+        try:
+            info = soundfile.info(audio_file)
+        except Exception as e:
+            print(colorama.Back.RED + f"[ERROR] {e}" + colorama.Back.RESET)
+            raise
         file_samp_rate = info.samplerate
         filename = os.path.basename(os.path.splitext(audio_file)[0])
         if filename.endswith("TE"): timeExpFact = 10
         else: timeExpFact = 1
         orig_samp_rate = file_samp_rate * timeExpFact
-        sampling_rate, audio_full = load_audio(audio_file, time_exp_fact=timeExpFact,  target_samp_rate=c.TARGET_SAMPLERATE_HZ)
+        sampling_rate, audio_full = load_audio(audio_file, time_exp_fact=timeExpFact,  target_samp_rate=TARGET_SAMPLERATE_HZ)
         
-        for chunk_time, audio in iterate_over_chunks(audio_full, sampling_rate, c.CHUNK_SIZE):
+        for chunk_time, audio in iterate_over_chunks(audio_full, sampling_rate, CHUNK_SIZE):
             pred_nms, features, spec = _process_audio_array( audio, sampling_rate, model, self.modelParams, device)
             pred_nms["start_times"] += chunk_time
             pred_nms["end_times"] += chunk_time
