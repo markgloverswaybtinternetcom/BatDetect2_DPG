@@ -227,6 +227,11 @@ class SpecDisplay():
         dpg.configure_item(self.ScrollBar, max_value=self.duration - self.Range) 
         dpg.configure_item(self.ScrollBar, format=f"%.03f of {self.duration:.3f} secs")         
         dpg.set_item_label(self.ScrollBar, f" of {self.duration}") 
+        grabSize = self.sliderWidth * self.Range / self.duration
+        with dpg.theme() as slider_theme:
+            with dpg.theme_component(dpg.mvSliderFloat):
+                dpg.add_theme_style(dpg.mvStyleVar_GrabMinSize, grabSize, category=dpg.mvThemeCat_Core)
+        dpg.bind_item_theme(self.ScrollBar, slider_theme)        
         dpg.set_value(self.ScrollBar, self.minT) 
         
  

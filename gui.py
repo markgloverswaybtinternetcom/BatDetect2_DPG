@@ -155,7 +155,7 @@ class MainWindow():
             dpg.add_key_press_handler(key=dpg.mvKey_Right, callback=self.RightKey_pressed)          
 
         # Initialise display from last time closed down
-        self.classify = Classifier()
+        self.classify = Classifier(self)
         if sys.platform.startswith("win"): DragAndDrop.set_drop(self.FileDrop)
         self.SpecDisplay1.dir = config['dir']; self.SpecDisplay1.file = config['file']
         if len(config['echoMeterDir']) > 0:
@@ -292,7 +292,7 @@ class MainWindow():
         elif self.ActiveDisplay.dirIndex < len(self.ActiveDisplay.dirFiles) -1:
             self.ActiveDisplay.dirIndex += 1
             self.LoadClassifiedFile(self.ActiveDisplay.dirFiles[self.ActiveDisplay.dirIndex], self.ActiveDisplay)
-        else:
+        elif len(self.ActiveDisplay.dirFiles) > 0:
             self.ActiveDisplay.dirIndex = 0 # wrap arround
             self.LoadClassifiedFile(self.ActiveDisplay.dirFiles[self.ActiveDisplay.dirIndex], self.ActiveDisplay)
              
