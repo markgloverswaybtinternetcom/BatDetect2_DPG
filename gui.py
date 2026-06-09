@@ -23,8 +23,8 @@ class MainWindow():
         self.lastMousePos = self.LabelStartPlot = self.StatusLabel = self.AssignSpeciesID = self.AssignCallTypeID = None
         self.lastRow = self.FileTableRow = self.FilesDF = self.SoundProcess = self.soundLine = self.lastMousePlotPos = self.calls = None
         self.MultiFile = config["MultiFile"]
-        if torch.cuda.is_available(): colorama.Fore.GREEN + "torch.cuda.is_available" + colorama.Fore.RESET
-        else: colorama.Fore.RED + "torch.cuda is not available" + colorama.Fore.RESET
+        if torch.cuda.is_available(): print(colorama.Fore.GREEN + "torch.cuda.is_available" + colorama.Fore.RESET)
+        else: print(colorama.Fore.RED + "torch.cuda is not available" + colorama.Fore.RESET)
 
         with dpg.window(label=TITLE.replace(" ", ""), width=-1, height=-1, pos=(0, 0), tag=TITLE.replace(" ", "")) as self.mainWindow:
             self.EditMode = config["EditMode"]; 
