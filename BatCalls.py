@@ -25,7 +25,7 @@ class BatCalls():
             summaryDict = {}; arr = []
             i = 0;
             for row in csvLines: 
-                if i>0: # first line column titles
+                if i>0 and len(row) > 7: # first line column titles
                     species = row[6]
                     if species == "Barbastellus barbastellus": species = "Barbastella barbastellus" #batdetect2 latin error
                     id = self.LatinIdx[species]; p1 = float(row[1]); p2 = float(row[7])
@@ -86,8 +86,17 @@ class BatCalls():
             else:
                 exception = f"{len(calls)} calls - Too many to label"
         return bestSpecies, exception
+        
+    def SaveAnnotations(self, minT, maxT, csvFilePath, callsJsonPath, audioFilename):
+        """Saves annotation file for displayed calls"""
+        calls = self.CallsNP[numpy.where((self.CallsNP[:,1] > minT) & (self.CallsNP[:,2] < maxT) )]
+        calls[:, 1] -= minT
+        calls[:, 2] -= minT
+        self.toCSV(csvFilePath, calls=calls)
+        self.toJSON(callsJsonPath, calls=calls, audioFile=audioFilename)
 
     def TruncateCalls(self, maxT):
+        """Truncates annotations"""
         indices = numpy.where(self.CallsNP[:, 1] < maxT)[0]
         print(f"TruncateCalls {len(indices)=} {self.CallsNP.shape=}")
         self.CallsNP = self.CallsNP[indices]
@@ -107,28 +116,31 @@ class BatCalls():
                 else:
                     self.CallsNP = numpy.append(self.CallsNP, numpy.array([[ id, t1, t2, f1, f2, p1, p2, ct]], dtype=numpy.float32), axis=0)
                 
-    def toJSON(self, callsJsonPath):
+    def toJSON(self, callsJsonPath, calls=None, audioFile=None):
         """"Save annotation information to a JSON file in format that the BatDetect2 uses for traiing models"""
         print(f"toJSON {callsJsonPath=}")
         annotationValues = []
         maxId = ""; maxIdProb = 0.0
-        for call in self.CallsNP:
+        if calls is None: calls = self.CallsNP
+        if audioFile is None: audioFile = self.parent.file
+        for call in calls:
             id = self.SpeciesNames["Latin"][int(call[0])]; t1=f"{call[1]:.4f}"; t2=f"{call[2]:.4f}"; f1=f"{call[3]*1000:.0f}"
             f2=f"{call[4]*1000:.0f}"; p1 = f"{call[5]:.3f}"; idProb = call[6]; p2 = f"{idProb:.3f}"; ct = self.CallTypes[int(call[7])]
             annotationValues.append({'class': id, 'class_prob': p2, 'det_prob': p1, 'end_time': t2, 'event': ct, 'high_freq': f2, 'individual': '-1','low_freq': f1, 'start_time': t1})
             if idProb > maxIdProb: 
                 maxIdProb = idProb
                 maxId = id
-        thisdict = {"annotated": True, "annotation": annotationValues, "class_name": maxId, "duration":  self.parent.duration, "id":  self.parent.file, "issued": False, "notes": "Automatically generated.", "time_exp": 1}
+        thisdict = {"annotated": True, "annotation": annotationValues, "class_name": maxId, "duration":  self.parent.duration, "id": audioFile, "issued": False, "notes": "Automatically generated.", "time_exp": 1}
         with open(callsJsonPath, "w", encoding="utf-8") as jsonfile:
             json.dump(thisdict, jsonfile, indent=2, sort_keys=True, cls=NumpyEncoder)
 
-    def toCSV(self, csvFilePath):
+    def toCSV(self, csvFilePath, calls=None):
         """"Save annotation information to BatDetect2 classifier CSV file, after manual editing"""
         print(f"toCSV {csvFilePath=}")
         data = [['id','det_prob','start_time','end_time','high_freq','low_freq','class','class_prob','event']]
         n = 0
-        for call in self.CallsNP:
+        if calls is None: calls = self.CallsNP
+        for call in calls:
             s = self.SpeciesNames["Latin"][int(call[0])]; t1=f"{call[1]:.4f}"; t2=f"{call[2]:.4f}"; f1=f"{call[3]*1000:.0f}"
             f2=f"{call[4]*1000:.0f}"; p1 = f"{call[5]:.3f}"; p2 = f"{call[6]:.3f}"; ct = self.CallTypes[int(call[7])]
             data.append([n, p1, t1, t2, f2, f1, s, p2, ct])

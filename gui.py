@@ -45,7 +45,7 @@ class MainWindow():
                     width=95*config["scale"], callback=self.HighFilterListBox_changed)
                 self.SpeciesLanguageCombo = dpg.add_combo(label="Species Language", items=("Latin","LatinAbbrev", "English", "EnglishAbbrev", "None"),
                     width=115*config["scale"], default_value=self.SpeciesLanguage, callback=self.SpeciesLanguageCombo_changed)
-                self.EditCombo = dpg.add_combo(label="Edit", items=("None", "Source"), width=100*config["scale"], 
+                self.EditCombo = dpg.add_combo(label="Edit", items=("None", "Source", "Train"), width=100*config["scale"], 
                     default_value=self.EditMode, callback=self.EditModeListbox_changed)
                 self.AssignSpeciesCombo = dpg.add_combo(label="Assign Species", width=180 * config["scale"], callback=self.AssignSpeciesCombo_changed)
                 self.AssignCallTypeID = 0
@@ -106,7 +106,7 @@ class MainWindow():
                 dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, (0, 125, 0, 255), category=dpg.mvThemeCat_Core)
                 dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, (0, 150, 0, 255), category=dpg.mvThemeCat_Core)
                 dpg.add_theme_style(dpg.mvStyleVar_FrameRounding, 10, category=dpg.mvThemeCat_Core)
-        with dpg.theme() as magentaButton_theme:
+        with dpg.theme() as self.magentaButton_theme:
             with dpg.theme_component(dpg.mvAll):
                 dpg.add_theme_color(dpg.mvThemeCol_Button, (119, 0, 119, 255), category=dpg.mvThemeCat_Core)
                 dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, (139, 0, 139, 255), category=dpg.mvThemeCat_Core)
@@ -131,13 +131,13 @@ class MainWindow():
         # apply style to individual elements
         dpg.bind_item_theme(SelectFileButton, greenButton_theme)
         dpg.bind_item_theme(self.FileTable, table_theme)
-        dpg.bind_item_theme(self.saveMapButton, magentaButton_theme)
+        dpg.bind_item_theme(self.saveMapButton, self.magentaButton_theme)
         dpg.bind_item_theme(self.EditCombo, self.magentaText_theme)
         dpg.bind_item_theme(self.AssignSpeciesCombo, self.magentaText_theme)
         dpg.bind_item_theme(self.AssignCallTypeCombo, self.magentaText_theme)
         dpg.bind_item_theme(self.SpeciesLanguageCombo, orangeText_theme)
-        dpg.bind_item_theme(self.TruncateFileEnd, magentaButton_theme)
-        dpg.bind_item_theme(self.DeleteFile, magentaButton_theme)
+        dpg.bind_item_theme(self.TruncateFileEnd, self.magentaButton_theme)
+        dpg.bind_item_theme(self.DeleteFile, self.magentaButton_theme)
         
         # mouse and keyboard handlers
         with dpg.item_handler_registry(tag="main resize handler") as resize_handler:
@@ -459,7 +459,7 @@ class MainWindow():
                 labelMaxT = max(self.LabelStartPlot[0], plotPos[0])#sec
                 labelMaxF = max(self.LabelStartPlot[1], plotPos[1])#kHz
                 
-                if self.EditMode == "Source":
+                if self.EditMode == "Source" or self.EditMode == "Train":
                     # edit original file annotations
                     print("label_release_handler Source")
                     if self.AssignSpeciesID == -1:
@@ -715,12 +715,15 @@ class MainWindow():
         else:
             self.EditMode = app_data
             if self.EditMode == "None": showAssign = False
-            else: 
-                showAssign = True
+            else: showAssign = True
         dpg.configure_item(self.AssignSpeciesCombo, show=showAssign)
         dpg.configure_item(self.AssignCallTypeCombo, show=showAssign)
         dpg.configure_item(self.TruncateFileEnd, show=showAssign)
         dpg.configure_item(self.DeleteFile, show=showAssign)
+        if self.EditMode == "Train":
+            dpg.set_value(self.SpecDisplay1.PlaySpeedCombo, "1")        
+            dpg.bind_item_theme(self.SpecDisplay1.SaveSoundbutton, self.magentaButton_theme)
+
 
     def SpeciesLanguageCombo_changed(self, sender, app_data, user_data):
         """Alters language of species call annotation and combo boxes"""

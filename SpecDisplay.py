@@ -73,7 +73,7 @@ class SpecDisplay():
                 with dpg.group(horizontal=True, height=SCROLL_HT * config["scale"]):
                     PlaySoundbutton = dpg.add_button(label="Play Sound", callback=self.PlaySound)
                     self.PlaySpeedCombo = dpg.add_combo(label="Speed", items=("1", "1/2", "1/5", "1/10", "1/20"), width=66*config["scale"], default_value=f"1/10")
-                    saveSoundbutton = dpg.add_button(label="Save Sound",  callback=self.saveSound_click)
+                    self.SaveSoundbutton = dpg.add_button(label="Save Sound",  callback=self.saveSound_click)
                     self.showSpeciesCombo = dpg.add_combo(label="Find Species", show=False, width=180 * config["scale"], callback=self.ShowSpeciesCombo_changed)
                     self.ClassifyLabel = dpg.add_text(color= (0, 200, 0, 255))                
         # style for the GUI elements
@@ -103,7 +103,7 @@ class SpecDisplay():
             with dpg.theme_component(dpg.mvAll):
                 dpg.add_theme_color(dpg.mvThemeCol_SliderGrab, self.colours[255], category=dpg.mvThemeCat_Core)                
         dpg.bind_item_theme(PlaySoundbutton, lBlueButton_theme)
-        dpg.bind_item_theme(saveSoundbutton, lBlueButton_theme)
+        dpg.bind_item_theme(self.SaveSoundbutton, lBlueButton_theme)
         dpg.bind_item_theme(self.showSpeciesCombo, orangeText_theme) 
         dpg.bind_item_theme(self.MinSlider, minSlider_theme)
         dpg.bind_item_theme(self.MaxSlider, maxSlider_theme)
@@ -360,6 +360,10 @@ class SpecDisplay():
         x1 = (startPoint[0] - self.minT)/ timePerPixel; x2 = (endPoint[0] - self.minT)/ timePerPixel
         y1 = (startPoint[1] - self.minF)/ freqPerPixel; y2 = (endPoint[1] - self.minF)/ freqPerPixel
         minY = int(min(y1, y2)) -1; minX = int(min(x1, x2)) -1; maxY = int(max(y1, y2)) +1; maxX = int(max(x1, x2)) +1
+        if minY < 0: minY = 0; 
+        if maxY > npSpec.shape[0] -1: maxY = npSpec.shape[0] -1;
+        if minX < 0: minX = 0; 
+        if maxX > npSpec.shape[1] -1: maxX = npSpec.shape[1] -1;
         npSpec[minY:maxY, minX] = self.maxA; npSpec[minY:maxY, maxX] = self.maxA;npSpec[minY, minX:maxX] = self.maxA; npSpec[maxY, minX:maxX] = self.maxA
         values = numpy.flipud(npSpec).flatten().tolist()
         if self.heatSeries is not None: dpg.delete_item(self.heatSeries); self.heatSeries = None
@@ -501,11 +505,17 @@ class SpecDisplay():
             soundfile.write(filepath, loud, round(self.sample_rate / 10)) 
             self.Status(f"Time expanded audio saved as '{filepath}'") 
         else:
-            file,_ = os.path.splitext(self.file)
-            if self.species.endswith("?"): filepath = os.path.join(self.dir, file + f"_{round(self.minT*1000)}ms_unknown.wav")
-            else: filepath = os.path.join(self.dir, file + f"_{round(self.minT*1000)}ms_{self.species}.wav")
-            soundfile.write(filepath, self.Recording, self.sample_rate) 
-            self.Status(f"Normal speed audio saved as '{filepath}'") 
+            wholeFile,_ = os.path.splitext(self.file)
+            undashed = wholeFile.split('-')
+            if len(undashed) > 2: wholeFile = undashed[0] + "-" + undashed[1] # remove location and author
+            if self.species.endswith("?"): partFile = wholeFile + f"_{round(self.minT*1000)}ms_unknown.wav"
+            else: partFile = wholeFile + f"_{round(self.minT*1000)}ms_{self.species}.wav"
+            filepath = os.path.join(self.dir, partFile)
+            soundfile.write(filepath, self.Recording, self.sample_rate)
+            callsCsvPath = os.path.join(self.dir, "ann", f"{partFile}.csv")
+            callsJsonPath = os.path.join(self.dir, "ann", f"{partFile}.json")
+            self.calls.SaveAnnotations(self.minT, self.maxT, callsCsvPath, callsJsonPath, partFile)
+            self.Status(f"Normal speed audio saved as '{filepath}' with ann file") 
         
     def DownSample(self, arr, downscale_factor):
         """Downsamples sound as sample rate too high to play"""

@@ -2,19 +2,19 @@ import pandas, os, sys, torch, colorama, json, utils, time, soundfile, Net2dFast
 from typing import Any, Union, Protocol, TypedDict
 
 #### Constants ###
-MIN_PROB = 0.2
-NUM_FILTERS = 128
-TARGET_SAMPLERATE_HZ = 256000
-FFT_WIN_LENGTH_S = 512 / 256000.0
-FFT_OVERLAP = 0.75
+MIN_PROB = 0.2                      # No call probabilities below this
+NUM_FILTERS = 128                   # model input output size
+TARGET_SAMPLERATE_HZ = 256000       # resamples all audio so that it is at this rate
+FFT_WIN_LENGTH_S = 512 / 256000.0   # in milliseconds, amount of time per stft time step
+FFT_OVERLAP = 0.75                  # stft window overlap
 MAX_FREQ_HZ = 120000
 MIN_FREQ_HZ = 10000
-RESIZE_FACTOR = 0.5
-SPEC_DIVIDE_FACTOR = 32
-SPEC_HEIGHT = 256
-DETECTION_THRESHOLD = 0.5
-NMS_KERNEL_SIZE = 9
-NMS_TOP_K_PER_SEC = 200
+RESIZE_FACTOR = 0.5                 # resize so the spectrogram at the input of the network
+SPEC_DIVIDE_FACTOR = 32             # spectrogram should be divisible by this amount in width and height
+SPEC_HEIGHT = 256                   # units are number of frequency bins (before resizing is performed)
+DETECTION_THRESHOLD = 0.5           # the smaller this is the better the recall will be
+NMS_KERNEL_SIZE = 9                 # size of the kernel for non-max suppression
+NMS_TOP_K_PER_SEC = 200             # keep top K highest predictions per second of audio
 SPEC_SCALE = "pcen"
 DENOISE_SPEC_AVG = True
 MAX_SCALE_SPEC = False
