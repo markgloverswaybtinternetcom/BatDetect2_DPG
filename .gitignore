@@ -1,10 +1,7 @@
 # Python-generated files
 __pycache__/
 *.py[oc]
-build/
-dist/
-test/
-wheels/
+TrainingData/
 *.egg-info
 Resources/temp.wav
 README.md.backup
