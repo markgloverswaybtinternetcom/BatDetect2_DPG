@@ -95,22 +95,17 @@ def pad_audio(audio: numpy.ndarray, samplerate: int = TARGET_SAMPLERATE_HZ, wind
     diff = target_samples - audio.shape[0]
     return numpy.hstack((audio, numpy.zeros(diff, dtype=audio.dtype)))
 
-def gen_mag_spectrogram(x, fs, ms, overlap_perc):
+def generate_spectrogram(audio, sampling_rate):
     # Computes magnitude spectrogram by specifying time.
-    x = x.astype(numpy.float32)
-    nfft = int(ms * fs)
-    noverlap = int(overlap_perc * nfft)
+    audio = audio.astype(numpy.float32)
+    nfft = int(FFT_WIN_LENGTH_S * sampling_rate)
+    noverlap = int(FFT_OVERLAP * nfft)
     # window data
     step = nfft - noverlap
     # compute spec
-    spec, _ = librosa.core.spectrum._spectrogram(y=x, power=1, n_fft=nfft, hop_length=step, center=False)
+    spec, _ = librosa.core.spectrum._spectrogram(y=audio, power=1, n_fft=nfft, hop_length=step, center=False)
     # remove DC component and flip vertical orientation
-    spec = numpy.flipud(spec[1:, :])
-    return spec.astype(numpy.float32)
-
-def generate_spectrogram(audio, sampling_rate, return_spec_for_viz=False, check_spec_size=True):
-    # generate spectrogram
-    spec = gen_mag_spectrogram(audio, sampling_rate, FFT_WIN_LENGTH_S, FFT_OVERLAP)
+    spec = numpy.flipud(spec[1:, :]).astype(numpy.float32)
     # crop to min/max freq
     max_freq = round(MAX_FREQ_HZ * FFT_WIN_LENGTH_S)
     min_freq = round(MIN_FREQ_HZ * FFT_WIN_LENGTH_S)
@@ -118,16 +113,10 @@ def generate_spectrogram(audio, sampling_rate, return_spec_for_viz=False, check_
         freq_pad = max_freq - spec.shape[0]
         spec = numpy.vstack((numpy.zeros((freq_pad, spec.shape[1]), dtype=spec.dtype), spec))
     spec_cropped = spec[-max_freq : spec.shape[0] - min_freq, :]
-    spec = librosa.pcen(spec_cropped * (2**31), sr=sampling_rate / 10).astype(numpy.float32)
+    spec = librosa.pcen(spec_cropped * (2**31), sr=sampling_rate / 10).astype(numpy.float32) #Per-channel energy normalization
     spec = spec - numpy.mean(spec, 1)[:, numpy.newaxis]
-    spec.clip(min=0, out=spec)
-
-    if return_spec_for_viz:
-        log_scaling = (2.0 * (1.0 / sampling_rate) * (1.0 / (numpy.abs(numpy.hanning(int(FFT_WIN_LENGTH_S * sampling_rate))) ** 2).sum()))
-        spec_for_viz = numpy.log1p(log_scaling * spec_cropped).astype(numpy.float32)
-    else:
-        spec_for_viz = None
-    return spec, spec_for_viz
+    spec.clip(min=0, out=spec) # no values below mean where mean now equals zero
+    return spec
 
 def compute_spectrogram_width(length: int) -> int:
     n_fft = int(FFT_WIN_LENGTH_S * TARGET_SAMPLERATE_HZ)
@@ -141,7 +130,7 @@ def compute_spectrogram(audio: numpy.ndarray, sampling_rate: int, device: torch.
     duration = audio.shape[0] / float(sampling_rate)
     audio = pad_audio(audio, sampling_rate, FFT_WIN_LENGTH_S, FFT_OVERLAP, RESIZE_FACTOR, SPEC_DIVIDE_FACTOR)
     # generate spectrogram
-    spec, _ = generate_spectrogram(audio, sampling_rate)
+    spec = generate_spectrogram(audio, sampling_rate)
     # convert to pytorch
     spec = torch.from_numpy(spec).to(device)
     # add batch and channel dimensions
@@ -341,12 +330,13 @@ def load_audio(path: AudioPath, time_exp_fact: float, target_samp_rate: int) -> 
 
 class Classifier():
     """Uses BatDetect2 lower level code without modification any modifications are in this class"""
-    def __init__(self, parentSelf=None):
+    def __init__(self, parentSelf=None, model=DEFAULT_MODEL_PATH):
         if parentSelf is not None: self.Status = parentSelf.Status
         else: self.Status = None
-        args = {'cnn_features': False, 'spec_features': False, 'quiet': False, 'save_preds_if_empty': False, 'model_path': DEFAULT_MODEL_PATH}
+        if model != DEFAULT_MODEL_PATH: print(f"Classifier __init__ {model=}")
+        args = {'cnn_features': False, 'spec_features': False, 'quiet': False, 'save_preds_if_empty': False, 'model_path': model}
         code_dir = os.path.dirname(os.path.abspath(__file__))
-        self.model, self.modelParams = load_model(os.path.join(code_dir, DEFAULT_MODEL_PATH)) 
+        self.model, self.modelParams = load_model(os.path.join(code_dir, model)) 
         #print(f"Classifier __init__ {self.modelParams=}")
         speciesNames = pandas.read_csv(os.path.join(code_dir, "Resources", "SpeciesNames.csv"))
         config = None
