@@ -4,7 +4,7 @@ if sys.platform.startswith("win"):
     import DearPyGui_DragAndDrop as DragAndDrop
 import numpy, soundfile, sounddevice, time, warnings, json, wakepy, json, colorama, datetime
 import re, multiprocessing, ctypes, math, torchaudio, torch, torchaudio_filters, traceback, webbrowser, chime
-import pandas, polars
+import pandas, polars, argparse
 from screeninfo import get_monitors
 from SpecDisplay import SpecDisplay
 from FileDialog import FileDialog
@@ -19,6 +19,10 @@ TITLE = "Bat Detect GUI"
 class MainWindow(): 
     """Graphical user interface using DearPyGui"""    
     def __init__(self):
+        parser = argparse.ArgumentParser(description='Display and classify bat calls')
+        parser.add_argument('-model', '--model', type=str, help='Model to be used for classifying', default="Net2DFast_UK_same.pth.tar")
+        args = parser.parse_args()
+        self.model=args.model
         self.SpeciesNames = pandas.read_csv(os.path.join("Resources", "SpeciesNames.csv"))
         self.lastMousePos = self.LabelStartPlot = self.StatusLabel = self.AssignSpeciesID = self.AssignCallTypeID = None
         self.lastRow = self.FileTableRow = self.FilesDF = self.SoundProcess = self.soundLine = self.lastMousePlotPos = self.calls = None

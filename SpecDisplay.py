@@ -107,7 +107,7 @@ class SpecDisplay():
         dpg.bind_item_theme(self.showSpeciesCombo, orangeText_theme) 
         dpg.bind_item_theme(self.MinSlider, minSlider_theme)
         dpg.bind_item_theme(self.MaxSlider, maxSlider_theme)
-        self.classify = Classifier()
+        self.classify = Classifier(model=parentSelf.model)
 
     def LoadClassifiedFile(self, filepath, nRow=None, dirList=None, rememberDir=True, minT=None):
         titleExtra = ""
