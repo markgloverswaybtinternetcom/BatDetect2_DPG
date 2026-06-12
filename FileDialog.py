@@ -272,7 +272,8 @@ class FileDialog():
         dirList = []
         for row in dpg.get_item_children(self.table, 1):
             filenameCell = dpg.get_item_children(row, 1)[1]
-            dirList.append(os.path.join(self.selectedDir, dpg.get_item_label(filenameCell)))
+            if dpg.get_item_label(filenameCell).lower().endswith(".wav"):
+                dirList.append(os.path.join(self.selectedDir, dpg.get_item_label(filenameCell)))
         return dirList
             
     def LoadFileSelected_callback(self):
