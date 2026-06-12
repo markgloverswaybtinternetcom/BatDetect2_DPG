@@ -12,7 +12,7 @@ It incorporates many of the features recommended for professional bat ecologists
    -   run 'Install.bat' in windows or 'install.sh' on Linux
    -   Windows: right click 'run.bat', select 'Properties',  tick 'Unblock' box and press 'OK'
    -   Linux: chmod u+x run.sh
-   -   GPU: see 'pytorch.org.get-started/locally' install command for PyTorch dependant on CUDA version and your Operating system.
+   -   GPU: see 'pytorch.org.get-started/locally' install command for PyTorch dependant on CUDA version and your Operating system. It is not normally worth using a GPU except when training a model.
  
  ![](Resources/web_Images/Unblock.png)
  
@@ -158,6 +158,11 @@ Species of  'DELETE' will just delete an area of calls.
 The new classification will be retained in the 'ann' directory. 
 The end of recorded files is usually noise the 'Truncate File' will remove contents after the current displays. The 'Delete File' will remove the current file and display the next.' 
 
+#### To automatically delete files with no Classified calls
+* Edit 'Classify.bat'
+* add '--delete' option to the call to cli.py
+
+This is not normally done in Classify.bat
 
 #### Display of wav file metadata
 * Select file in 'Open Dir/File ...' dialogue. 
