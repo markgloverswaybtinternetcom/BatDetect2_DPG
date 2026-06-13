@@ -5,7 +5,7 @@ warnings.filterwarnings("ignore", category=UserWarning)
 torch.set_printoptions(threshold=torch.inf, linewidth=200, precision=3)
 numpy.set_printoptions(threshold=numpy.inf)
 
-DEBUG = False
+DEBUG = True
 DETECTION_OVERLAP = 0.01    # has to be within this number of ms to count as detection
 LEARNING_RATE = 0.001
 BATCH_SIZE = 8
@@ -13,13 +13,14 @@ NUM_WORKERS = 4
 NUM_EPOCHS = 400
 NUM_SAVE_EPOCHS = 50
 TRAIN_FILE_USED_SEC = 1         # standarised length in seconds
-TARGET_SIGMA = 2.0              # value used by gaussian_distribution 
+SPEC_TRAIN_WIDTH = 2560         # equivalent to 1 seoond,  units are number of time steps (before resizing is performed)
+TARGET_SIGMA = 2.0              #value used by draw_gaussian
 
 DET_LOSS_WEIGHT = 1.0 #0.001    # weight for the detection part of the loss
 SIZE_LOSS_WEIGHT = 0.1 #0.5     # weight for the bbox size loss
 CLASS_LOSS_WEIGHT  = 2.0 #10.0  # weight for the classification loss	
 
-AUGMENT = True
+AUGMENT = False
 AUG_PROB = 0.20
 ECHO_MAX_DELAY = 0.005          # simulate echo by adding copy of raw audio
 STRETCH_SQUEEZE_DELTA = 0.04    # stretch or squeeze spec
@@ -27,32 +28,32 @@ MASK_MAX_TIME_PERC = 0.05       # max mask size - here percentage, not ideal
 MASK_MAX_FREQ_PERC = 0.10       # max mask size - here percentage, not ideal
 SPEC_AMP_SCALING = 2.0 
 
-def summarize_array(name, value, debug=DEBUG):
-    if not debug: return
+def summarize_array(name, value):
+    if not DEBUG: return
     if numpy.isscalar(value):
         print(colorama.Style.BRIGHT + f"{name + colorama.Style.RESET_ALL}: {value}")
         return
     try:
         arr = numpy.asarray(value)  # Convert lists or other sequences to NumPy array
     except Exception as e:
-        print(colorama.Back.RED + f"{name}: Could not convert to NumPy array ({e})")
+        print(fcolorama.Back.RED + "{name}: Could not convert to NumPy array ({e})")
         return
     flat = arr.flatten()
     nan_count = numpy.isnan(flat).sum() if numpy.issubdtype(arr.dtype, numpy.floating) else 0
     print(colorama.Style.BRIGHT + f"{name + colorama.Style.RESET_ALL}: shape={arr.shape}, {arr.dtype}, min={numpy.min(flat):.3f}, max={numpy.max(flat):.3f} mean={numpy.mean(flat):.3f}, NANs={int(nan_count)}")
 
-def summarize(functionName, data, debug=DEBUG):
-    if not debug: return
+def summarize(functionName, data):
+    if not DEBUG: return
     if isinstance(data, numpy.ndarray) or hasattr(data, "__array__"):
         callers_locals = inspect.currentframe().f_back.f_locals
         # Find all variable names that reference the same object
-        names = [name for name, val in callers_locals.items() if val is data]
-        summarize_array(names[0], data, debug=debug)
+        names = [name for name, val in callers_locals.items() if val is var]
+        summarize_array(names[0], data)
     elif isinstance(data, dict):
-        print(functionName)
+        if DEBUG: print(functionName)
         for key, value in data.items():          
-            summarize_array(str(key), value, debug=debug) 
-    else: print(colorama.Back.RED + f"summarize: {functionName=}  Unsupported data type. {type(data)} Please provide a NumPy array or a dictionary of arrays." + colorama.Back.RESET)
+            summarize_array(str(key), value) 
+    else: print(colorama.Back.RED + "summarize: Unsupported data type. Please provide a NumPy array or a dictionary of arrays." + colorama.Back.RESET)
     
 def load_set_of_anns(wav_path):
     audioFiles = glob.glob(os.path.join(wav_path, "**", "*.wav"), recursive=True)
@@ -79,6 +80,14 @@ def load_set_of_anns(wav_path):
     for cc in range(len(class_names)):
         print(str(cc).ljust(5) + class_names[cc].ljust(str_len) + str(class_cnts[cc]))
     return anns, class_names.tolist(), class_inv_freq 
+
+def get_params():
+    params = {}
+    now_str = datetime.datetime.now().strftime("%Y_%m_%d__%H_%M_%S")
+    model_name = now_str + ".pth.tar"
+    params["model_file_name"] = model_name
+    params["class_names"] = []
+    return params
 
 #batdetect2.train.audio_dataloader AudioLoader
 def echo_aug(audio, sampling_rate):
@@ -109,7 +118,8 @@ def scale_vol_aug(spec):
 
 def warp_spec_aug(spec, ann):
     # Augment spectrogram by randomly stretch and squeezing
-    # NOTE this also changes the start and stop time in place not taking care of spec for viz
+    # NOTE this also changes the start and stop time in place
+    # not taking care of spec for viz
     if DEBUG: print(f"warp_spec_aug")
     op_size = (spec.shape[1], spec.shape[2])
     resize_fract_r = numpy.random.rand() * STRETCH_SQUEEZE_DELTA * 2 - STRETCH_SQUEEZE_DELTA + 1.0
@@ -121,91 +131,29 @@ def warp_spec_aug(spec, ann):
     ann["start_times"] *= 1.0 / resize_fract_r
     ann["end_times"] *= 1.0 / resize_fract_r
     return spec
-    
-def gaussian_heatmap(size, center, sigma):
-    """ Generate a 2D Gaussian heatmap.
-        size (tuple): (height, width) of the heatmap
-        center (tuple): (x, y) center of the Gaussian
-        sigma (float): standard deviation of the Gaussian
-    """
-    H, W = size
-    y = torch.arange(0, H, dtype=torch.float32).unsqueeze(1)
-    x = torch.arange(0, W, dtype=torch.float32).unsqueeze(0)
-    # Squared distance from the center
-    dist_sq = (x - center[0])**2 + (y - center[1])**2
-    # Gaussian formula
-    heatmap = torch.exp(-dist_sq / (2 * sigma**2))
-    return heatmap
 
-def generate_gaussian_heatmaps(centers, size, sigma):
-    """Generate batched Gaussian heatmaps for multiple keypoints.
-        centers (torch.Tensor): shape (B, K, 2) — keypoint centers (x, y)
-        size (tuple): (H, W) — heatmap height and width
-        sigma (float): standard deviation of the Gaussian
-    Returns: torch.Tensor: shape (B, K, H, W) — heatmaps """
-    B, K, _ = centers.shape
-    H, W = size
-    # Create coordinate grid (H, W)
-    y = torch.arange(H, dtype=torch.float32, device=centers.device).view(1, 1, H, 1)
-    x = torch.arange(W, dtype=torch.float32, device=centers.device).view(1, 1, 1, W)
-    # Expand centers to match grid shape
-    cx = centers[:, :, 0].view(B, K, 1, 1)
-    cy = centers[:, :, 1].view(B, K, 1, 1)
-    # Squared distance from each center
-    dist_sq = (x - cx) ** 2 + (y - cy) ** 2
-    # Apply Gaussian formula
-    heatmaps = torch.exp(-dist_sq / (2 * sigma ** 2))
-    return heatmaps
-
-def generate_normalized_gaussian_heatmaps(centers, size, sigma):
-    """ Generate normalized batched Gaussian heatmaps for multiple keypoints.
-        centers (torch.Tensor): shape (B, K, 2) — keypoint centers (x, y)
-        size (tuple): (H, W) — heatmap height and width
-        sigma (float): standard deviation of the Gaussian
-    Returns: torch.Tensor: shape (B, K, H, W) — normalized heatmaps"""
-    B, K, _ = centers.shape
-    H, W = size
-    # Create coordinate grid
-    y = torch.arange(H, dtype=torch.float32, device=centers.device).view(1, 1, H, 1)
-    x = torch.arange(W, dtype=torch.float32, device=centers.device).view(1, 1, 1, W)
-    # Expand centers
-    cx = centers[:, :, 0].view(B, K, 1, 1)
-    cy = centers[:, :, 1].view(B, K, 1, 1)
-    # Squared distance from each center
-    dist_sq = (x - cx) ** 2 + (y - cy) ** 2
-    # Gaussian formula (max value = 1 at center)
-    heatmaps = torch.exp(-dist_sq / (2 * sigma ** 2))
-    # Mask out keypoints outside the image
-    valid_mask = ((cx >= 0) & (cx < W) &(cy >= 0) & (cy < H)).float()
-    # Apply mask (broadcast to H, W)
-    heatmaps = heatmaps * valid_mask.view(B, K, 1, 1)
-    return heatmaps
-
-def gaussian_distribution(heatmap, center, sigmax, sigmay=None):
-    # center is (x, y) this edits the heatmap inplace 
-    """Used as Human-labeled keypoints are often slightly inaccurate ???"""
-    ###### sigma, heatmap same shape 128,1616 only center varies
+def draw_gaussian(heatmap, center, sigmax, sigmay=None):
+    # center is (x, y) this edits the heatmap inplace
     if sigmay is None:
-        sigmay = sigmax # standard deviation in gaussian distribution
-    tmp_size = numpy.maximum(sigmax, sigmay) * 3 # gaussian distribution radius
-    mu_x = int(center[0] + 0.5) # mean or expectation
+        sigmay = sigmax
+    tmp_size = numpy.maximum(sigmax, sigmay) * 3
+    mu_x = int(center[0] + 0.5)
     mu_y = int(center[1] + 0.5)
-    w, h = heatmap.shape[0], heatmap.shape[1] ##
-    ul = [int(mu_x - tmp_size), int(mu_y - tmp_size)] # lower
-    br = [int(mu_x + tmp_size + 1), int(mu_y + tmp_size + 1)] # upper
+    w, h = heatmap.shape[0], heatmap.shape[1]
+    ul = [int(mu_x - tmp_size), int(mu_y - tmp_size)]
+    br = [int(mu_x + tmp_size + 1), int(mu_y + tmp_size + 1)]
     if ul[0] >= h or ul[1] >= w or br[0] < 0 or br[1] < 0:
-        return False # distribution larger than heatmap size
-    size = 2 * tmp_size + 1 ##
-    x = numpy.arange(0, size, 1, numpy.float32) ##
-    y = x[:, numpy.newaxis] ##
-    x0 = y0 = size // 2 ##
+        return False
+    size = 2 * tmp_size + 1
+    x = numpy.arange(0, size, 1, numpy.float32)
+    y = x[:, numpy.newaxis]
+    x0 = y0 = size // 2
     g = numpy.exp(-((x - x0) ** 2) / (2 * sigmax**2) - ((y - y0) ** 2) / (2 * sigmay**2))
     g_x = max(0, -ul[0]), min(br[0], h) - ul[0]
     g_y = max(0, -ul[1]), min(br[1], w) - ul[1]
     img_x = max(0, ul[0]), min(br[0], h)
     img_y = max(0, ul[1]), min(br[1], w)
-    heatmap[img_y[0] : img_y[1], img_x[0] : img_x[1]] = numpy.maximum(heatmap[img_y[0] : img_y[1], img_x[0] : img_x[1]],  g[g_y[0] : g_y[1], g_x[0] : g_x[1]]) # no negative values
-    #print(f"gaussian_distribution {center=} {heatmap.shape=}")
+    heatmap[img_y[0] : img_y[1], img_x[0] : img_x[1]] = numpy.maximum(heatmap[img_y[0] : img_y[1], img_x[0] : img_x[1]],  g[g_y[0] : g_y[1], g_x[0] : g_x[1]])
     return True
     
 def time_to_x_coords(time_in_file: float, samplerate: float, window_duration: float, window_overlap: float) -> float:
@@ -214,11 +162,6 @@ def time_to_x_coords(time_in_file: float, samplerate: float, window_duration: fl
     return (time_in_file * samplerate - noverlap) / (nfft - noverlap)
 
 def target_heatmaps(spec_op_shape: Tuple[int, int], sampling_rate: int, ann: AnnotationGroup, class_names) -> Tuple[numpy.ndarray, numpy.ndarray, numpy.ndarray, AnnotationGroup]:
-    """RETURNS:
-    y_2d_det : np.ndarray 2D heatmap of the presence of an event.
-    y_2d_size : np.ndarray 2D heatmap of the size of the bounding box associated to event.
-    y_2d_classes : np.ndarray 3D array containing the ground-truth class probabilities for each pixel.
-    ann_aug : AnnotationGroup A dictionary containing the annotation information of the annotations that are within the input spectrogram, augmented with the x and y indices of their pixel location in the input spectrogram."""
     # spec may be resized on input into the network
     num_classes = len(class_names)
     op_height = spec_op_shape[0]
@@ -244,10 +187,16 @@ def target_heatmaps(spec_op_shape: Tuple[int, int], sampling_rate: int, ann: Ann
         "high_freqs": ann["high_freqs"][valid_inds],
         "low_freqs": ann["low_freqs"][valid_inds],
         "class_ids": ann["class_ids"][valid_inds],
+        "individual_ids": ann["individual_ids"][valid_inds],
     }
     ann_aug["x_inds"] = x_pos_start[valid_inds]
     ann_aug["y_inds"] = y_pos_low[valid_inds]
     before = len(ann["start_times"]); after = len(ann_aug["start_times"])
+    #if  before > after:
+    # if the number of calls is only 1, then it is unique
+    # TODO would be better if we found these unique calls at the merging stage
+    if len(ann_aug["individual_ids"]) == 1:
+        ann_aug["individual_ids"][0] = 0
     y_2d_det = numpy.zeros((1, op_height, op_width), dtype=numpy.float32)
     y_2d_size = numpy.zeros((2, op_height, op_width), dtype=numpy.float32)
     
@@ -255,17 +204,16 @@ def target_heatmaps(spec_op_shape: Tuple[int, int], sampling_rate: int, ann: Ann
     y_2d_classes: numpy.ndarray = numpy.zeros((num_classes + 1, op_height, op_width), dtype=numpy.float32)
     # create 2D ground truth heatmaps
     for ii in valid_inds:
-        center = ((x_pos_start[ii] + x_pos_end[ii])/2, (y_pos_low[ii] + y_pos_high)/2)
-        gaussian_distribution(y_2d_det[0, :], center, TARGET_SIGMA)
-        #gaussian_distribution(y_2d_det[0, :], (x_pos_start[ii], y_pos_low[ii]), TARGET_SIGMA)
+        draw_gaussian(y_2d_det[0, :], (x_pos_start[ii], y_pos_low[ii]), TARGET_SIGMA)
         y_2d_size[0, y_pos_low[ii], x_pos_start[ii]] = bb_widths[ii]
         y_2d_size[1, y_pos_low[ii], x_pos_start[ii]] = bb_heights[ii]
 
         cls_id = ann["class_ids"][ii]
+        if DEBUG: print(f"target_heatmaps ii={int(ii)} {cls_id=} {class_names[int(cls_id)]}")
         if cls_id > -1:
-            drawResult = gaussian_distribution(y_2d_classes[cls_id, :], (x_pos_start[ii], y_pos_low[ii]), TARGET_SIGMA)
+            drawResult = draw_gaussian(y_2d_classes[cls_id, :], (x_pos_start[ii], y_pos_low[ii]), TARGET_SIGMA)
             y_2d_classes_cls_id = y_2d_classes[cls_id, :]
-            summarize_array(f"target_heatmaps ii={int(ii)} {cls_id=} {class_names[cls_id]} {drawResult=}", y_2d_classes_cls_id)
+            summarize_array(f"target_heatmaps {drawResult=}", y_2d_classes_cls_id)
     # be careful as this will have a 1.0 places where we have event but dont know gt class this will be masked in training anyway
     y_2d_classes[num_classes, :] = 1.0 - y_2d_classes.sum(0)
     y_2d_classes = y_2d_classes / y_2d_classes.sum(0)[numpy.newaxis, ...]
@@ -293,12 +241,15 @@ def combine_audio_aug(audio, sampling_rate, ann, audio2, sampling_rate2, ann2):
         inds = numpy.argsort(numpy.hstack((ann["start_times"], ann2["start_times"])))
         for kk in ann.keys():
             # when combining calls from different files, assume they come from different individuals
-            if kk == "class_ids": # last item
+            if kk == "individual_ids":
                 if (ann[kk] > -1).sum() > 0:
                     ann2[kk][ann2[kk] > -1] += numpy.max(ann[kk][ann[kk] > -1]) + 1
             if (kk != "class_id_file") and (kk != "annotated"):
                 ann[kk] = numpy.hstack((ann[kk], ann2[kk]))[inds]
     return audio, ann
+
+"""def pad_array(ip_array, pad_size):
+    return numpy.hstack((ip_array, numpy.ones(pad_size, dtype=numpy.int32) * -1))"""
 
 def CompositeClass(species, call_type="Echolocation"):
     if species == "Barbastellus barbastellus": species = "Barbastella barbastellus" #error in BatDetect2 data
@@ -334,6 +285,7 @@ class AudioLoader(torch.utils.data.Dataset):
             dd["high_freqs"] = numpy.array([float(aa["high_freq"]) for aa in dd["annotation"]]).astype(numpy.float64)
             dd["low_freqs"] = numpy.array([float(aa["low_freq"]) for aa in dd["annotation"]]).astype(numpy.float64)
             dd["class_ids"] = numpy.array([aa["class_id"] for aa in dd["annotation"]]).astype(numpy.int32)
+            dd["individual_ids"] = numpy.array([aa["individual"] for aa in dd["annotation"]]).astype(numpy.int32)
             # file level class name
             if "class_name" in dd.keys(): # file level value, call one is 'class'
                 compositeClass = CompositeClass(dd["class_name"])
@@ -362,7 +314,7 @@ class AudioLoader(torch.utils.data.Dataset):
         ann = {}
         ann["annotated"] = self.data_anns[index]["annotated"]
         ann["class_id_file"] = self.data_anns[index]["class_id_file"]
-        keys = ["start_times", "end_times", "high_freqs", "low_freqs", "class_ids"]
+        keys = ["start_times", "end_times", "high_freqs", "low_freqs", "class_ids", "individual_ids"]
         for kk in keys:
             ann[kk] = self.data_anns[index][kk].copy()
         # if train then grab a random crop
@@ -385,7 +337,7 @@ class AudioLoader(torch.utils.data.Dataset):
         for kk in ann.keys():
             if (kk != "class_id_file") and (kk != "annotated"):
                 ann[kk] = ann[kk][inds]
-        #summarize("get_file_and_anns " + os.path.basename(audio_file), ann)
+        summarize("get_file_and_anns " + os.path.basename(audio_file), ann)
         return audio_raw, sampling_rate, duration, ann
     
     def __getitem__(self, index):
@@ -406,7 +358,7 @@ class AudioLoader(torch.utils.data.Dataset):
             spec_op_shape = (int(Classifier.SPEC_HEIGHT * Classifier.RESIZE_FACTOR), int(spec.shape[1] * Classifier.RESIZE_FACTOR))
             # resize the spec
             spec = torch.from_numpy(spec).unsqueeze(0).unsqueeze(0)
-            spec = torch.nn.functional.interpolate(spec, size=spec_op_shape, mode="bilinear", align_corners=False).squeeze(0) # downsamples by RESIZE_FACTOR
+            spec = torch.nn.functional.interpolate(spec, size=spec_op_shape, mode="bilinear", align_corners=False).squeeze(0)
             # augment spectrogram
             if AUGMENT:
                 if numpy.random.random() < AUG_PROB: spec = scale_vol_aug(spec)
@@ -418,11 +370,10 @@ class AudioLoader(torch.utils.data.Dataset):
             # create ground truth heatmaps
             (outputs["y_2d_det"],  outputs["y_2d_size"], outputs["y_2d_classes"], ann_aug) = target_heatmaps(spec_op_shape, sampling_rate, ann, self.params["class_names"])
             # hack to get around requirement that all vectors are the same length in the output batch
-            summarize("__getitem__", ann_aug)
-            pad_size = self.max_num_anns - len(ann_aug["class_id"])
-            outputs["is_valid"] = numpy.hstack((numpy.ones(len(ann_aug["class_id"])), numpy.ones(pad_size, dtype=numpy.int32) * -1))
-            #outputs["is_valid"] = pad_array(numpy.ones(len(ann_aug["class_id"])), pad_size)
-            keys = ["class_ids", "class_id", "x_inds", "y_inds", "start_times",  "end_times", "low_freqs", "high_freqs"]
+            pad_size = self.max_num_anns - len(ann_aug["individual_ids"])
+            outputs["is_valid"] = numpy.hstack((numpy.ones(len(ann_aug["individual_ids"])), numpy.ones(pad_size, dtype=numpy.int32) * -1))
+            #outputs["is_valid"] = pad_array(numpy.ones(len(ann_aug["individual_ids"])), pad_size)
+            keys = ["class_ids", "individual_ids", "x_inds", "y_inds", "start_times",  "end_times", "low_freqs", "high_freqs"]
             for kk in keys:
                 outputs[kk] = numpy.hstack((ann_aug[kk], numpy.ones(pad_size, dtype=numpy.int32) * -1))
                 #outputs[kk] = pad_array(ann_aug[kk], pad_size)
@@ -444,23 +395,18 @@ class AudioLoader(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.data_anns)
 
-def focal_loss(pred, target, weights=None, valid_mask=None, debug=DEBUG):
+def focal_loss(pred, gt, weights=None, valid_mask=None):
     """ Focal loss adapted from CornerNet: Detecting Objects as Paired Keypoints
     pred  (batch x c x h x w)
     gt    (batch x c x h x w)"""
-    if debug:
-        pred_copy = pred.clone().detach().numpy() # pred has requires grad
-        summarize("focal_loss pred", pred_copy, debug=debug)
-        summarize("focal_loss target", target, debug=debug)
-        summarize("focal_loss valid_mask", valid_mask, debug=debug)
-        #### summarize: functionName='focal_loss valid_mask'  Unsupported data type. Please provide a NumPy array or a dictionary of arrays.
+    if DEBUG: print(f"focal_loss {pred.shape=} {gt.shape=}")
     eps = 1e-5
     beta = 4
     alpha = 2 # Balances the importance of positive and negative samples.
-    pos_inds = target.eq(1).float()
-    neg_inds = target.lt(1).float()
+    pos_inds = gt.eq(1).float()
+    neg_inds = gt.lt(1).float()
     pos_loss = torch.log(pred + eps) * torch.pow(1 - pred, alpha) * pos_inds
-    neg_loss = (torch.log(1 - pred + eps) * torch.pow(pred, alpha) * torch.pow(1 - target, beta) * neg_inds)
+    neg_loss = (torch.log(1 - pred + eps) * torch.pow(pred, alpha) * torch.pow(1 - gt, beta) * neg_inds)
     if weights is not None:
         pos_loss = pos_loss * weights
     if valid_mask is not None:
@@ -483,15 +429,16 @@ def bbox_size_loss(pred_size, target_size):
 def loss_fun(outputs, target_det, target_size, target_class, class_inv_freq):
     detectionLoss = DET_LOSS_WEIGHT * focal_loss(outputs.pred_det, target_det)  
     boundingBoxSizeLoss = SIZE_LOSS_WEIGHT * bbox_size_loss(outputs.pred_size, target_size)
-    #summarize_array("loss_fun", target_class) 
+    summarize_array("loss_fun", target_class) 
     valid_mask = (target_class[:, :-1, :, :].sum(1) > 0).float().unsqueeze(1) 
-    #summarize_array("loss_fun", valid_mask)
+    summarize_array("loss_fun", valid_mask)
     p_class = outputs.pred_class[:, :-1, :]
-    classLoss = CLASS_LOSS_WEIGHT * focal_loss(p_class, target_class[:, :-1, :], valid_mask=valid_mask, debug=False)
+    classLoss = CLASS_LOSS_WEIGHT * focal_loss(p_class, target_class[:, :-1, :], valid_mask=valid_mask)
     return detectionLoss, boundingBoxSizeLoss, classLoss
 
 def train(model, epoch, data_loader, optimizer, scheduler, params):
     model.train()
+    
     class_inv_freq = torch.from_numpy(numpy.array(params["class_inv_freq"], dtype=numpy.float32)).to(params["device"])
     class_inv_freq = class_inv_freq.unsqueeze(0).unsqueeze(2).unsqueeze(2)
     det_loss_sum = size_loss_sum = class_loss_sum = 0; 
@@ -513,7 +460,6 @@ def train(model, epoch, data_loader, optimizer, scheduler, params):
             scheduler.step()
         except Exception as e:
             print(colorama.Back.BLUE + f"[WARNING] Skipping batch {batch_idx}: {e}" + colorama.Back.RESET)
-            traceback.print_exc()
             continue
     det_loss_avg = det_loss_sum / count; size_loss_avg = size_loss_sum / count; class_loss_avg = class_loss_sum / count
     train_loss = det_loss_avg + size_loss_avg + class_loss_avg
@@ -523,8 +469,7 @@ def train(model, epoch, data_loader, optimizer, scheduler, params):
     return res
 
 def main():
-    params = {}
-    params["class_names"] = []
+    params = get_params()
     if torch.cuda.is_available(): params["device"] = "cuda"
     else: params["device"] = "cpu"
 
@@ -559,12 +504,11 @@ def main():
         # main train loop
         for epoch in range(0, NUM_EPOCHS + 1):
             train_loss = train(model, epoch, train_loader, optimizer,  scheduler, params)
-            if epoch % NUM_SAVE_EPOCHS == 0:
+            if epoch > 0 and epoch % NUM_SAVE_EPOCHS == 0:
                 # save trained model
-                model_file_name = f"E{epoch}_{datetime.datetime.now().strftime("%Y_%m_%d__%H_%M_%S")}.pth.tar"
-                print(f"saving model to: {model_file_name}")
+                print(f"saving model to: E{epoch}_NO_AUG_{params["model_file_name"]}")
                 op_state = {"epoch": epoch + 1, "state_dict": model.state_dict(), "params": params}
-                torch.save(op_state, os.path.join(params["data_dir"], model_file_name ))
+                torch.save(op_state, os.path.join(params["data_dir"], f"E{epoch}_NO_AUG_{params["model_file_name"]}" ))
 
 if __name__ == "__main__":
     main()
