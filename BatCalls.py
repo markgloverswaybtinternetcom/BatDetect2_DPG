@@ -89,6 +89,7 @@ class BatCalls():
         
     def SaveAnnotations(self, minT, maxT, csvFilePath, callsJsonPath, audioFilename):
         """Saves annotation file for displayed calls"""
+        if len(self.CallsNP) == 0: return
         calls = self.CallsNP[numpy.where((self.CallsNP[:,1] > minT) & (self.CallsNP[:,2] < maxT) )]
         calls[:, 1] -= minT
         calls[:, 2] -= minT
