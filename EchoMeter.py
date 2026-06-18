@@ -15,7 +15,7 @@ class EchoMeter():
 
     def LoadEchoMeterDir(self, echoMeterPath):
         self.echoMeterPath = echoMeterPath
-        self.classify = Classifier()
+        self.classify = Classifier(self)
         self.TE_DirPath = os.path.join(self.echoMeterPath, "TimeExpanded")
         gpsBatFilePath = os.path.join(self.echoMeterPath, "GpsBatCallFiles.csv")
         if os.path.exists(gpsBatFilePath):

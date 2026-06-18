@@ -353,7 +353,10 @@ class Classifier():
         """Creates file species summary info"""
         summaryDict = {}
         for row in df.itertuples():
-            id = row[6]; prob = float(row[1]) * float(row[7])
+            cls = row[6]; callType = row[8]; prob = float(row[1]) * float(row[7])
+            #print(f"GetDfSummary {cls=} {callType=} {prob=}")
+            if callType == "Echolocation": id = cls
+            else: id = cls + '-' + callType
             if prob > MIN_PROB:
                 if id in summaryDict:
                     min = summaryDict[id][1]; max = summaryDict[id][2];
@@ -364,10 +367,13 @@ class Classifier():
                     summaryDict[id] = [1, prob, prob]
         summary = ""
         for id, val in summaryDict.items():
-            if id == "Barbastellus barbastellus": id = "Barbastella barbastellus" #batdetect2 latin error
-            if self.latinToLangDict is None: species = id
-            else: species = self.latinToLangDict[id]
-            if val[0] == 1: summary += f"{species} 1 call {val[1]:.0%}, "
+            ids = id.split('-')
+            if len(ids) > 1: latinSpecies = ids[0]; callType = '-' + ids[1]
+            else: latinSpecies = ids[0]; callType = ""
+            if latinSpecies == "Barbastellus barbastellus": latinSpecies = "Barbastella barbastellus" #batdetect2 latin error
+            if self.latinToLangDict is None: species = latinSpecies
+            else: species = self.latinToLangDict[latinSpecies]
+            if val[0] == 1: summary += f"{species}{callType} 1 call {val[1]:.0%}, "
             else: summary += f"{species} {val[0]} calls {val[2]:.0%}-{val[1]:.0%}, "
         return summary
         
