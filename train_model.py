@@ -1,27 +1,28 @@
-import argparse, json, warnings, numpy, torch, datetime, os, glob, copy, torchaudio, librosa, traceback, colorama, inspect, wakepy
+import argparse, json, warnings, numpy, torch, datetime, os, glob, copy
+import torchaudio, librosa, traceback, colorama, inspect, wakepy, random, math
 import Net2dFast, Classifier
 
 warnings.filterwarnings("ignore", category=UserWarning)
 torch.set_printoptions(threshold=torch.inf, linewidth=200, precision=3)
 numpy.set_printoptions(threshold=numpy.inf)
 
-DEBUG = True
-DETECTION_OVERLAP = 0.01    # has to be within this number of ms to count as detection
+DEBUG = False
+DETECTION_OVERLAP = 0.01  # has to be within this number of ms to count as detection
 LEARNING_RATE = 0.001
 BATCH_SIZE = 8
 NUM_WORKERS = 4
-NUM_EPOCHS = 400
+NUM_EPOCHS = 500
 NUM_SAVE_EPOCHS = 50
-TRAIN_FILE_USED_SEC = 1         # standarised length in seconds
-SPEC_TRAIN_WIDTH = 2560         # equivalent to 1 seoond,  units are number of time steps (before resizing is performed)
-TARGET_SIGMA = 2.0              #value used by draw_gaussian
+TRAIN_FILE_USED_SEC = 1   # standarised length in seconds
+SPEC_TRAIN_WIDTH = 2560   # equivalent to 1 seoond,  units are number of time steps (before resizing is performed)
+TARGET_SIGMA = 2.0        #value used by draw_gaussian
 
-DET_LOSS_WEIGHT = 1.0 #0.001    # weight for the detection part of the loss
-SIZE_LOSS_WEIGHT = 0.1 #0.5     # weight for the bbox size loss
-CLASS_LOSS_WEIGHT  = 2.0 #10.0  # weight for the classification loss	
+DET_LOSS_WEIGHT = 1.0     # weight for the detection part of the loss
+SIZE_LOSS_WEIGHT = 0.1    # weight for the bbox size loss
+CLASS_LOSS_WEIGHT  = 2.0  # weight for the classification loss	
 
-AUGMENT = False
-AUG_PROB = 0.20
+AUGMENT = True
+AUG_PROB = 0.15
 ECHO_MAX_DELAY = 0.005          # simulate echo by adding copy of raw audio
 STRETCH_SQUEEZE_DELTA = 0.04    # stretch or squeeze spec
 MASK_MAX_TIME_PERC = 0.05       # max mask size - here percentage, not ideal
@@ -59,6 +60,7 @@ def load_set_of_anns(wav_path):
     audioFiles = glob.glob(os.path.join(wav_path, "**", "*.wav"), recursive=True)
     anns = []
     for path in audioFiles:
+        #if "Noise" in path: continue
         jsonFilepath = os.path.join(os.path.dirname(path), "ann", os.path.basename(path) + ".json")
         try:
             with open(jsonFilepath) as da:
@@ -80,12 +82,9 @@ def load_set_of_anns(wav_path):
     for cc in range(len(class_names)):
         print(str(cc).ljust(5) + class_names[cc].ljust(str_len) + str(class_cnts[cc]))
     return anns, class_names.tolist(), class_inv_freq 
-
+    
 def get_params():
     params = {}
-    now_str = datetime.datetime.now().strftime("%Y_%m_%d__%H_%M_%S")
-    model_name = now_str + ".pth.tar"
-    params["model_file_name"] = model_name
     params["class_names"] = []
     return params
 
@@ -118,8 +117,7 @@ def scale_vol_aug(spec):
 
 def warp_spec_aug(spec, ann):
     # Augment spectrogram by randomly stretch and squeezing
-    # NOTE this also changes the start and stop time in place
-    # not taking care of spec for viz
+    # NOTE this also changes the start and stop time in place not taking care of spec for viz
     if DEBUG: print(f"warp_spec_aug")
     op_size = (spec.shape[1], spec.shape[2])
     resize_fract_r = numpy.random.rand() * STRETCH_SQUEEZE_DELTA * 2 - STRETCH_SQUEEZE_DELTA + 1.0
@@ -131,9 +129,81 @@ def warp_spec_aug(spec, ann):
     ann["start_times"] *= 1.0 / resize_fract_r
     ann["end_times"] *= 1.0 / resize_fract_r
     return spec
+    
+def random_bandpass_filter(spec, low_factor=0.5, high_factor=0.5):
+    """spec: torch.Tensor (freq x time) or (batch x freq x time)"""
+    F = spec.shape[-2]
+    low = random.uniform(0, low_factor)
+    high = random.uniform(1 - high_factor, 1)
+    freqs = torch.linspace(0, 1, F, device=spec.device)
+    center = (low + high) / 2
+    width = (high - low) / 4
+    response = torch.exp(-((freqs - center) ** 2) / (2 * width ** 2))
+    # Expand for batch if needed
+    if spec.dim() == 3:
+        response = response.unsqueeze(0)
+    return spec * response.unsqueeze(-1)    
 
+def random_time_shift(spec, max_shift_frames=20):
+    """S: torch.Tensor (freq x time) or (batch x freq x time)"""
+    shift = random.randint(-max_shift_frames, max_shift_frames)
+    if shift == 0:
+        return spec
+    if shift > 0:
+        pad = (shift, 0)
+        spec_pad = torch.nn.functional.pad(spec, pad, mode='constant', value=0)
+        return spec_pad[..., :-shift]
+    else:
+        pad = (0, -shift)
+        spec_pad = torch.nn.functional.pad(spec, pad, mode='constant', value=0)
+        return spec_pad[..., -shift:]
+
+def dynamic_scale_factor(w):
+
+    radius = int(base_radius * scale)
+    sigma = max(1.0, radius / 3.0)
+    sigma = min(sigma, 12.0)
+    return sigma
+        
+def gaussian_sigma_from_box(h, w, min_overlap=0.7, scale=1.5,  max_radius=80,  max_sigma=12.0):
+    """ Computes a CornerNet-style Gaussian radius from bounding box size,
+    applies scaling for large calls, converts to sigma, and caps it.
+    Returns sigma for draw_gaussian(). """
+    # --- CornerNet radius calculation ---
+    if w < 80: scale = 1.5
+    elif w < 200: scale = 2.0
+    elif w < 400: scale = 3.0
+    else: scale = 4.0
+    a1 = 1
+    b1 = (h + w)
+    c1 = w * h * (1 - min_overlap) / (1 + min_overlap)
+    sq1 = math.sqrt(max(0, b1 ** 2 - 4 * a1 * c1))
+    r1 = (b1 + sq1) / 2
+    a2 = 4
+    b2 = 2 * (h + w)
+    c2 = (1 - min_overlap) * w * h
+    sq2 = math.sqrt(max(0, b2 ** 2 - 4 * a2 * c2))
+    r2 = (b2 + sq2) / 2
+    a3 = 4 * min_overlap
+    b3 = -2 * min_overlap * (h + w)
+    c3 = (min_overlap - 1) * w * h
+    sq3 = math.sqrt(max(0, b3 ** 2 - 4 * a3 * c3))
+    r3 = (b3 + sq3) / 2
+    base_radius = min(r1, r2, r3)
+    # --- Scale for large calls (social calls, feeding buzzes) ---
+    radius = int(base_radius * scale)
+    radius = min(radius, max_radius)
+    # --- Convert radius → sigma ---
+    sigma = radius / 3.0
+    # --- Cap sigma to avoid flattening ---
+    sigma = max(1.0, min(sigma, max_sigma))
+    return sigma
+    
 def draw_gaussian(heatmap, center, sigmax, sigmay=None):
-    # center is (x, y) this edits the heatmap inplace
+    """CornerNet is a novel approach to object detection that detects objects as pairs of corners top-left and bottom-right) using a single convolutional neural network.
+    It eliminates the need for predefined anchor boxes, which simplifies the detection process.
+    The network predicts heatmaps for these corners, and focal loss is used to optimize the prediction of these heatmaps. 
+    CornerNet achieves high accuracy by associating detected corners with similar embeddings, enhancing the detection of objects in images"""
     if sigmay is None:
         sigmay = sigmax
     tmp_size = numpy.maximum(sigmax, sigmay) * 3
@@ -204,16 +274,24 @@ def target_heatmaps(spec_op_shape: Tuple[int, int], sampling_rate: int, ann: Ann
     y_2d_classes: numpy.ndarray = numpy.zeros((num_classes + 1, op_height, op_width), dtype=numpy.float32)
     # create 2D ground truth heatmaps
     for ii in valid_inds:
-        draw_gaussian(y_2d_det[0, :], (x_pos_start[ii], y_pos_low[ii]), TARGET_SIGMA)
+        heatmap = y_2d_det[0, :]
+        w, h = heatmap.shape[0], heatmap.shape[1]
+        #radius = gaussian_radius_fixed(h, w)
+        #sigma = max(1.0, radius / 3.0)
+        sigma = gaussian_sigma_from_box(h, w)
+        draw_gaussian(y_2d_det[0, :], (x_pos_start[ii], y_pos_low[ii]), sigma)
+        #draw_gaussian(y_2d_det[0, :], (x_pos_start[ii], y_pos_low[ii]), TARGET_SIGMA)
         y_2d_size[0, y_pos_low[ii], x_pos_start[ii]] = bb_widths[ii]
         y_2d_size[1, y_pos_low[ii], x_pos_start[ii]] = bb_heights[ii]
-
         cls_id = ann["class_ids"][ii]
         if DEBUG: print(f"target_heatmaps ii={int(ii)} {cls_id=} {class_names[int(cls_id)]}")
         if cls_id > -1:
-            drawResult = draw_gaussian(y_2d_classes[cls_id, :], (x_pos_start[ii], y_pos_low[ii]), TARGET_SIGMA)
+            heatmap = y_2d_classes[cls_id, :]
+            w, h = heatmap.shape[0], heatmap.shape[1]
+            sigma = gaussian_sigma_from_box(h, w)
+            draw_gaussian(y_2d_classes[cls_id, :], (x_pos_start[ii], y_pos_low[ii]), sigma)
+            #drawResult = draw_gaussian(y_2d_classes[cls_id, :], (x_pos_start[ii], y_pos_low[ii]), TARGET_SIGMA)
             y_2d_classes_cls_id = y_2d_classes[cls_id, :]
-            summarize_array(f"target_heatmaps {drawResult=}", y_2d_classes_cls_id)
     # be careful as this will have a 1.0 places where we have event but dont know gt class this will be masked in training anyway
     y_2d_classes[num_classes, :] = 1.0 - y_2d_classes.sum(0)
     y_2d_classes = y_2d_classes / y_2d_classes.sum(0)[numpy.newaxis, ...]
@@ -248,9 +326,6 @@ def combine_audio_aug(audio, sampling_rate, ann, audio2, sampling_rate2, ann2):
                 ann[kk] = numpy.hstack((ann[kk], ann2[kk]))[inds]
     return audio, ann
 
-"""def pad_array(ip_array, pad_size):
-    return numpy.hstack((ip_array, numpy.ones(pad_size, dtype=numpy.int32) * -1))"""
-
 def CompositeClass(species, call_type="Echolocation"):
     if species == "Barbastellus barbastellus": species = "Barbastella barbastellus" #error in BatDetect2 data
     return species + "-" + call_type
@@ -276,7 +351,7 @@ class AudioLoader(torch.utils.data.Dataset):
                 if compositeClass in self.params["class_names"]:
                     aa["class_id"] = self.params["class_names"].index(compositeClass)
                 else:
-                    print(colorama.Back.RED + f"AudioLoader __init__ class {compositeClass} NOT FOUND" + colorama.Back.RESET)
+                    print(colorama.Back.RED + f"AudioLoader __init__ class {compositeClass} NOT FOUND for {dd["file_path"]}" + colorama.Back.RESET)
                     aa["class_id"] = -1
                 filtered_annotations.append(aa)
             dd["annotation"] = filtered_annotations
@@ -292,7 +367,7 @@ class AudioLoader(torch.utils.data.Dataset):
                 if compositeClass in self.params["class_names"]:
                     dd["class_id_file"] = self.params["class_names"].index(compositeClass)
                 else: 
-                    print(colorama.Back.RED + f"AudioLoader __init__ class_name {compositeClass} NOT FOUND" + colorama.Back.RESET)
+                    print(colorama.Back.RED + f"AudioLoader __init__ class_name {compositeClass} NOT FOUND for {dd["file_path"]}" + colorama.Back.RESET)
                     dd["class_id_file"] = -1
             self.data_anns.append(dd)
             self.audio_file.append(dd["file_path"])
@@ -362,9 +437,11 @@ class AudioLoader(torch.utils.data.Dataset):
             # augment spectrogram
             if AUGMENT:
                 if numpy.random.random() < AUG_PROB: spec = scale_vol_aug(spec)
-                if numpy.random.random() < AUG_PROB: spec = warp_spec_aug(spec, ann)
+                #if numpy.random.random() < AUG_PROB: spec = warp_spec_aug(spec, ann) # causes horseshoe bat problems
                 if numpy.random.random() < AUG_PROB: spec = mask_time_aug(spec)
-                if numpy.random.random() < AUG_PROB: spec = mask_freq_aug(spec)
+                #if numpy.random.random() < AUG_PROB: spec = mask_freq_aug(spec) # causes horseshoe bat problems
+                if numpy.random.random() < AUG_PROB: spec = random_bandpass_filter(spec)
+                if numpy.random.random() < AUG_PROB: spec = random_time_shift(spec)
             outputs = {}
             outputs["spec"] = spec
             # create ground truth heatmaps
@@ -372,11 +449,9 @@ class AudioLoader(torch.utils.data.Dataset):
             # hack to get around requirement that all vectors are the same length in the output batch
             pad_size = self.max_num_anns - len(ann_aug["individual_ids"])
             outputs["is_valid"] = numpy.hstack((numpy.ones(len(ann_aug["individual_ids"])), numpy.ones(pad_size, dtype=numpy.int32) * -1))
-            #outputs["is_valid"] = pad_array(numpy.ones(len(ann_aug["individual_ids"])), pad_size)
             keys = ["class_ids", "individual_ids", "x_inds", "y_inds", "start_times",  "end_times", "low_freqs", "high_freqs"]
             for kk in keys:
                 outputs[kk] = numpy.hstack((ann_aug[kk], numpy.ones(pad_size, dtype=numpy.int32) * -1))
-                #outputs[kk] = pad_array(ann_aug[kk], pad_size)
             # convert to pytorch
             for kk in outputs.keys():
                 if type(outputs[kk]) != torch.Tensor:
@@ -395,7 +470,32 @@ class AudioLoader(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.data_anns)
 
-def focal_loss(pred, gt, weights=None, valid_mask=None):
+def focal_loss_per_class(p_class, target_class, valid_mask, gamma=2.0, eps=1e-5):
+    """ p_class:        (B, C, A, T)  focal loss per element
+    target_class: (B, C, A, T)  one-hot targets
+    valid_mask:   (B, 1, A, T)  mask of valid positions
+    returns:      (C,)          one scalar loss per class """
+    p = torch.clamp(p_class, eps, 1 - eps)
+    ce = -target_class * torch.log(p)
+    focal = (1 - p) ** gamma * ce          # (B, C, A, T)
+    focal = focal * valid_mask             # mask invalid
+    # total positives (or normaliser)
+    num_pos = (target_class * valid_mask).sum() + eps
+    # original scalar loss (what you see as ~10.496)
+    loss_scalar = focal.sum() / num_pos
+    
+    # sum over batch, anchors, time → keep class
+    per_class_sum = focal.sum(dim=(0, 2, 3))          # (C,)
+    # count positives per class
+    class_counts = (target_class * valid_mask).sum(dim=(0, 2, 3)) + eps  # (C,)
+    # per-class *average* loss
+    per_class_avg = per_class_sum / class_counts      # (C,)
+
+    per_class_contrib = per_class_sum / num_pos
+    print(f"focal_loss_per_class {loss_scalar.item()=} {per_class_avg=} {per_class_contrib=} {per_class_contrib.sum()=}")
+    return
+
+def focal_loss(pred, gt, valid_mask=None, IsClass=False):
     """ Focal loss adapted from CornerNet: Detecting Objects as Paired Keypoints
     pred  (batch x c x h x w)
     gt    (batch x c x h x w)"""
@@ -407,18 +507,29 @@ def focal_loss(pred, gt, weights=None, valid_mask=None):
     neg_inds = gt.lt(1).float()
     pos_loss = torch.log(pred + eps) * torch.pow(1 - pred, alpha) * pos_inds
     neg_loss = (torch.log(1 - pred + eps) * torch.pow(pred, alpha) * torch.pow(1 - gt, beta) * neg_inds)
-    if weights is not None:
-        pos_loss = pos_loss * weights
     if valid_mask is not None:
         pos_loss = pos_loss * valid_mask
         neg_loss = neg_loss * valid_mask
-    pos_loss = pos_loss.sum()
-    neg_loss = neg_loss.sum()
+    pos_loss_sum = pos_loss.sum()
+    neg_loss_sum = neg_loss.sum()
     num_pos = pos_inds.float().sum()
     if num_pos == 0:
-        loss = -neg_loss
+        loss = -neg_loss_sum
     else:
-        loss = -(pos_loss + neg_loss) / num_pos
+        loss = -(pos_loss_sum + neg_loss_sum) / num_pos
+    if IsClass:
+        per_class_pos_sum = pos_loss.float().sum(dim=(0, 2, 3))
+        per_class_neg_sum = neg_loss.float().sum(dim=(0, 2, 3))
+        #num_pos = pos_inds.float().sum(dim=(0, 2, 3)) #####
+        class_counts = (gt * valid_mask).sum(dim=(0, 2, 3)) + eps
+        if num_pos == 0:
+            ##### Boolean value of Tensor with more than one value is ambiguous #####
+            per_class_loss = -per_class_neg_sum
+        else:
+            per_class_loss = -(per_class_pos_sum + per_class_neg_sum) / num_pos
+        #print(f"focal_loss loss={loss.item()} num_pos={num_pos.item()} per_class_loss.sum={per_class_loss.sum().item()}")
+        #return loss, per_class_loss
+        return per_class_loss
     return loss
 
 def bbox_size_loss(pred_size, target_size):
@@ -433,15 +544,21 @@ def loss_fun(outputs, target_det, target_size, target_class, class_inv_freq):
     valid_mask = (target_class[:, :-1, :, :].sum(1) > 0).float().unsqueeze(1) 
     summarize_array("loss_fun", valid_mask)
     p_class = outputs.pred_class[:, :-1, :]
-    classLoss = CLASS_LOSS_WEIGHT * focal_loss(p_class, target_class[:, :-1, :], valid_mask=valid_mask)
-    return detectionLoss, boundingBoxSizeLoss, classLoss
+    per_class_loss = focal_loss(p_class, target_class[:, :-1, :], valid_mask=valid_mask, IsClass=True)
+    #class_loss, per_class_loss = focal_loss(p_class, target_class[:, :-1, :], valid_mask=valid_mask, IsClass=True)
+    #class_loss = CLASS_LOSS_WEIGHT * class_loss; 
+    per_class_loss = per_class_loss * CLASS_LOSS_WEIGHT
+    return detectionLoss, boundingBoxSizeLoss, per_class_loss
+    #return detectionLoss, boundingBoxSizeLoss, class_loss, per_class_loss
 
 def train(model, epoch, data_loader, optimizer, scheduler, params):
     model.train()
     
     class_inv_freq = torch.from_numpy(numpy.array(params["class_inv_freq"], dtype=numpy.float32)).to(params["device"])
     class_inv_freq = class_inv_freq.unsqueeze(0).unsqueeze(2).unsqueeze(2)
-    det_loss_sum = size_loss_sum = class_loss_sum = 0; 
+    det_loss_sum = size_loss_sum = 0; 
+    #class_loss_sum = 0
+    per_class_loss_sum = torch.zeros(len(params["class_names"])).to(params["device"])
     count = 0
     for batch_idx, inputs in enumerate(data_loader):
         try:
@@ -451,22 +568,35 @@ def train(model, epoch, data_loader, optimizer, scheduler, params):
             target_class = inputs["y_2d_classes"].to(params["device"])
             optimizer.zero_grad()
             outputs = model(data)
-            det_loss, size_loss, class_loss = loss_fun(outputs, target_det, target_size, target_class, class_inv_freq)
-            det_loss_sum += det_loss.item() * data.shape[0]; size_loss_sum += size_loss.item() * data.shape[0]; class_loss_sum += class_loss.item() * data.shape[0]
+            det_loss, size_loss, per_class_loss = loss_fun(outputs, target_det, target_size, target_class, class_inv_freq)
+            #det_loss, size_loss, class_loss, per_class_loss = loss_fun(outputs, target_det, target_size, target_class, class_inv_freq)
+            det_loss_sum += det_loss.item() * data.shape[0]; size_loss_sum += size_loss.item() * data.shape[0] 
+            #; class_loss_sum += class_loss.item() * data.shape[0]
+            per_class_loss_sum = per_class_loss_sum + (per_class_loss * data.shape[0])
+            #print(f"train {class_loss_sum=} {data.shape[0]=} {per_class_loss_sum=} {per_class_loss=}")
             count += data.shape[0]
-            loss = det_loss + size_loss + class_loss
+            loss = det_loss + size_loss + per_class_loss.sum()  ############# what matters ################
             loss.backward()
             optimizer.step()
             scheduler.step()
         except Exception as e:
             print(colorama.Back.BLUE + f"[WARNING] Skipping batch {batch_idx}: {e}" + colorama.Back.RESET)
+            traceback.print_exc()
             continue
-    det_loss_avg = det_loss_sum / count; size_loss_avg = size_loss_sum / count; class_loss_avg = class_loss_sum / count
+    #print(f"train class_loss_sum={class_loss_sum} per_class_loss_sum.sum={per_class_loss_sum.sum().item()} {per_class_loss_sum.shape=}")
+    if epoch % NUM_SAVE_EPOCHS == 0:
+        classes = params["class_names"]
+        for idx, value in enumerate(per_class_loss_sum):
+            print(f"{epoch=} Train {classes[idx]} {value:.3f}")
+
+    det_loss_avg = det_loss_sum / count; size_loss_avg = size_loss_sum / count; class_loss_avg = per_class_loss_sum.sum() / count
+    #det_loss_avg = det_loss_sum / count; size_loss_avg = size_loss_sum / count; class_loss_avg = class_loss_sum / count
     train_loss = det_loss_avg + size_loss_avg + class_loss_avg
     print(f"{epoch=} Train loss {train_loss:.3f} = detection {det_loss_avg:.3f} + box size {size_loss_avg:.3f} + class {class_loss_avg:.3f}")
-    res = {}
-    res["train_loss"] = float(train_loss)
-    return res
+    return float(train_loss)
+    #res = {}
+    #res["train_loss"] = float(train_loss)
+    #return res
 
 def main():
     params = get_params()
@@ -483,6 +613,7 @@ def main():
     else: print(colorama.Fore.RED + "torch.cuda is not available" + colorama.Fore.RESET)
     
     with wakepy.keep.running():
+        min_loss = 1.79e308
         (data_train, params["class_names"], class_inv_freq) = load_set_of_anns(params["data_dir"])
         params["class_inv_freq"] = class_inv_freq.tolist()
         # train loader
@@ -504,11 +635,16 @@ def main():
         # main train loop
         for epoch in range(0, NUM_EPOCHS + 1):
             train_loss = train(model, epoch, train_loader, optimizer,  scheduler, params)
-            if epoch > 0 and epoch % NUM_SAVE_EPOCHS == 0:
+            if train_loss < min_loss:
+                best_model = model
+                min_loss = train_loss
+            if epoch % NUM_SAVE_EPOCHS == 0:
                 # save trained model
-                print(f"saving model to: E{epoch}_NO_AUG_{params["model_file_name"]}")
-                op_state = {"epoch": epoch + 1, "state_dict": model.state_dict(), "params": params}
-                torch.save(op_state, os.path.join(params["data_dir"], f"E{epoch}_NO_AUG_{params["model_file_name"]}" ))
+                now_str = datetime.datetime.now().strftime("%Y_%m_%d__%H_%M_%S")
+                model_file_name = f"E{epoch}_AUG_{now_str}.pth.tar"
+                print(f"saving model to: {model_file_name}")
+                op_state = {"epoch": epoch + 1, "state_dict": best_model.state_dict(), "params": params}
+                torch.save(op_state, os.path.join(params["data_dir"], model_file_name))
 
 if __name__ == "__main__":
     main()
