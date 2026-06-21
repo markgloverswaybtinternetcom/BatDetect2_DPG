@@ -195,16 +195,21 @@ class BatCalls():
     def GetSpeciesList(self):
         speciesList = []
         if self.CallsNP.shape[0] > 0: 
-            idList = numpy.unique(self.CallsNP[:, 0])
+            cols = self.CallsNP[:, [0, 7]]
+            idList = numpy.unique(cols, axis=0)
+            #idList = numpy.unique(self.CallsNP[:, 0])
             if self.SpeciesLanguage != "None":
-                for id in idList:                 
-                    sl = self.SpeciesLanguage;
-                    if sl == "EnglishAbbrev": sl = "English" # otherwise not unique                    
-                    speciesList.append(self.SpeciesNames.loc[id][sl])
+                sl = self.SpeciesLanguage;
+                if sl == "EnglishAbbrev": sl = "English" # otherwise not unique 
+                for ids in idList:
+                    id = int(ids[0]); ct = int(ids[1])
+                    if self.CallTypes[ct] == "Echolocation": speciesList.append(self.SpeciesNames.loc[id][sl])
+                    else: speciesList.append(self.SpeciesNames.loc[id][sl] + '-' + self.CallTypes[ct])
         return speciesList
         
-    def FindSpeciesMaxProb(self, id):
-        condition = (self.CallsNP[:,0] == id)
+    def FindSpeciesMaxProb(self, id, ct=0):
+        print(f"FindSpeciesMaxProb {id=} {ct=}")
+        condition = (self.CallsNP[:,0] == id) & (self.CallsNP[:,7] == ct)
         selected_rows = self.CallsNP[condition]
         c = numpy.argmax(selected_rows[:, 6]) #max probaliity
         minT = selected_rows[c, 1]

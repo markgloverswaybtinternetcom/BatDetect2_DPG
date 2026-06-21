@@ -129,7 +129,7 @@ class SpecDisplay():
                 self.SetClassifyLabel(summary)                
                 speciesComboList = self.calls.GetSpeciesList()
                 if len(speciesComboList) > 1:
-                    dpg.configure_item(self.showSpeciesCombo,  items=speciesComboList)
+                    dpg.configure_item(self.showSpeciesCombo, items=speciesComboList)
                     dpg.configure_item(self.showSpeciesCombo, default_value="")
                     dpg.configure_item(self.showSpeciesCombo, show=True)
                 else:
@@ -205,14 +205,18 @@ class SpecDisplay():
         
     def ShowSpeciesCombo_changed(self, sender, app_data, user_data):
         """Allows user to find highest probable of a species in a long file"""
+        print(f"ShowSpeciesCombo_changed {app_data=}")
         sl = self.SpeciesLanguage
+        ids = app_data.split('-')
+        species = ids[0]
         if sl == "EnglishAbbrev": sl = "English"
-        id = self.SpeciesNames.index[self.SpeciesNames[sl]==app_data].tolist()
-        if len(id) != 1:
-            print(colorama.Fore.RED + f"ShowSpeciesCombo_changed {len(id)=}" + colorama.Fore.RESET) 
-            return
-        print(f"ShowSpeciesCombo_changed {app_data=} {app_data=}")
-        t1 = self.calls.FindSpeciesMaxProb(id)
+        id = self.SpeciesNames.index[self.SpeciesNames[sl]==species].tolist()
+        if len(ids) > 0: 
+            call_type = ids[1]
+            ct = self.CallTypes.index(call_type)
+        else: ct =0
+        print(f"ShowSpeciesCombo_changed {species=} {call_type=}")
+        t1 = self.calls.FindSpeciesMaxProb(id, ct)
         if t1 > self.Range / 2: 
             if t1 + self.Range / 2 < self.duration: 
                 self.minT =  t1 - self.Range / 2; self.maxT =  t1 + self.Range / 2
