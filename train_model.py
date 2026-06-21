@@ -637,13 +637,14 @@ def main():
             train_loss = train(model, epoch, train_loader, optimizer,  scheduler, params)
             if train_loss < min_loss:
                 best_model = model
+                best_epoch = epoch
                 min_loss = train_loss
             if epoch % NUM_SAVE_EPOCHS == 0:
                 # save trained model
                 now_str = datetime.datetime.now().strftime("%Y_%m_%d__%H_%M_%S")
-                model_file_name = f"E{epoch}_AUG_{now_str}.pth.tar"
+                model_file_name = f"E{best_epoch}_AUG_{now_str}.pth.tar"
                 print(f"saving model to: {model_file_name}")
-                op_state = {"epoch": epoch + 1, "state_dict": best_model.state_dict(), "params": params}
+                op_state = {"epoch": best_epoch + 1, "state_dict": best_model.state_dict(), "params": params}
                 torch.save(op_state, os.path.join(params["data_dir"], model_file_name))
 
 if __name__ == "__main__":

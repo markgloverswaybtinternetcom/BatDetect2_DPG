@@ -374,7 +374,7 @@ class Classifier():
             if self.latinToLangDict is None: species = latinSpecies
             else: species = self.latinToLangDict[latinSpecies]
             if val[0] == 1: summary += f"{species}{callType} 1 call {val[1]:.0%}, "
-            else: summary += f"{species} {val[0]} calls {val[2]:.0%}-{val[1]:.0%}, "
+            else: summary += f"{species}{callType} {val[0]} calls {val[2]:.0%}-{val[1]:.0%}, "
         return summary
         
     def save_results_to_file(self, results, op_path: str) -> None:
