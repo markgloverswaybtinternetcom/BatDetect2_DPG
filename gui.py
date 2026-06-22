@@ -173,7 +173,7 @@ class MainWindow():
                 self.lastRow = row
                 self.MultiFile = True; self.resize_handler(0, None, None)
                 self.Status(f"'{config['echoMeterDir']}' Echo Meter files, select file") 
-        elif self.MultiFile:
+        elif self.MultiFile and os.path.isdir(self.SpecDisplay1.dir):
             dirResults_file = os.path.join(self.SpecDisplay1.dir, "BatDetect2 Results.csv")
             if os.path.isfile(dirResults_file):
                 self.LoadBatDetectTable(self.FileTable, self.SpecDisplay1.dir)
