@@ -15,7 +15,6 @@ NUM_EPOCHS = 500
 NUM_SAVE_EPOCHS = 50
 TRAIN_FILE_USED_SEC = 1   # standarised length in seconds
 SPEC_TRAIN_WIDTH = 2560   # equivalent to 1 seoond,  units are number of time steps (before resizing is performed)
-TARGET_SIGMA = 2.0        #value used by draw_gaussian
 
 DET_LOSS_WEIGHT = 1.0     # weight for the detection part of the loss
 SIZE_LOSS_WEIGHT = 0.1    # weight for the bbox size loss
@@ -60,7 +59,6 @@ def load_set_of_anns(wav_path):
     audioFiles = glob.glob(os.path.join(wav_path, "**", "*.wav"), recursive=True)
     anns = []
     for path in audioFiles:
-        #if "Noise" in path: continue
         jsonFilepath = os.path.join(os.path.dirname(path), "ann", os.path.basename(path) + ".json")
         try:
             with open(jsonFilepath) as da:
@@ -164,41 +162,40 @@ def dynamic_scale_factor(w):
     sigma = max(1.0, radius / 3.0)
     sigma = min(sigma, 12.0)
     return sigma
-        
-def gaussian_sigma_from_box(h, w, min_overlap=0.7, scale=1.5,  max_radius=80,  max_sigma=12.0):
-    """ Computes a CornerNet-style Gaussian radius from bounding box size,
-    applies scaling for large calls, converts to sigma, and caps it.
-    Returns sigma for draw_gaussian(). """
+     
+def gaussian_sigma_from_box(x1, x2, y1, y2, min_overlap=0.7, max_sigma=14.0):
+    """ Computes sigma for draw_gaussian() based on bounding box size.
+    Dynamically scales for social calls, feeding buzzes not possible"""
     # --- CornerNet radius calculation ---
-    if w < 80: scale = 1.5
-    elif w < 200: scale = 2.0
-    elif w < 400: scale = 3.0
-    else: scale = 4.0
+    h = y1 - y2   # inverted axis !! height of the call in heatmap pixels
+    w = x2 - x1   # width of the call in heatmap pixels
     a1 = 1
     b1 = (h + w)
     c1 = w * h * (1 - min_overlap) / (1 + min_overlap)
-    sq1 = math.sqrt(max(0, b1 ** 2 - 4 * a1 * c1))
+    sq1 = math.sqrt(max(0, b1**2 - 4*a1*c1))
     r1 = (b1 + sq1) / 2
     a2 = 4
     b2 = 2 * (h + w)
     c2 = (1 - min_overlap) * w * h
-    sq2 = math.sqrt(max(0, b2 ** 2 - 4 * a2 * c2))
+    sq2 = math.sqrt(max(0, b2**2 - 4*a2*c2))
     r2 = (b2 + sq2) / 2
     a3 = 4 * min_overlap
     b3 = -2 * min_overlap * (h + w)
     c3 = (min_overlap - 1) * w * h
-    sq3 = math.sqrt(max(0, b3 ** 2 - 4 * a3 * c3))
+    sq3 = math.sqrt(max(0, b3**2 - 4*a3*c3))
     r3 = (b3 + sq3) / 2
     base_radius = min(r1, r2, r3)
-    # --- Scale for large calls (social calls, feeding buzzes) ---
-    radius = int(base_radius * scale)
-    radius = min(radius, max_radius)
-    # --- Convert radius → sigma ---
+    # --- Dynamic scaling based on width ---
+    if w < 80: scale = 1.5
+    elif w < 200: scale = 2.0
+    elif w < 400: scale = 3.0
+    else:scale = 4.0   # feeding buzz territory
+    radius = base_radius * scale
     sigma = radius / 3.0
     # --- Cap sigma to avoid flattening ---
     sigma = max(1.0, min(sigma, max_sigma))
     return sigma
-    
+        
 def draw_gaussian(heatmap, center, sigmax, sigmay=None):
     """CornerNet is a novel approach to object detection that detects objects as pairs of corners top-left and bottom-right) using a single convolutional neural network.
     It eliminates the need for predefined anchor boxes, which simplifies the detection process.
@@ -269,30 +266,19 @@ def target_heatmaps(spec_op_shape: Tuple[int, int], sampling_rate: int, ann: Ann
         ann_aug["individual_ids"][0] = 0
     y_2d_det = numpy.zeros((1, op_height, op_width), dtype=numpy.float32)
     y_2d_size = numpy.zeros((2, op_height, op_width), dtype=numpy.float32)
-    
     # num classes and "background" class
     y_2d_classes: numpy.ndarray = numpy.zeros((num_classes + 1, op_height, op_width), dtype=numpy.float32)
     # create 2D ground truth heatmaps
     for ii in valid_inds:
         heatmap = y_2d_det[0, :]
         w, h = heatmap.shape[0], heatmap.shape[1]
-        #radius = gaussian_radius_fixed(h, w)
-        #sigma = max(1.0, radius / 3.0)
-        sigma = gaussian_sigma_from_box(h, w)
+        sigma = gaussian_sigma_from_box(x_pos_start[ii], x_pos_end[ii], y_pos_low[ii], y_pos_high[ii])
         draw_gaussian(y_2d_det[0, :], (x_pos_start[ii], y_pos_low[ii]), sigma)
-        #draw_gaussian(y_2d_det[0, :], (x_pos_start[ii], y_pos_low[ii]), TARGET_SIGMA)
         y_2d_size[0, y_pos_low[ii], x_pos_start[ii]] = bb_widths[ii]
-        y_2d_size[1, y_pos_low[ii], x_pos_start[ii]] = bb_heights[ii]
+        y_2d_size[1, y_pos_low[ii], x_pos_start[ii]] = bb_heights[ii]        
         cls_id = ann["class_ids"][ii]
-        if DEBUG: print(f"target_heatmaps ii={int(ii)} {cls_id=} {class_names[int(cls_id)]}")
         if cls_id > -1:
-            heatmap = y_2d_classes[cls_id, :]
-            w, h = heatmap.shape[0], heatmap.shape[1]
-            sigma = gaussian_sigma_from_box(h, w)
             draw_gaussian(y_2d_classes[cls_id, :], (x_pos_start[ii], y_pos_low[ii]), sigma)
-            #drawResult = draw_gaussian(y_2d_classes[cls_id, :], (x_pos_start[ii], y_pos_low[ii]), TARGET_SIGMA)
-            y_2d_classes_cls_id = y_2d_classes[cls_id, :]
-    # be careful as this will have a 1.0 places where we have event but dont know gt class this will be masked in training anyway
     y_2d_classes[num_classes, :] = 1.0 - y_2d_classes.sum(0)
     y_2d_classes = y_2d_classes / y_2d_classes.sum(0)[numpy.newaxis, ...]
     y_2d_classes[numpy.isnan(y_2d_classes)] = 0.0
