@@ -211,10 +211,12 @@ class SpecDisplay():
         species = ids[0]
         if sl == "EnglishAbbrev": sl = "English"
         id = self.SpeciesNames.index[self.SpeciesNames[sl]==species].tolist()
-        if len(ids) > 0: 
+        if len(ids) > 1: 
             call_type = ids[1]
             ct = self.CallTypes.index(call_type)
-        else: ct =0
+        else: 
+            ct = 0
+            call_type = self.CallTypes[ct]
         print(f"ShowSpeciesCombo_changed {species=} {call_type=}")
         t1 = self.calls.FindSpeciesMaxProb(id, ct)
         if t1 > self.Range / 2: 
