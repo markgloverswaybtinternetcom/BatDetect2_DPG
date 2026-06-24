@@ -29,24 +29,29 @@ class BatCalls():
                     species = row[6]
                     if species == "Barbastellus barbastellus": species = "Barbastella barbastellus" #batdetect2 latin error
                     id = self.LatinIdx[species]; p1 = float(row[1]); p2 = float(row[7])
-                    if len(row) > 8: ct = self.CallTypes.index(row[8])
+                    if len(row) > 8: 
+                        ct = self.CallTypes.index(row[8])
                     else: ct = 0
                     arr.append([id, float(row[2]), float(row[3]), float(row[5])/1000, float(row[4])/1000, p1, p2, ct])
                     # no call type / event in standard CSV
                     prob = p1 * p2
-                    if id in summaryDict:
-                        min = summaryDict[id][1]; max = summaryDict[id][2];
+                    idct = id * len(self.CallTypes) + ct
+                    if idct in summaryDict:
+                        min = summaryDict[idct][1]; max = summaryDict[idct][2];
                         if prob < min: min = prob
                         if prob > max: max = prob
-                        summaryDict[id] = [summaryDict[id][0]+1, min, max]
+                        summaryDict[idct] = [summaryDict[idct][0]+1, min, max]
                     else:
-                        summaryDict[id] = [1, prob, prob] 
+                        summaryDict[idct] = [1, prob, prob] 
                 i += 1
         summary = ""
-        for id, val in summaryDict.items():
+        for idct, val in summaryDict.items():
+            id, ct = divmod(idct, len(self.CallTypes))
             species = self.SpeciesNames.loc[id][self.SpeciesLanguage]
-            if val[0] == 1: summary += f"{species} 1 call {val[1]:.0%}, "
-            else: summary += f"{species} {val[0]} calls {val[2]:.0%}-{val[1]:.0%}, "
+            callType = ""
+            if ct > 0: callType = '-' + self.CallTypes[ct]
+            if val[0] == 1: summary += f"{species}{callType} 1 call {val[1]:.0%}, "
+            else: summary += f"{species}{callType} {val[0]} calls {val[2]:.0%}-{val[1]:.0%}, "
         self.CallsNP = numpy.array(arr, dtype='f')
         return summary
 
