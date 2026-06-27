@@ -11,15 +11,60 @@ DETECTION_OVERLAP = 0.01  # has to be within this number of ms to count as detec
 LEARNING_RATE = 0.001
 BATCH_SIZE = 8
 NUM_WORKERS = 4
-NUM_EPOCHS = 500
+NUM_EPOCHS = 700
 NUM_SAVE_EPOCHS = 50
 TRAIN_FILE_USED_SEC = 1   # standarised length in seconds
 SPEC_TRAIN_WIDTH = 2560   # equivalent to 1 seoond,  units are number of time steps (before resizing is performed)
 
 DET_LOSS_WEIGHT = 1.0     # weight for the detection part of the loss
 SIZE_LOSS_WEIGHT = 0.1    # weight for the bbox size loss
-CLASS_LOSS_WEIGHT  = 2.0  # weight for the classification loss	
-
+#CLASS_LOSS_WEIGHT  = 2.0  # weight for the classification loss	
+GAUSSIAN_SIGMA = 12
+CLASS_WEIGHTS = {
+    "Barbastella barbastellus-Echolocation": 4.0,
+    "Barbastella barbastellus-Feeding Buzz": 0.0,
+    "Barbastella barbastellus-Social": 3.0,
+    "Eptesicus serotinus-Echolocation": 4.0,
+    "Eptesicus serotinus-Feeding Buzz": 0.0,
+    "Eptesicus serotinus-Social": 3.0,
+    "Myotis alcathoe-Echolocation": 2.0,
+    "Myotis alcathoe-Feeding Buzz": 0.0,
+    "Myotis alcathoe-Social": 2.0,
+    "Myotis bechsteinii-Echolocation": 2.0,
+    "Myotis bechsteinii-Social": 2.0,
+    "Myotis brandtii-Echolocation": 2.0,
+    "Myotis brandtii-Feeding Buzz": 0.0,
+    "Myotis brandtii-Social": 2.0,
+    "Myotis daubentonii-Echolocation": 2.0,
+    "Myotis daubentonii-Feeding Buzz": 0.0,
+    "Myotis daubentonii-Social": 2.0,
+    "Myotis mystacinus-Echolocation": 2.0,
+    "Myotis mystacinus-Social": 2.0,
+    "Myotis nattereri-Echolocation": 3.5,
+    "Myotis nattereri-Social": 3.0,
+    "Nyctalus leisleri-Echolocation": 2.0,
+    "Nyctalus leisleri-Social": 2.0,
+    "Nyctalus noctula-Echolocation": 2.0,
+    "Nyctalus noctula-Feeding Buzz": 0.0,
+    "Nyctalus noctula-Social": 2.0,
+    "Pipistrellus nathusii-Echolocation": 2.0,
+    "Pipistrellus nathusii-Feeding Buzz": 0.0,
+    "Pipistrellus nathusii-Social": 2.0,
+    "Pipistrellus pipistrellus-Echolocation": 1.0,
+    "Pipistrellus pipistrellus-Feeding Buzz": 0.0,
+    "Pipistrellus pipistrellus-Social": 2.0,
+    "Pipistrellus pygmaeus-Echolocation": 1.0,
+    "Pipistrellus pygmaeus-Feeding Buzz": 0.0,
+    "Pipistrellus pygmaeus-Social": 3.0,
+    "Plecotus auritus-Echolocation": 2.0,
+    "Plecotus auritus-Social": 2.0,
+    "Plecotus austriacus-Echolocation": 2.0,
+    "Rhinolophus ferrumequinum-Echolocation": 2.0,
+    "Rhinolophus ferrumequinum-Social": 2.0,
+    "Rhinolophus hipposideros-Echolocation": 2.0,
+    "Rhinolophus hipposideros-Social": 2.0
+}
+    
 AUGMENT = True
 AUG_PROB = 0.15
 ECHO_MAX_DELAY = 0.005          # simulate echo by adding copy of raw audio
@@ -40,7 +85,8 @@ def summarize_array(name, value):
         return
     flat = arr.flatten()
     nan_count = numpy.isnan(flat).sum() if numpy.issubdtype(arr.dtype, numpy.floating) else 0
-    print(colorama.Style.BRIGHT + f"{name + colorama.Style.RESET_ALL}: shape={arr.shape}, {arr.dtype}, min={numpy.min(flat):.3f}, max={numpy.max(flat):.3f} mean={numpy.mean(flat):.3f}, NANs={int(nan_count)}")
+    vals_greater_mean = (flat > numpy.mean(flat)).sum()
+    print(colorama.Style.BRIGHT + f"{name + colorama.Style.RESET_ALL}: shape={arr.shape}, {arr.dtype}, min={numpy.min(flat):.3f}, max={numpy.max(flat):.3f} mean={numpy.mean(flat):.3f}, N above mean= {vals_greater_mean}, NANs={int(nan_count)}")
 
 def summarize(functionName, data):
     if not DEBUG: return
@@ -156,56 +202,41 @@ def random_time_shift(spec, max_shift_frames=20):
         spec_pad = torch.nn.functional.pad(spec, pad, mode='constant', value=0)
         return spec_pad[..., -shift:]
 
-def dynamic_scale_factor(w):
+"""import matplotlib.pyplot
+def debug_heatmap_alignment_corners(spec, heatmap, x1, x2, y1, y2, ii, class_name):
+    heatmap = torch.from_numpy(heatmap)
+    spec = torch.squeeze(spec, dim=0)
+    print(f"debug_heatmap_alignment_corners {ii} {class_name=} {spec.shape=} {heatmap.shape=}")
+    heatmap_up = heatmap
+    heatmap_up = heatmap_up / (heatmap_up.max() + 1e-6)
+    summarize_array("debug_heatmap_alignment_corners", heatmap_up)
+    Hh, Wh = heatmap.shape
+    Hs, Ws = spec.shape
+    # Scale factors
+    scale_x = Ws / Wh
+    scale_y = Hs / Hh
+    # Convert heatmap coords → spectrogram coords
+    x1_disp = x1 * scale_x
+    x2_disp = x2 * scale_x
+    y1_disp = y2 * scale_y
+    y2_disp = y1 * scale_y
+    # Plot
+    matplotlib.pyplot.figure(figsize=(20,12))
+    print(f"debug_heatmap_alignment_corners {x1_disp=}, {x2_disp=} {y1_disp=}, {y2_disp=}")
+    #matplotlib.pyplot.axis([x1_disp * 0.75, x2_disp * 1.25, y1_disp * 0.75, y2_disp * 1.25])
+    #matplotlib.pyplot.imshow(spec, cmap='gray', alpha=0.5, origin='lower')
+    matplotlib.pyplot.imshow(torch.log1p(heatmap_up), cmap='jet', vmin=0, vmax=0.1, origin='lower')
+    # Draw box using corners only
+    matplotlib.pyplot.plot([x1_disp, x2_disp, x2_disp, x1_disp, x1_disp],[y1_disp, y1_disp, y2_disp, y2_disp, y1_disp], 'lime' )
+    matplotlib.pyplot.title(f"{ii} {class_name}")
+    matplotlib.pyplot.show()"""
 
-    radius = int(base_radius * scale)
-    sigma = max(1.0, radius / 3.0)
-    sigma = min(sigma, 12.0)
-    return sigma
-     
-def gaussian_sigma_from_box(x1, x2, y1, y2, min_overlap=0.7, max_sigma=14.0):
-    """ Computes sigma for draw_gaussian() based on bounding box size.
-    Dynamically scales for social calls, feeding buzzes not possible"""
-    # --- CornerNet radius calculation ---
-    h = y1 - y2   # inverted axis !! height of the call in heatmap pixels
-    w = x2 - x1   # width of the call in heatmap pixels
-    a1 = 1
-    b1 = (h + w)
-    c1 = w * h * (1 - min_overlap) / (1 + min_overlap)
-    sq1 = math.sqrt(max(0, b1**2 - 4*a1*c1))
-    r1 = (b1 + sq1) / 2
-    a2 = 4
-    b2 = 2 * (h + w)
-    c2 = (1 - min_overlap) * w * h
-    sq2 = math.sqrt(max(0, b2**2 - 4*a2*c2))
-    r2 = (b2 + sq2) / 2
-    a3 = 4 * min_overlap
-    b3 = -2 * min_overlap * (h + w)
-    c3 = (min_overlap - 1) * w * h
-    sq3 = math.sqrt(max(0, b3**2 - 4*a3*c3))
-    r3 = (b3 + sq3) / 2
-    base_radius = min(r1, r2, r3)
-    # --- Dynamic scaling based on width ---
-    if w < 80: scale = 1.5
-    elif w < 200: scale = 2.0
-    elif w < 400: scale = 3.0
-    else:scale = 4.0   # feeding buzz territory
-    radius = base_radius * scale
-    sigma = radius / 3.0
-    # --- Cap sigma to avoid flattening ---
-    sigma = max(1.0, min(sigma, max_sigma))
-    return sigma
-        
-def draw_gaussian(heatmap, center, sigmax, sigmay=None):
-    """CornerNet is a novel approach to object detection that detects objects as pairs of corners top-left and bottom-right) using a single convolutional neural network.
-    It eliminates the need for predefined anchor boxes, which simplifies the detection process.
-    The network predicts heatmaps for these corners, and focal loss is used to optimize the prediction of these heatmaps. 
-    CornerNet achieves high accuracy by associating detected corners with similar embeddings, enhancing the detection of objects in images"""
+def draw_gaussian(heatmap, corner, sigmax, sigmay=None):
     if sigmay is None:
         sigmay = sigmax
     tmp_size = numpy.maximum(sigmax, sigmay) * 3
-    mu_x = int(center[0] + 0.5)
-    mu_y = int(center[1] + 0.5)
+    mu_x = int(corner[0] + 0.5)
+    mu_y = int(corner[1] + 0.5)
     w, h = heatmap.shape[0], heatmap.shape[1]
     ul = [int(mu_x - tmp_size), int(mu_y - tmp_size)]
     br = [int(mu_x + tmp_size + 1), int(mu_y + tmp_size + 1)]
@@ -228,7 +259,7 @@ def time_to_x_coords(time_in_file: float, samplerate: float, window_duration: fl
     noverlap = numpy.floor(window_overlap * nfft)
     return (time_in_file * samplerate - noverlap) / (nfft - noverlap)
 
-def target_heatmaps(spec_op_shape: Tuple[int, int], sampling_rate: int, ann: AnnotationGroup, class_names) -> Tuple[numpy.ndarray, numpy.ndarray, numpy.ndarray, AnnotationGroup]:
+def target_heatmaps(spec_op_shape: Tuple[int, int], sampling_rate: int, ann: AnnotationGroup, class_names, spec) -> Tuple[numpy.ndarray, numpy.ndarray, numpy.ndarray, AnnotationGroup]:
     # spec may be resized on input into the network
     num_classes = len(class_names)
     op_height = spec_op_shape[0]
@@ -259,9 +290,6 @@ def target_heatmaps(spec_op_shape: Tuple[int, int], sampling_rate: int, ann: Ann
     ann_aug["x_inds"] = x_pos_start[valid_inds]
     ann_aug["y_inds"] = y_pos_low[valid_inds]
     before = len(ann["start_times"]); after = len(ann_aug["start_times"])
-    #if  before > after:
-    # if the number of calls is only 1, then it is unique
-    # TODO would be better if we found these unique calls at the merging stage
     if len(ann_aug["individual_ids"]) == 1:
         ann_aug["individual_ids"][0] = 0
     y_2d_det = numpy.zeros((1, op_height, op_width), dtype=numpy.float32)
@@ -270,15 +298,14 @@ def target_heatmaps(spec_op_shape: Tuple[int, int], sampling_rate: int, ann: Ann
     y_2d_classes: numpy.ndarray = numpy.zeros((num_classes + 1, op_height, op_width), dtype=numpy.float32)
     # create 2D ground truth heatmaps
     for ii in valid_inds:
-        heatmap = y_2d_det[0, :]
-        w, h = heatmap.shape[0], heatmap.shape[1]
-        sigma = gaussian_sigma_from_box(x_pos_start[ii], x_pos_end[ii], y_pos_low[ii], y_pos_high[ii])
-        draw_gaussian(y_2d_det[0, :], (x_pos_start[ii], y_pos_low[ii]), sigma)
+        sigma = GAUSSIAN_SIGMA ## Try 5, 6
+        draw_gaussian(y_2d_det[0, :], (x_pos_start[ii], y_pos_low[ii]), sigma)        
         y_2d_size[0, y_pos_low[ii], x_pos_start[ii]] = bb_widths[ii]
         y_2d_size[1, y_pos_low[ii], x_pos_start[ii]] = bb_heights[ii]        
         cls_id = ann["class_ids"][ii]
         if cls_id > -1:
             draw_gaussian(y_2d_classes[cls_id, :], (x_pos_start[ii], y_pos_low[ii]), sigma)
+            #debug_heatmap_alignment_corners(spec, y_2d_classes[cls_id, :], x_pos_start[ii], x_pos_end[ii], y_pos_low[ii], y_pos_high[ii], ii, class_names[cls_id])
     y_2d_classes[num_classes, :] = 1.0 - y_2d_classes.sum(0)
     y_2d_classes = y_2d_classes / y_2d_classes.sum(0)[numpy.newaxis, ...]
     y_2d_classes[numpy.isnan(y_2d_classes)] = 0.0
@@ -398,7 +425,7 @@ class AudioLoader(torch.utils.data.Dataset):
         for kk in ann.keys():
             if (kk != "class_id_file") and (kk != "annotated"):
                 ann[kk] = ann[kk][inds]
-        summarize("get_file_and_anns " + os.path.basename(audio_file), ann)
+        #summarize("get_file_and_anns " + os.path.basename(audio_file), ann)
         return audio_raw, sampling_rate, duration, ann
     
     def __getitem__(self, index):
@@ -431,7 +458,7 @@ class AudioLoader(torch.utils.data.Dataset):
             outputs = {}
             outputs["spec"] = spec
             # create ground truth heatmaps
-            (outputs["y_2d_det"],  outputs["y_2d_size"], outputs["y_2d_classes"], ann_aug) = target_heatmaps(spec_op_shape, sampling_rate, ann, self.params["class_names"])
+            (outputs["y_2d_det"],  outputs["y_2d_size"], outputs["y_2d_classes"], ann_aug) = target_heatmaps(spec_op_shape, sampling_rate, ann, self.params["class_names"], spec)
             # hack to get around requirement that all vectors are the same length in the output batch
             pad_size = self.max_num_anns - len(ann_aug["individual_ids"])
             outputs["is_valid"] = numpy.hstack((numpy.ones(len(ann_aug["individual_ids"])), numpy.ones(pad_size, dtype=numpy.int32) * -1))
@@ -455,31 +482,6 @@ class AudioLoader(torch.utils.data.Dataset):
             raise
     def __len__(self):
         return len(self.data_anns)
-
-def focal_loss_per_class(p_class, target_class, valid_mask, gamma=2.0, eps=1e-5):
-    """ p_class:        (B, C, A, T)  focal loss per element
-    target_class: (B, C, A, T)  one-hot targets
-    valid_mask:   (B, 1, A, T)  mask of valid positions
-    returns:      (C,)          one scalar loss per class """
-    p = torch.clamp(p_class, eps, 1 - eps)
-    ce = -target_class * torch.log(p)
-    focal = (1 - p) ** gamma * ce          # (B, C, A, T)
-    focal = focal * valid_mask             # mask invalid
-    # total positives (or normaliser)
-    num_pos = (target_class * valid_mask).sum() + eps
-    # original scalar loss (what you see as ~10.496)
-    loss_scalar = focal.sum() / num_pos
-    
-    # sum over batch, anchors, time → keep class
-    per_class_sum = focal.sum(dim=(0, 2, 3))          # (C,)
-    # count positives per class
-    class_counts = (target_class * valid_mask).sum(dim=(0, 2, 3)) + eps  # (C,)
-    # per-class *average* loss
-    per_class_avg = per_class_sum / class_counts      # (C,)
-
-    per_class_contrib = per_class_sum / num_pos
-    print(f"focal_loss_per_class {loss_scalar.item()=} {per_class_avg=} {per_class_contrib=} {per_class_contrib.sum()=}")
-    return
 
 def focal_loss(pred, gt, valid_mask=None, IsClass=False):
     """ Focal loss adapted from CornerNet: Detecting Objects as Paired Keypoints
@@ -509,7 +511,6 @@ def focal_loss(pred, gt, valid_mask=None, IsClass=False):
         #num_pos = pos_inds.float().sum(dim=(0, 2, 3)) #####
         class_counts = (gt * valid_mask).sum(dim=(0, 2, 3)) + eps
         if num_pos == 0:
-            ##### Boolean value of Tensor with more than one value is ambiguous #####
             per_class_loss = -per_class_neg_sum
         else:
             per_class_loss = -(per_class_pos_sum + per_class_neg_sum) / num_pos
@@ -523,7 +524,7 @@ def bbox_size_loss(pred_size, target_size):
     target_size_mask = (target_size > 0).float()
     return torch.nn.functional.l1_loss(pred_size * target_size_mask, target_size, reduction="sum") / (target_size_mask.sum() + 1e-5)
 
-def loss_fun(outputs, target_det, target_size, target_class, class_inv_freq):
+def loss_fun(outputs, target_det, target_size, target_class, class_inv_freq, class_weight_vector):
     detectionLoss = DET_LOSS_WEIGHT * focal_loss(outputs.pred_det, target_det)  
     boundingBoxSizeLoss = SIZE_LOSS_WEIGHT * bbox_size_loss(outputs.pred_size, target_size)
     summarize_array("loss_fun", target_class) 
@@ -533,10 +534,19 @@ def loss_fun(outputs, target_det, target_size, target_class, class_inv_freq):
     per_class_loss = focal_loss(p_class, target_class[:, :-1, :], valid_mask=valid_mask, IsClass=True)
     #class_loss, per_class_loss = focal_loss(p_class, target_class[:, :-1, :], valid_mask=valid_mask, IsClass=True)
     #class_loss = CLASS_LOSS_WEIGHT * class_loss; 
-    per_class_loss = per_class_loss * CLASS_LOSS_WEIGHT
+    per_class_loss = per_class_loss * class_weight_vector
     return detectionLoss, boundingBoxSizeLoss, per_class_loss
     #return detectionLoss, boundingBoxSizeLoss, class_loss, per_class_loss
 
+def build_class_weight_vector(class_names, class_weight_dict, device):
+    weights = []
+    for name in class_names:
+        if name not in class_weight_dict:
+            raise KeyError(f"Missing weight for class: {name}")
+        weights.append(class_weight_dict[name])
+    # Return as a torch tensor with NO grad
+    return torch.tensor(weights, dtype=torch.float32).to(device)
+    
 def train(model, epoch, data_loader, optimizer, scheduler, params):
     model.train()
     
@@ -554,7 +564,8 @@ def train(model, epoch, data_loader, optimizer, scheduler, params):
             target_class = inputs["y_2d_classes"].to(params["device"])
             optimizer.zero_grad()
             outputs = model(data)
-            det_loss, size_loss, per_class_loss = loss_fun(outputs, target_det, target_size, target_class, class_inv_freq)
+            class_weight_vector = build_class_weight_vector(params["class_names"], CLASS_WEIGHTS, params["device"])
+            det_loss, size_loss, per_class_loss = loss_fun(outputs, target_det, target_size, target_class, class_inv_freq, class_weight_vector)
             #det_loss, size_loss, class_loss, per_class_loss = loss_fun(outputs, target_det, target_size, target_class, class_inv_freq)
             det_loss_sum += det_loss.item() * data.shape[0]; size_loss_sum += size_loss.item() * data.shape[0] 
             #; class_loss_sum += class_loss.item() * data.shape[0]
@@ -628,10 +639,10 @@ def main():
             if epoch % NUM_SAVE_EPOCHS == 0:
                 # save trained model
                 now_str = datetime.datetime.now().strftime("%Y_%m_%d__%H_%M_%S")
-                model_file_name = f"E{best_epoch}_AUG_{now_str}.pth.tar"
+                model_file_name = f"E{best_epoch}_SIGMA_{GAUSSIAN_SIGMA}_PER_CLASS_WEIGHT_{now_str}.pth.tar"
                 print(f"saving model to: {model_file_name}")
                 op_state = {"epoch": best_epoch + 1, "state_dict": best_model.state_dict(), "params": params}
                 torch.save(op_state, os.path.join(params["data_dir"], model_file_name))
-
+ 
 if __name__ == "__main__":
     main()
