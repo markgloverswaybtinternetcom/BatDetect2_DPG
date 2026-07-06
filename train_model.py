@@ -1,6 +1,6 @@
 import argparse, json, warnings, numpy, torch, datetime, os, glob, copy
 import torchaudio, librosa, traceback, colorama, inspect, wakepy, random, math, scipy
-import Net2dFast, Classifier
+import Net2dFast, Classifier, copy
 
 warnings.filterwarnings("ignore", category=UserWarning)
 torch.set_printoptions(threshold=torch.inf, linewidth=200, precision=3)
@@ -22,12 +22,12 @@ SIZE_LOSS_WEIGHT = 0.1    # weight for the bbox size loss
 #CLASS_LOSS_WEIGHT  = 2.0  # weight for the classification loss	
 GAUSSIAN_SIGMA = 12
 CLASS_WEIGHTS = {
-    "Barbastella barbastellus-Echolocation": 4.5, # species weak id
-    "Barbastella barbastellus-Feeding Buzz": 0.0, # buzzes impossible to id 
+    "Barbastella barbastellus-Echolocation": 4.5, ## try 3
+    "Barbastella barbastellus-Feeding Buzz": 0.0,
     "Barbastella barbastellus-Social": 3.0,
-    "Eptesicus serotinus-Echolocation": 4.5, # species weak id
-    "Eptesicus serotinus-Feeding Buzz": 0.0, 
-    "Eptesicus serotinus-Social": 3.0, # socials under represented
+    "Eptesicus serotinus-Echolocation": 4.5, ## try 1, 2
+    "Eptesicus serotinus-Feeding Buzz": 0.0,
+    "Eptesicus serotinus-Social": 3.0,
     "Myotis alcathoe-Echolocation": 2.0,
     "Myotis alcathoe-Feeding Buzz": 0.0,
     "Myotis alcathoe-Social": 2.0,
@@ -41,7 +41,7 @@ CLASS_WEIGHTS = {
     "Myotis daubentonii-Social": 2.0,
     "Myotis mystacinus-Echolocation": 2.0,
     "Myotis mystacinus-Social": 2.0,
-    "Myotis nattereri-Echolocation": 3.5, # species weak id
+    "Myotis nattereri-Echolocation": 3.5,
     "Myotis nattereri-Social": 3.0,
     "Nyctalus leisleri-Echolocation": 2.0,
     "Nyctalus leisleri-Social": 2.0,
@@ -51,28 +51,33 @@ CLASS_WEIGHTS = {
     "Pipistrellus nathusii-Echolocation": 2.0,
     "Pipistrellus nathusii-Feeding Buzz": 0.0,
     "Pipistrellus nathusii-Social": 2.0,
-    "Pipistrellus pipistrellus-Echolocation": 1.0, # species over represented
+    "Pipistrellus pipistrellus-Echolocation": 1.0,
     "Pipistrellus pipistrellus-Feeding Buzz": 0.0,
-    "Pipistrellus pipistrellus-Social": 3.5, 
-    "Pipistrellus pygmaeus-Echolocation": 1.0, # species over represented
+    "Pipistrellus pipistrellus-Social": 3.5,  
+    "Pipistrellus pygmaeus-Echolocation": 1.0,
     "Pipistrellus pygmaeus-Feeding Buzz": 0.0,
     "Pipistrellus pygmaeus-Social": 3.5, 
-    "Plecotus auritus-Echolocation": 3.0,
-    "Plecotus auritus-Social": 3.0, 
+    "Plecotus auritus-Echolocation": 3.5, ## try 1
+    "Plecotus auritus-Social": 3.5, ## try 1
     "Plecotus austriacus-Echolocation": 2.0,
-    "Rhinolophus ferrumequinum-Echolocation": 1.5,# otherwise get lots of false horseshoes
-    "Rhinolophus ferrumequinum-Social": 1.5, 
-    "Rhinolophus hipposideros-Echolocation": 1.5,
+    "Rhinolophus ferrumequinum-Echolocation": 1.5,
+    "Rhinolophus ferrumequinum-Social": 1.5,
+    "Rhinolophus hipposideros-Echolocation": 1.5, 
     "Rhinolophus hipposideros-Social": 1.5 
 }
     
 AUGMENT = True
 AUG_PROB = 0.15
+COMBINE_PROB = 0.08 ## try 1
 ECHO_MAX_DELAY = 0.005          # simulate echo by adding copy of raw audio
 STRETCH_SQUEEZE_DELTA = 0.04    # stretch or squeeze spec
 MASK_MAX_TIME_PERC = 0.05       # max mask size - here percentage, not ideal
 MASK_MAX_FREQ_PERC = 0.10       # max mask size - here percentage, not ideal
 SPEC_AMP_SCALING = 2.0 
+HORSESHOE_CF = {
+    "Rhinolophus ferrumequinum-Echolocation": 80000,   # Greater Horseshoe CF (Hz)
+    "Rhinolophus hipposideros-Echolocation": 110000,   # Lesser Horseshoe CF (Hz)
+}
 
 def summarize_array(name, value):
     if not DEBUG: return
@@ -125,7 +130,7 @@ def load_set_of_anns(wav_path):
     print("load_set_of_anns Class count:")
     str_len = numpy.max([len(cc) for cc in class_names]) + 5
     for cc in range(len(class_names)):
-        print(str(cc).ljust(5) + class_names[cc].ljust(str_len) + str(class_cnts[cc]))
+        print(f"{str(cc).ljust(5)}, {class_names[cc].ljust(str_len)}, {str(class_cnts[cc])}")
     return anns, class_names.tolist(), class_inv_freq 
     
 def get_params():
@@ -135,12 +140,14 @@ def get_params():
 
 #batdetect2.train.audio_dataloader AudioLoader
 def echo_aug(audio, sampling_rate):
+    if DEBUG: print(f"echo_aug")
     sample_offset = ( int(ECHO_MAX_DELAY * numpy.random.random() * sampling_rate) + 1)
     audio[:-sample_offset] += numpy.random.random() * audio[sample_offset:]
     return audio
     
 def mask_time_aug(spec):
     # Mask out a random block of time - repeat up to 3 times
+    if DEBUG: print(f"mask_time_aug")
     fm = torchaudio.transforms.TimeMasking(int(spec.shape[1] * MASK_MAX_TIME_PERC))
     for ii in range(numpy.random.randint(1, 4)):
         spec = fm(spec)
@@ -148,16 +155,20 @@ def mask_time_aug(spec):
 
 def mask_freq_aug(spec):
     # Mask out a random frequncy range - repeat up to 3 times
+    if DEBUG: print(f"mask_freq_aug")
     fm = torchaudio.transforms.FrequencyMasking(int(spec.shape[1] * MASK_MAX_FREQ_PERC))
     for ii in range(numpy.random.randint(1, 4)):
         spec = fm(spec)
     return spec
     
 def scale_vol_aug(spec):
+    if DEBUG: print(f"scale_vol_aug")
     return spec * numpy.random.random() * SPEC_AMP_SCALING
 
 def warp_spec_aug(spec, ann):
     # Randomly stretch or squeeze the time axis only
+    if DEBUG:
+        print("warp_spec_aug")
     # Original output size (C, F, T)
     op_size = (spec.shape[1], spec.shape[2])
     # Random stretch/squeeze factor
@@ -206,6 +217,24 @@ def random_time_shift(spec, max_shift_frames=20):
         spec_pad = torch.nn.functional.pad(spec, pad, mode='constant', value=0)
         return spec_pad[..., -shift:]
 
+def inject_vertical_noise_streak(spec, strength=0.02):
+    # Choose a random frequency bin (second axis)
+    freq_bin = numpy.random.randint(0, spec.shape[1])
+    # Add noise across all time bins (first axis)
+    spec[:, freq_bin] += strength * numpy.random.rand(spec.shape[0])
+    return spec
+
+def reinforce_cf_band(spec, cf_freq, boost_db=1.5):
+    # spec.shape == (time_bins, freq_bins)
+    op_height = spec.shape[1]
+    freq_per_bin = (Classifier.MAX_FREQ_HZ - Classifier.MIN_FREQ_HZ) / op_height
+    cf_bin = int((cf_freq - Classifier.MIN_FREQ_HZ) / freq_per_bin)
+    # Safety clamp
+    cf_bin = max(0, min(cf_bin, op_height - 1))
+    # Boost CF band across all time bins
+    spec[:, cf_bin] *= 10 ** (boost_db / 20.0)
+    return spec
+    
 """import matplotlib.pyplot
 def debug_heatmap_alignment_corners(spec, heatmap, x1, x2, y1, y2, ii, class_name):
     heatmap = torch.from_numpy(heatmap)
@@ -317,6 +346,7 @@ def target_heatmaps(spec_op_shape: Tuple[int, int], sampling_rate: int, ann: Ann
 
 def resample_audio(num_samples, sampling_rate, audio2, sampling_rate2):
     if sampling_rate != sampling_rate2:
+        if DEBUG: print(f"resample_audio {sampling_rate=} {sampling_rate2=}")
         audio2 = librosa.resample(audio2,  orig_sr=sampling_rate2, target_sr=sampling_rate, res_type="polyphase")
         sampling_rate2 = sampling_rate
     if audio2.shape[0] < num_samples:
@@ -389,6 +419,12 @@ class AudioLoader(torch.utils.data.Dataset):
             self.audio_file.append(dd["file_path"])
         ann_cnt = [len(aa["annotation"]) for aa in self.data_anns]
         self.max_num_anns = 2 * numpy.max(ann_cnt)  # x2 because we may be combining files during training
+        
+        self.Horseshoe_CF = {}
+        for key, value in HORSESHOE_CF.items():
+            id = self.params["class_names"].index(key)
+            self.Horseshoe_CF[id] = value
+            
         print("\n")
         if dataset_name is not None:
             print("Dataset     : " + dataset_name)
@@ -428,16 +464,16 @@ class AudioLoader(torch.utils.data.Dataset):
         for kk in ann.keys():
             if (kk != "class_id_file") and (kk != "annotated"):
                 ann[kk] = ann[kk][inds]
-        #summarize("get_file_and_anns " + os.path.basename(audio_file), ann)
         return audio_raw, sampling_rate, duration, ann
     
     def __getitem__(self, index):
         try:
             # load audio file
+            if DEBUG: print()
             audio, sampling_rate, duration, ann = self.get_file_and_anns(index)
             if AUGMENT:
                 # augment on raw audio - combine with random audio file
-                if numpy.random.random() < AUG_PROB:
+                if numpy.random.random() < COMBINE_PROB:
                     (audio2, sampling_rate2, duration2, ann2) = self.get_file_and_anns()
                     audio, ann = combine_audio_aug(audio, sampling_rate, ann, audio2, sampling_rate2, ann2)
                 # simulate echo by adding delayed copy of the file
@@ -458,6 +494,11 @@ class AudioLoader(torch.utils.data.Dataset):
                 #if numpy.random.random() < AUG_PROB: spec = mask_freq_aug(spec) # causes horseshoe bat problems
                 if numpy.random.random() < AUG_PROB: spec = random_bandpass_filter(spec)
                 if numpy.random.random() < AUG_PROB: spec = random_time_shift(spec)
+                if numpy.random.random() < AUG_PROB: 
+                    if ann["class_id_file"] in self.Horseshoe_CF:
+                        spec = reinforce_cf_band(spec, cf_freq=self.Horseshoe_CF[ann["class_id_file"]]) 
+                    else:
+                        spec = inject_vertical_noise_streak(spec)
             outputs = {}
             outputs["spec"] = spec
             # create ground truth heatmaps
@@ -490,6 +531,7 @@ def focal_loss(pred, gt, valid_mask=None, IsClass=False):
     """ Focal loss adapted from CornerNet: Detecting Objects as Paired Keypoints
     pred  (batch x c x h x w)
     gt    (batch x c x h x w)"""
+    if DEBUG: print(f"focal_loss {pred.shape=} {gt.shape=}")
     eps = 1e-5
     beta = 4
     alpha = 2 # Balances the importance of positive and negative samples.
@@ -524,19 +566,14 @@ def bbox_size_loss(pred_size, target_size):
     target_size_mask = (target_size > 0).float()
     return torch.nn.functional.l1_loss(pred_size * target_size_mask, target_size, reduction="sum") / (target_size_mask.sum() + 1e-5)
 
-def loss_fun(outputs, target_det, target_size, target_class, class_inv_freq, class_weight_vector):
+def loss_fun(outputs, target_det, target_size, target_class, class_weight_vector):
     detectionLoss = DET_LOSS_WEIGHT * focal_loss(outputs.pred_det, target_det)  
     boundingBoxSizeLoss = SIZE_LOSS_WEIGHT * bbox_size_loss(outputs.pred_size, target_size)
-    summarize_array("loss_fun", target_class) 
     valid_mask = (target_class[:, :-1, :, :].sum(1) > 0).float().unsqueeze(1) 
-    summarize_array("loss_fun", valid_mask)
     p_class = outputs.pred_class[:, :-1, :]
     per_class_loss = focal_loss(p_class, target_class[:, :-1, :], valid_mask=valid_mask, IsClass=True)
-    #class_loss, per_class_loss = focal_loss(p_class, target_class[:, :-1, :], valid_mask=valid_mask, IsClass=True)
-    #class_loss = CLASS_LOSS_WEIGHT * class_loss; 
     per_class_loss = per_class_loss * class_weight_vector
     return detectionLoss, boundingBoxSizeLoss, per_class_loss
-    #return detectionLoss, boundingBoxSizeLoss, class_loss, per_class_loss
 
 def build_class_weight_vector(class_names, class_weight_dict, device):
     weights = []
@@ -546,14 +583,64 @@ def build_class_weight_vector(class_names, class_weight_dict, device):
         weights.append(class_weight_dict[name])
     # Return as a torch tensor with NO grad
     return torch.tensor(weights, dtype=torch.float32).to(device)
+
+class Trainer():
+    def __init__(self, params, len_train_loader):
+        self.device = params["device"]
+        self.classes = params["class_names"]
+        self.num_classes =len(self.classes)
+        self.class_weight_vector = build_class_weight_vector(self.classes, CLASS_WEIGHTS, self.device)
+        self.min_loss = 1.79e308
+        model = Net2dFast.Net2dFast(Classifier.NUM_FILTERS, num_classes=self.num_classes, ip_height=params["ip_height"])
+        self.model = model.to(Classifier.DEVICE)
+        self.optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
+        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, MAX_EPOCHS * len_train_loader)
+        
+    def train(self, epoch, data_loader):
+        self.model.train()
+        det_loss_sum = size_loss_sum = 0; 
+        per_class_loss_sum = torch.zeros(self.num_classes).to(self.device)
+        count = 0
+        for batch_idx, inputs in enumerate(data_loader):
+            try:
+                data = inputs["spec"].to(self.device)
+                target_det = inputs["y_2d_det"].to(self.device)
+                target_size = inputs["y_2d_size"].to(self.device)
+                target_class = inputs["y_2d_classes"].to(self.device)
+                self.optimizer.zero_grad()
+                outputs = self.model(data)
+                det_loss, size_loss, per_class_loss = loss_fun(outputs, target_det, target_size, target_class, self.class_weight_vector)
+                det_loss_sum += det_loss.item() * data.shape[0]; size_loss_sum += size_loss.item() * data.shape[0] 
+                per_class_loss_sum = per_class_loss_sum + (per_class_loss * data.shape[0])
+                count += data.shape[0]
+                loss = det_loss + size_loss + per_class_loss.sum() 
+                loss.backward()
+                self.optimizer.step()
+                self.scheduler.step()
+            except Exception as e:
+                print(colorama.Back.BLUE + f"[WARNING] Skipping batch {batch_idx}: {e}" + colorama.Back.RESET)
+                traceback.print_exc()
+                continue
+        if epoch >= MIN_EPOCHS and epoch % NUM_SAVE_EPOCHS == 0:
+            for idx, value in enumerate(per_class_loss_sum):
+                print(f"{epoch=} Train, {self.classes[idx]}, {value:.3f}")
+        det_loss_avg = det_loss_sum / count; size_loss_avg = size_loss_sum / count; class_loss_avg = per_class_loss_sum.sum() / count
+        train_loss = det_loss_avg + size_loss_avg + class_loss_avg
+        style = ""
+        if train_loss < self.min_loss:
+            self.best_epoch = epoch
+            self.min_loss = train_loss
+            if epoch >= MIN_EPOCHS: 
+                self.best_model = copy.deepcopy(self.model)
+                style = colorama.Style.BRIGHT
+        print(style + f"{epoch=} Train loss {train_loss:.3f} = detection {det_loss_avg:.3f} + box size {size_loss_avg:.3f} + class {class_loss_avg:.3f}" + colorama.Style.RESET_ALL)
+        return float(train_loss)
     
-def train(model, epoch, data_loader, optimizer, scheduler, params):
+"""def train(model, epoch, data_loader, optimizer, scheduler, params):
     model.train()
-    
     class_inv_freq = torch.from_numpy(numpy.array(params["class_inv_freq"], dtype=numpy.float32)).to(params["device"])
     class_inv_freq = class_inv_freq.unsqueeze(0).unsqueeze(2).unsqueeze(2)
     det_loss_sum = size_loss_sum = 0; 
-    #class_loss_sum = 0
     per_class_loss_sum = torch.zeros(len(params["class_names"])).to(params["device"])
     count = 0
     for batch_idx, inputs in enumerate(data_loader):
@@ -566,9 +653,7 @@ def train(model, epoch, data_loader, optimizer, scheduler, params):
             outputs = model(data)
             class_weight_vector = build_class_weight_vector(params["class_names"], CLASS_WEIGHTS, params["device"])
             det_loss, size_loss, per_class_loss = loss_fun(outputs, target_det, target_size, target_class, class_inv_freq, class_weight_vector)
-            #det_loss, size_loss, class_loss, per_class_loss = loss_fun(outputs, target_det, target_size, target_class, class_inv_freq)
             det_loss_sum += det_loss.item() * data.shape[0]; size_loss_sum += size_loss.item() * data.shape[0] 
-            #; class_loss_sum += class_loss.item() * data.shape[0]
             per_class_loss_sum = per_class_loss_sum + (per_class_loss * data.shape[0])
             count += data.shape[0]
             loss = det_loss + size_loss + per_class_loss.sum() 
@@ -582,16 +667,11 @@ def train(model, epoch, data_loader, optimizer, scheduler, params):
     if epoch >= MIN_EPOCHS and epoch % NUM_SAVE_EPOCHS == 0:
         classes = params["class_names"]
         for idx, value in enumerate(per_class_loss_sum):
-            print(f"{epoch=} Train {classes[idx]} {value:.3f}")
-
+            print(f"{epoch=} Train, {classes[idx]}, {value:.3f}")
     det_loss_avg = det_loss_sum / count; size_loss_avg = size_loss_sum / count; class_loss_avg = per_class_loss_sum.sum() / count
-    #det_loss_avg = det_loss_sum / count; size_loss_avg = size_loss_sum / count; class_loss_avg = class_loss_sum / count
     train_loss = det_loss_avg + size_loss_avg + class_loss_avg
     print(f"{epoch=} Train loss {train_loss:.3f} = detection {det_loss_avg:.3f} + box size {size_loss_avg:.3f} + class {class_loss_avg:.3f}")
-    return float(train_loss)
-    #res = {}
-    #res["train_loss"] = float(train_loss)
-    #return res
+    return float(train_loss)"""
 
 def main():
     params = get_params()
@@ -608,9 +688,7 @@ def main():
     else: print(colorama.Fore.RED + "torch.cuda is not available" + colorama.Fore.RESET)
     
     with wakepy.keep.running():
-        min_loss = 1.79e308
         (data_train, params["class_names"], class_inv_freq) = load_set_of_anns(params["data_dir"])
-        params["class_inv_freq"] = class_inv_freq.tolist()
         # train loader
         train_dataset = AudioLoader(data_train, params, is_train=True)
         train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, pin_memory=True,)
@@ -618,30 +696,22 @@ def main():
         params["ip_height"] = int(Classifier.SPEC_HEIGHT * Classifier.RESIZE_FACTOR)
         print("\ntrain batch spec size :", inputs_train["spec"].shape)
         print("class target size     :", inputs_train["y_2d_classes"].shape)
-        # select network
-        num_classes = len(params["class_names"])
-        model = Net2dFast.Net2dFast(Classifier.NUM_FILTERS,num_classes=num_classes, ip_height=params["ip_height"])
-        model = model.to(Classifier.DEVICE)
-        optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, MAX_EPOCHS * len(train_loader))
         # save parameters to file 
         with open(os.path.join(params["data_dir"], "params.json"), "w") as da:
-            json.dump(params, da, indent=2, sort_keys=True)       
+            json.dump(params, da, indent=2, sort_keys=True) 
+        trainer = Trainer(params, len(train_loader))
         # main train loop
         for epoch in range(0, MAX_EPOCHS + 1):
-            train_loss = train(model, epoch, train_loader, optimizer,  scheduler, params)
-            if train_loss < min_loss:
-                best_model = model
-                best_epoch = epoch
-                min_loss = train_loss
-            if epoch >= MIN_EPOCHS and epoch % NUM_SAVE_EPOCHS == 0:
+            train_loss = trainer.train(epoch, train_loader)
+            #train_loss = train(model, epoch, train_loader, optimizer,  scheduler, params)
+            if epoch > MIN_EPOCHS and epoch % NUM_SAVE_EPOCHS == 0:
                 # save trained model
                 now_str = datetime.datetime.now().strftime("%Y_%m_%d__%H_%M_%S")
-                model_file_name = f"E{best_epoch}_SIGMA_{GAUSSIAN_SIGMA}_WARP_SPEC_AUG_{now_str}.pth.tar"
+                model_file_name = f"E{trainer.best_epoch}_LESS_COMBINE_PROB_{now_str}.pth.tar"
                 print(f"saving model to: {model_file_name}")
-                op_state = {"epoch": best_epoch + 1, "state_dict": best_model.state_dict(), "params": params}
+                op_state = {"epoch": trainer.best_epoch + 1, "state_dict": trainer.best_model.state_dict(), "params": params}
                 torch.save(op_state, os.path.join(params["data_dir"], model_file_name))
-                if epoch - best_epoch > 50:
+                if epoch - trainer.best_epoch > 50:
                     break # have plateaued
 if __name__ == "__main__":
     main()
