@@ -665,7 +665,11 @@ class MainWindow():
         if os.path.exists(callsCsvPath): os.remove(callsCsvPath)
         callsJsonPath = os.path.join(self.SpecDisplay1.dir, "ann", f"{self.SpecDisplay1.file}.json")
         if os.path.exists(callsJsonPath): os.remove(callsJsonPath)
-        del self.ActiveDisplay.dirFiles[self.ActiveDisplay.dirIndex]
+        if self.MultiFile:
+            rows = dpg.get_item_children(self.FileTable, slot=1)
+            dpg.delete_item(rows[self.FileTableRow])
+        else:
+            del self.ActiveDisplay.dirFiles[self.ActiveDisplay.dirIndex]
         self.DownKey_pressed(self.DeleteFile, 0, 0)
     
     def AssignCallTypeCombo_changed(self, sender, app_data, user_data):
