@@ -119,7 +119,7 @@ def load_set_of_anns(wav_path):
             ann["file_path"] = path
             anns.append(ann)
         except Exception as e:
-            print(colorama.Back.YELLOW + colorama.Fore.BLACK + f"[WARNING] {e} for {jsonFilepath=}" + colorama.Fore.RESET + colorama.Back.RESET)
+            print(colorama.Back.YELLOW + colorama.Fore.BLACK + f"[WARNING] {e}" + colorama.Fore.RESET + colorama.Back.RESET)
      # get unique class names
     class_names_all = []
     for ann in anns:
