@@ -1,6 +1,6 @@
-import argparse, json, warnings, numpy, torch, datetime, os, glob, copy
+import argparse, json, warnings, numpy, torch, datetime, os, glob, copy, polars
 import torchaudio, librosa, traceback, colorama, inspect, wakepy, random, math, scipy
-import Net2dFast, Classifier, copy
+import Net2dFast, Classifier
 
 warnings.filterwarnings("ignore", category=UserWarning)
 torch.set_printoptions(threshold=torch.inf, linewidth=200, precision=3)
@@ -21,11 +21,12 @@ DET_LOSS_WEIGHT = 1.0     # weight for the detection part of the loss
 SIZE_LOSS_WEIGHT = 0.1    # weight for the bbox size loss
 #CLASS_LOSS_WEIGHT  = 2.0  # weight for the classification loss	
 GAUSSIAN_SIGMA = 12
-CLASS_WEIGHTS = {
-    "Barbastella barbastellus-Echolocation": 4.5, ## try 3
+#Only used on first run until class difficulty found
+DEFAULT_CLASS_WEIGHTS = { 
+    "Barbastella barbastellus-Echolocation": 4.5, 
     "Barbastella barbastellus-Feeding Buzz": 0.0,
     "Barbastella barbastellus-Social": 3.0,
-    "Eptesicus serotinus-Echolocation": 4.5, ## try 1, 2
+    "Eptesicus serotinus-Echolocation": 4.5, 
     "Eptesicus serotinus-Feeding Buzz": 0.0,
     "Eptesicus serotinus-Social": 3.0,
     "Myotis alcathoe-Echolocation": 2.0,
@@ -57,8 +58,8 @@ CLASS_WEIGHTS = {
     "Pipistrellus pygmaeus-Echolocation": 1.0,
     "Pipistrellus pygmaeus-Feeding Buzz": 0.0,
     "Pipistrellus pygmaeus-Social": 3.5, 
-    "Plecotus auritus-Echolocation": 3.5, ## try 1
-    "Plecotus auritus-Social": 3.5, ## try 1
+    "Plecotus auritus-Echolocation": 3.5,
+    "Plecotus auritus-Social": 3.5, 
     "Plecotus austriacus-Echolocation": 2.0,
     "Rhinolophus ferrumequinum-Echolocation": 1.5,
     "Rhinolophus ferrumequinum-Social": 1.5,
@@ -490,8 +491,6 @@ class AudioLoader(torch.utils.data.Dataset):
                 if numpy.random.random() < AUG_PROB: spec = scale_vol_aug(spec)
                 if numpy.random.random() < AUG_PROB: spec = warp_spec_aug(spec, ann) 
                 if numpy.random.random() < AUG_PROB: spec = mask_time_aug(spec)
-                #if numpy.random.random() < AUG_PROB: random_freq_shift(spec)
-                #if numpy.random.random() < AUG_PROB: spec = mask_freq_aug(spec) # causes horseshoe bat problems
                 if numpy.random.random() < AUG_PROB: spec = random_bandpass_filter(spec)
                 if numpy.random.random() < AUG_PROB: spec = random_time_shift(spec)
                 if numpy.random.random() < AUG_PROB: 
@@ -566,13 +565,12 @@ def bbox_size_loss(pred_size, target_size):
     target_size_mask = (target_size > 0).float()
     return torch.nn.functional.l1_loss(pred_size * target_size_mask, target_size, reduction="sum") / (target_size_mask.sum() + 1e-5)
 
-def loss_fun(outputs, target_det, target_size, target_class, class_weight_vector):
+def loss_fun(outputs, target_det, target_size, target_class):
     detectionLoss = DET_LOSS_WEIGHT * focal_loss(outputs.pred_det, target_det)  
     boundingBoxSizeLoss = SIZE_LOSS_WEIGHT * bbox_size_loss(outputs.pred_size, target_size)
     valid_mask = (target_class[:, :-1, :, :].sum(1) > 0).float().unsqueeze(1) 
     p_class = outputs.pred_class[:, :-1, :]
     per_class_loss = focal_loss(p_class, target_class[:, :-1, :], valid_mask=valid_mask, IsClass=True)
-    per_class_loss = per_class_loss * class_weight_vector
     return detectionLoss, boundingBoxSizeLoss, per_class_loss
 
 def build_class_weight_vector(class_names, class_weight_dict, device):
@@ -589,7 +587,7 @@ class Trainer():
         self.device = params["device"]
         self.classes = params["class_names"]
         self.num_classes =len(self.classes)
-        self.class_weight_vector = build_class_weight_vector(self.classes, CLASS_WEIGHTS, self.device)
+        self.class_weight_vector = params["class_weight_vector"]
         self.min_loss = 1.79e308
         model = Net2dFast.Net2dFast(Classifier.NUM_FILTERS, num_classes=self.num_classes, ip_height=params["ip_height"])
         self.model = model.to(Classifier.DEVICE)
@@ -599,8 +597,10 @@ class Trainer():
     def train(self, epoch, data_loader):
         self.model.train()
         det_loss_sum = size_loss_sum = 0; 
-        per_class_loss_sum = torch.zeros(self.num_classes).to(self.device)
+        weighted_per_class_loss_sum = torch.zeros(self.num_classes).to(self.device)
+        unweighted_per_class_loss_total = torch.zeros(self.num_classes).to(self.device) 
         count = 0
+        epsilon = 1e-8 # prevents divide by zero problems
         for batch_idx, inputs in enumerate(data_loader):
             try:
                 data = inputs["spec"].to(self.device)
@@ -609,11 +609,13 @@ class Trainer():
                 target_class = inputs["y_2d_classes"].to(self.device)
                 self.optimizer.zero_grad()
                 outputs = self.model(data)
-                det_loss, size_loss, per_class_loss = loss_fun(outputs, target_det, target_size, target_class, self.class_weight_vector)
+                det_loss, size_loss, per_class_loss = loss_fun(outputs, target_det, target_size, target_class)
+                weighted_per_class_loss = per_class_loss * self.class_weight_vector
                 det_loss_sum += det_loss.item() * data.shape[0]; size_loss_sum += size_loss.item() * data.shape[0] 
-                per_class_loss_sum = per_class_loss_sum + (per_class_loss * data.shape[0])
+                weighted_per_class_loss_sum = weighted_per_class_loss_sum + (weighted_per_class_loss * data.shape[0])
+                unweighted_per_class_loss_total = unweighted_per_class_loss_total + per_class_loss
                 count += data.shape[0]
-                loss = det_loss + size_loss + per_class_loss.sum() 
+                loss = det_loss + size_loss + weighted_per_class_loss.sum() 
                 loss.backward()
                 self.optimizer.step()
                 self.scheduler.step()
@@ -622,9 +624,9 @@ class Trainer():
                 traceback.print_exc()
                 continue
         if epoch >= MIN_EPOCHS and epoch % NUM_SAVE_EPOCHS == 0:
-            for idx, value in enumerate(per_class_loss_sum):
+            for idx, value in enumerate(weighted_per_class_loss):
                 print(f"{epoch=} Train, {self.classes[idx]}, {value:.3f}")
-        det_loss_avg = det_loss_sum / count; size_loss_avg = size_loss_sum / count; class_loss_avg = per_class_loss_sum.sum() / count
+        det_loss_avg = det_loss_sum / count; size_loss_avg = size_loss_sum / count; class_loss_avg = weighted_per_class_loss_sum.sum() / count
         train_loss = det_loss_avg + size_loss_avg + class_loss_avg
         style = ""
         if train_loss < self.min_loss:
@@ -632,46 +634,10 @@ class Trainer():
             self.min_loss = train_loss
             if epoch >= MIN_EPOCHS: 
                 self.best_model = copy.deepcopy(self.model)
+                self.best_loss = unweighted_per_class_loss_total
                 style = colorama.Style.BRIGHT
         print(style + f"{epoch=} Train loss {train_loss:.3f} = detection {det_loss_avg:.3f} + box size {size_loss_avg:.3f} + class {class_loss_avg:.3f}" + colorama.Style.RESET_ALL)
         return float(train_loss)
-    
-"""def train(model, epoch, data_loader, optimizer, scheduler, params):
-    model.train()
-    class_inv_freq = torch.from_numpy(numpy.array(params["class_inv_freq"], dtype=numpy.float32)).to(params["device"])
-    class_inv_freq = class_inv_freq.unsqueeze(0).unsqueeze(2).unsqueeze(2)
-    det_loss_sum = size_loss_sum = 0; 
-    per_class_loss_sum = torch.zeros(len(params["class_names"])).to(params["device"])
-    count = 0
-    for batch_idx, inputs in enumerate(data_loader):
-        try:
-            data = inputs["spec"].to(params["device"])
-            target_det = inputs["y_2d_det"].to(params["device"])
-            target_size = inputs["y_2d_size"].to(params["device"])
-            target_class = inputs["y_2d_classes"].to(params["device"])
-            optimizer.zero_grad()
-            outputs = model(data)
-            class_weight_vector = build_class_weight_vector(params["class_names"], CLASS_WEIGHTS, params["device"])
-            det_loss, size_loss, per_class_loss = loss_fun(outputs, target_det, target_size, target_class, class_inv_freq, class_weight_vector)
-            det_loss_sum += det_loss.item() * data.shape[0]; size_loss_sum += size_loss.item() * data.shape[0] 
-            per_class_loss_sum = per_class_loss_sum + (per_class_loss * data.shape[0])
-            count += data.shape[0]
-            loss = det_loss + size_loss + per_class_loss.sum() 
-            loss.backward()
-            optimizer.step()
-            scheduler.step()
-        except Exception as e:
-            print(colorama.Back.BLUE + f"[WARNING] Skipping batch {batch_idx}: {e}" + colorama.Back.RESET)
-            traceback.print_exc()
-            continue
-    if epoch >= MIN_EPOCHS and epoch % NUM_SAVE_EPOCHS == 0:
-        classes = params["class_names"]
-        for idx, value in enumerate(per_class_loss_sum):
-            print(f"{epoch=} Train, {classes[idx]}, {value:.3f}")
-    det_loss_avg = det_loss_sum / count; size_loss_avg = size_loss_sum / count; class_loss_avg = per_class_loss_sum.sum() / count
-    train_loss = det_loss_avg + size_loss_avg + class_loss_avg
-    print(f"{epoch=} Train loss {train_loss:.3f} = detection {det_loss_avg:.3f} + box size {size_loss_avg:.3f} + class {class_loss_avg:.3f}")
-    return float(train_loss)"""
 
 def main():
     params = get_params()
@@ -680,7 +646,8 @@ def main():
 
     # setup arg parser and populate it with exiting parameters - will not work with lists
     parser = argparse.ArgumentParser()
-    parser.add_argument("data_dir", type=str, help="Path to root of datasets")
+    parser.add_argument("training_data_dir", type=str, help="Path to root of datasets")
+    parser.add_argument("model_path",type=str,help="Path to the trained model file.")
     for key, val in params.items():
         parser.add_argument("--" + key, type=type(val), default=val)
     params = vars(parser.parse_args())
@@ -688,30 +655,48 @@ def main():
     else: print(colorama.Fore.RED + "torch.cuda is not available" + colorama.Fore.RESET)
     
     with wakepy.keep.running():
-        (data_train, params["class_names"], class_inv_freq) = load_set_of_anns(params["data_dir"])
+        (data_train, params["class_names"], class_inv_freq) = load_set_of_anns(params["training_data_dir"])
+        loss_file = os.path.join(params["training_data_dir"], "loss.npy")
+        if os.path.exists(loss_file):
+            print("Loading previous difficulty values...")
+            arr = numpy.load(loss_file)
+            class_inv_freq = arr[0]          # row 0
+            raw_difficulty = arr[1]          # row 1
+            # Normalise difficulty
+            difficulty = raw_difficulty / (raw_difficulty.mean() + 1e-8)
+            # Compute new weights
+            new_weights = difficulty / numpy.sqrt(class_inv_freq + 1e-8)
+            # Normalise weights to mean 1
+            new_weights = new_weights / new_weights.mean()
+            print("Using difficulty-adjusted class weights:")
+            for cls, w in zip(params["class_names"], new_weights):
+                print(f"{cls}: {w:.3f}")
+            params["class_weight_vector"] = new_weights.astype(numpy.float32)
+        else:
+            # reuse your existing helper
+            params["class_weight_vector"] = build_class_weight_vector(params["class_names"], DEFAULT_CLASS_WEIGHTS, params["device"])
+
         # train loader
         train_dataset = AudioLoader(data_train, params, is_train=True)
         train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, pin_memory=True,)
         inputs_train = next(iter(train_loader))
         params["ip_height"] = int(Classifier.SPEC_HEIGHT * Classifier.RESIZE_FACTOR)
-        print("\ntrain batch spec size :", inputs_train["spec"].shape)
-        print("class target size     :", inputs_train["y_2d_classes"].shape)
-        # save parameters to file 
-        with open(os.path.join(params["data_dir"], "params.json"), "w") as da:
-            json.dump(params, da, indent=2, sort_keys=True) 
         trainer = Trainer(params, len(train_loader))
         # main train loop
+        model_name  = None; model_file_path = None
         for epoch in range(0, MAX_EPOCHS + 1):
             train_loss = trainer.train(epoch, train_loader)
-            #train_loss = train(model, epoch, train_loader, optimizer,  scheduler, params)
             if epoch > MIN_EPOCHS and epoch % NUM_SAVE_EPOCHS == 0:
                 # save trained model
-                now_str = datetime.datetime.now().strftime("%Y_%m_%d__%H_%M_%S")
-                model_file_name = f"E{trainer.best_epoch}_LESS_COMBINE_PROB_{now_str}.pth.tar"
-                print(f"saving model to: {model_file_name}")
+                model_name = f"E{trainer.best_epoch}_{datetime.datetime.now().strftime("%Y_%m_%d__%H_%M_%S")}"
+                print(f"saving model to: {params["model_path"]}.pth.tar")
                 op_state = {"epoch": trainer.best_epoch + 1, "state_dict": trainer.best_model.state_dict(), "params": params}
-                torch.save(op_state, os.path.join(params["data_dir"], model_file_name))
+                torch.save(op_state, params["model_path"] + ".pth.tar")
                 if epoch - trainer.best_epoch > 50:
-                    break # have plateaued
+                    numpy.save(os.path.join(os.path.dirname((params["model_path"], "loss"), numpy.vstack((class_inv_freq, trainer.best_loss.detach().cpu().numpy())) )
+                    break # have plateaued  
+        del trainer
+        torch.cuda.empty_cache()
+            
 if __name__ == "__main__":
     main()
