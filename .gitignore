@@ -2,7 +2,8 @@
 __pycache__/
 *.py[oc]
 TrainingData/
-zTrainingData/
+ValidationData/
+Models/
 *.egg-info
 Resources/temp.wav
 README.md.backup
