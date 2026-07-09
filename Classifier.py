@@ -49,10 +49,8 @@ def load_model(model_path: str = DEFAULT_MODEL_PATH, load_weights: bool = True, 
     params = net_params["params"]
     model: DetectionModel
     model = Net2dFast.Net2dFast(NUM_FILTERS, num_classes=len(params["class_names"]), ip_height=params["ip_height"])
-
     if load_weights:
         model.load_state_dict(net_params["state_dict"])
-
     model = model.to(device)
     model.eval()
     return model, params
@@ -330,9 +328,7 @@ def load_audio(path: AudioPath, time_exp_fact: float, target_samp_rate: int) -> 
 
 class Classifier():
     """Uses BatDetect2 lower level code without modification any modifications are in this class"""
-    def __init__(self, parentSelf=None, model=DEFAULT_MODEL_PATH):
-        if parentSelf is not None: self.Status = parentSelf.Status
-        else: self.Status = None
+    def __init__(self, model=DEFAULT_MODEL_PATH):
         if model != DEFAULT_MODEL_PATH: print(f"Classifier __init__ {model=}")
         args = {'cnn_features': False, 'spec_features': False, 'quiet': False, 'save_preds_if_empty': False, 'model_path': model}
         code_dir = os.path.dirname(os.path.abspath(__file__))
@@ -438,14 +434,14 @@ class Classifier():
             duration=audio_full.shape[0] / float(sampling_rate), params=self.modelParams, predictions=predictions, nyquist_freq=orig_samp_rate / 2)
         return calls
 
-    def File(self, filepath, debug=False, annEmpty=True):
+    def File(self, filepath, debug=False, annForEmpty=True, annDir="ann"):
         """Classifies one file using BatDetect2"""
         dir = os.path.dirname(filepath)
         file = os.path.basename(filepath)
         calls = self.process_file(filepath, self.model)
-        op_dir = os.path.join(dir,"ann")
+        op_dir = os.path.join(dir, annDir)
         if not os.path.isdir(op_dir): # make directory if it does not exist
             os.makedirs(op_dir)
-        if annEmpty or len(calls) > 0 : summary = self.save_results_to_file(calls, os.path.join(op_dir ,file)) # annEmpty = annotaion for empty file saves trying to classify again
+        if annForEmpty or len(calls) > 0 : summary = self.save_results_to_file(calls, os.path.join(op_dir ,file)) # annEmpty = annotaion for empty file saves trying to classify again
         if len(summary)> 0: print(colorama.Fore.GREEN + f"{file}, {summary}  " + colorama.Fore.RESET, flush=True)
         return summary
