@@ -159,7 +159,7 @@ class MainWindow():
             dpg.add_key_press_handler(key=dpg.mvKey_Right, callback=self.RightKey_pressed)          
 
         # Initialise display from last time closed down
-        self.classify = Classifier(self)
+        self.classify = Classifier()
         if sys.platform.startswith("win"): DragAndDrop.set_drop(self.FileDrop)
         self.SpecDisplay1.dir = config['dir']; self.SpecDisplay1.file = config['file']
         if len(config['echoMeterDir']) > 0:
@@ -666,11 +666,15 @@ class MainWindow():
         callsJsonPath = os.path.join(self.SpecDisplay1.dir, "ann", f"{self.SpecDisplay1.file}.json")
         if os.path.exists(callsJsonPath): os.remove(callsJsonPath)
         if self.MultiFile:
-            rows = dpg.get_item_children(self.FileTable, slot=1)
-            dpg.delete_item(rows[self.FileTableRow])
+            print(f"DeleteFile_click before {self.FilesDF.height=}")
+            self.FilesDF = self.FilesDF.filter(polars.arange(0, self.FilesDF.height) != self.FileTableRow)
+            dirResults_file = os.path.join(self.ActiveDisplay.dir, "BatDetect2 Results.csv")
+            self.FilesDF.write_csv(dirResults_file)            
+            print(f"DeleteFile_click after {self.FilesDF.height=}")
+            self.LoadBatDetectTable(self.FileTable, dir=self.ActiveDisplay.dir, loadBatDetect2=False)
         else:
             del self.ActiveDisplay.dirFiles[self.ActiveDisplay.dirIndex]
-        self.DownKey_pressed(self.DeleteFile, 0, 0)
+            self.DownKey_pressed(self.DeleteFile, 0, 0)
     
     def AssignCallTypeCombo_changed(self, sender, app_data, user_data):
         """So the call type can be altered from the default echolocation the only one BatDetect2 knows"""
@@ -802,7 +806,7 @@ class MainWindow():
                 dpg.set_y_scroll(self.FileTable, ysm)
                 
     def LoadBatDetectTable(self, table, dir, loadBatDetect2=True):
-        """Loads file table with clasification summary of each file if already classified"""
+        """Loads file table with classification summary of each file if already classified"""
         print(f"LoadBatDetectTable {table=} {dir=}")
         config["echoMeterDir"] = ""
         if loadBatDetect2:
