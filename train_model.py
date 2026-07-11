@@ -587,7 +587,7 @@ class Trainer():
         self.device = params["device"]
         self.classes = params["class_names"]
         self.num_classes =len(self.classes)
-        self.class_weight_vector = params["class_weight_vector"]
+        self.class_weight_vector = torch.tensor(params["class_weight_vector"], device=params["device"])
         self.min_loss = 1.79e308
         model = Net2dFast.Net2dFast(Classifier.NUM_FILTERS, num_classes=self.num_classes, ip_height=params["ip_height"])
         self.model = model.to(Classifier.DEVICE)
@@ -656,7 +656,7 @@ def main():
     
     with wakepy.keep.running():
         (data_train, params["class_names"], class_inv_freq) = load_set_of_anns(params["training_data_dir"])
-        loss_file = os.path.join(params["training_data_dir"], "loss.npy")
+        loss_file = os.path.join(os.path.dirname(params["model_path"]), "loss")
         if os.path.exists(loss_file):
             print("Loading previous difficulty values...")
             arr = numpy.load(loss_file)
@@ -693,10 +693,10 @@ def main():
                 op_state = {"epoch": trainer.best_epoch + 1, "state_dict": trainer.best_model.state_dict(), "params": params}
                 torch.save(op_state, params["model_path"] + ".pth.tar")
                 if epoch - trainer.best_epoch > 50:
-                    numpy.save(os.path.join(os.path.dirname((params["model_path"], "loss"), numpy.vstack((class_inv_freq, trainer.best_loss.detach().cpu().numpy())) )
+                    numpy.save(os.path.join(os.path.dirname(params["model_path"]), "loss"), numpy.vstack((class_inv_freq, trainer.best_loss.detach().cpu().numpy())) )
                     break # have plateaued  
-        del trainer
-        torch.cuda.empty_cache()
+        #del trainer
+        #torch.cuda.empty_cache()
             
 if __name__ == "__main__":
     main()
