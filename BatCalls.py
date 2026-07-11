@@ -131,14 +131,17 @@ class BatCalls():
         if calls is None: calls = self.CallsNP
         if audioFile is None: audioFile = self.parent.file
         for call in calls:
+            #annotationValues.append({'class': self.SpeciesNames["Latin"][int(call[0])], 'class_prob': idProb, 'det_prob': call[5], 'end_time': call[2]), 'event': self.CallTypes[int(call[7])], 'high_freq': call[4], 'individual': '-1','low_freq': call[3], 'start_time': call[1]})
+            
             id = self.SpeciesNames["Latin"][int(call[0])]; t1=f"{call[1]:.4f}"; t2=f"{call[2]:.4f}"; f1=f"{call[3]*1000:.0f}"
             f2=f"{call[4]*1000:.0f}"; p1 = f"{call[5]:.3f}"; idProb = call[6]; p2 = f"{idProb:.3f}"; ct = self.CallTypes[int(call[7])]
-            annotationValues.append({'class': id, 'class_prob': p2, 'det_prob': p1, 'end_time': t2, 'event': ct, 'high_freq': f2, 'individual': '-1','low_freq': f1, 'start_time': t1})
+            annotationValues.append({'class': id, 'class_prob': float(p2), 'det_prob': float(p1), 'end_time': float(t2), 'event': ct, 'high_freq': float(f2), 'individual': '-1','low_freq': float(f1), 'start_time': float(t1)})
             if idProb > maxIdProb: 
                 maxIdProb = idProb
                 maxId = id
         thisdict = {"annotated": True, "annotation": annotationValues, "class_name": maxId, "duration":  self.parent.duration, "id": audioFile, "issued": False, "notes": "Automatically generated.", "time_exp": 1}
-        with open(callsJsonPath, "w", encoding="utf-8") as jsonfile:
+        #with open(callsJsonPath, "w", encoding="utf-8") as jsonfile:
+        with open(callsJsonPath, "w") as jsonfile:
             json.dump(thisdict, jsonfile, indent=2, sort_keys=True, cls=NumpyEncoder)
 
     def toCSV(self, csvFilePath, calls=None):
@@ -150,7 +153,7 @@ class BatCalls():
         for call in calls:
             s = self.SpeciesNames["Latin"][int(call[0])]; t1=f"{call[1]:.4f}"; t2=f"{call[2]:.4f}"; f1=f"{call[3]*1000:.0f}"
             f2=f"{call[4]*1000:.0f}"; p1 = f"{call[5]:.3f}"; p2 = f"{call[6]:.3f}"; ct = self.CallTypes[int(call[7])]
-            data.append([n, p1, t1, t2, f2, f1, s, p2, ct])
+            data.append([n, float(p1), float(t1), float(t2), float(f2), float(f1), s, float(p2), ct])
             n += 1
         with open(csvFilePath, 'w', newline='') as csvfile:
             writer = csv.writer(csvfile)
