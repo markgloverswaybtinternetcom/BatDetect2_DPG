@@ -442,6 +442,6 @@ class Classifier():
         op_dir = os.path.join(dir, annDir)
         if not os.path.isdir(op_dir): # make directory if it does not exist
             os.makedirs(op_dir)
-        if annForEmpty or len(calls) > 0 : summary = self.save_results_to_file(calls, os.path.join(op_dir ,file)) # annEmpty = annotaion for empty file saves trying to classify again
+        if annForEmpty or len(calls) > 0 : summary = self.save_results_to_file(calls, os.path.join(op_dir ,file)) # annForEmpty = annotation for empty file saves trying to classify again
         if len(summary)> 0: print(colorama.Fore.GREEN + f"{file}, {summary}  " + colorama.Fore.RESET, flush=True)
         return summary

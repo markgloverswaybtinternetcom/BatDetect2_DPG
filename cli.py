@@ -28,7 +28,7 @@ def ClassifyDir(dir_path, deleteNoCallFiles=False):
         FilesDF = polars.DataFrame(schema=[("Filename", polars.Utf8), ("Bat Call", polars.Utf8)]) # Utf8 = string
         length = len(files)
         for index, audio_file in enumerate(files): 
-            result = classify.File(audio_file, annEmpty=not deleteNoCallFiles)
+            result = classify.File(audio_file, annForEmpty=not deleteNoCallFiles)
             file = os.path.basename(audio_file)
             if len(result) > 0: 
                 r = len(FilesDF)
