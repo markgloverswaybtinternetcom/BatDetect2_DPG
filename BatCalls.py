@@ -115,6 +115,8 @@ class BatCalls():
         with open(filepath, 'r') as file:
             jsonData = json.load(file)
             self.CallsNP = None
+            audioFile = jsonData['id']
+            duration = jsonData['duration']
             for call in jsonData['annotation']:
                 id = self.LatinIdx[call["class"]]; ct = self.CallTypes.index(call["event"]); t1 = float(call["start_time"]); t2 = float(call["end_time"]); 
                 f1 = float(call["low_freq"])/1000; f2 = float(call["high_freq"])/1000; p1 = float(call["det_prob"]); p2 = float(call["class_prob"])
@@ -122,25 +124,25 @@ class BatCalls():
                     self.CallsNP = numpy.array([[ id, t1, t2, f1, f2, p1, p2, ct]], dtype=numpy.float32) 
                 else:
                     self.CallsNP = numpy.append(self.CallsNP, numpy.array([[ id, t1, t2, f1, f2, p1, p2, ct]], dtype=numpy.float32), axis=0)
+        return audioFile, duration
                 
-    def toJSON(self, callsJsonPath, calls=None, audioFile=None):
+    def toJSON(self, callsJsonPath, calls=None, audioFile=None, duration=None):
         """"Save annotation information to a JSON file in format that the BatDetect2 uses for traiing models"""
         print(f"toJSON {callsJsonPath=}")
         annotationValues = []
         maxId = ""; maxIdProb = 0.0
         if calls is None: calls = self.CallsNP
         if audioFile is None: audioFile = self.parent.file
-        for call in calls:
-            #annotationValues.append({'class': self.SpeciesNames["Latin"][int(call[0])], 'class_prob': idProb, 'det_prob': call[5], 'end_time': call[2]), 'event': self.CallTypes[int(call[7])], 'high_freq': call[4], 'individual': '-1','low_freq': call[3], 'start_time': call[1]})
-            
-            id = self.SpeciesNames["Latin"][int(call[0])]; t1=f"{call[1]:.4f}"; t2=f"{call[2]:.4f}"; f1=f"{call[3]*1000:.0f}"
-            f2=f"{call[4]*1000:.0f}"; p1 = f"{call[5]:.3f}"; idProb = call[6]; p2 = f"{idProb:.3f}"; ct = self.CallTypes[int(call[7])]
-            annotationValues.append({'class': id, 'class_prob': float(p2), 'det_prob': float(p1), 'end_time': float(t2), 'event': ct, 'high_freq': float(f2), 'individual': '-1','low_freq': float(f1), 'start_time': float(t1)})
-            if idProb > maxIdProb: 
-                maxIdProb = idProb
-                maxId = id
-        thisdict = {"annotated": True, "annotation": annotationValues, "class_name": maxId, "duration":  self.parent.duration, "id": audioFile, "issued": False, "notes": "Automatically generated.", "time_exp": 1}
-        #with open(callsJsonPath, "w", encoding="utf-8") as jsonfile:
+        if duration is None: audioFile = self.parent.duration
+        if calls is not None:
+            for call in calls:
+                id = self.SpeciesNames["Latin"][int(call[0])]; t1=f"{call[1]:.4f}"; t2=f"{call[2]:.4f}"; f1=f"{call[3]*1000:.0f}"
+                f2=f"{call[4]*1000:.0f}"; p1 = f"{call[5]:.3f}"; idProb = call[6]; p2 = f"{idProb:.3f}"; ct = self.CallTypes[int(call[7])]
+                annotationValues.append({'start_time': float(t1), 'end_time': float(t2), 'low_freq': float(f1), 'high_freq': float(f2), 'class': id, 'class_prob': float(p2), 'det_prob': float(p1), 'individual': '-1', 'event': ct})
+                if idProb > maxIdProb: 
+                    maxIdProb = idProb
+                    maxId = id
+        thisdict = {"annotated": True, "annotation": annotationValues, "class_name": maxId, "duration":  duration, "id": audioFile, "issued": False, "notes": "Automatically generated.", "time_exp": 1}
         with open(callsJsonPath, "w") as jsonfile:
             json.dump(thisdict, jsonfile, indent=2, sort_keys=True, cls=NumpyEncoder)
 
@@ -150,11 +152,12 @@ class BatCalls():
         data = [['id','det_prob','start_time','end_time','high_freq','low_freq','class','class_prob','event']]
         n = 0
         if calls is None: calls = self.CallsNP
-        for call in calls:
-            s = self.SpeciesNames["Latin"][int(call[0])]; t1=f"{call[1]:.4f}"; t2=f"{call[2]:.4f}"; f1=f"{call[3]*1000:.0f}"
-            f2=f"{call[4]*1000:.0f}"; p1 = f"{call[5]:.3f}"; p2 = f"{call[6]:.3f}"; ct = self.CallTypes[int(call[7])]
-            data.append([n, float(p1), float(t1), float(t2), float(f2), float(f1), s, float(p2), ct])
-            n += 1
+        if calls is not None:
+            for call in calls:
+                s = self.SpeciesNames["Latin"][int(call[0])]; t1=f"{call[1]:.4f}"; t2=f"{call[2]:.4f}"; f1=f"{call[3]*1000:.0f}"
+                f2=f"{call[4]*1000:.0f}"; p1 = f"{call[5]:.3f}"; p2 = f"{call[6]:.3f}"; ct = self.CallTypes[int(call[7])]
+                data.append([n, float(p1), float(t1), float(t2), float(f2), float(f1), s, float(p2), ct])
+                n += 1
         with open(csvFilePath, 'w', newline='') as csvfile:
             writer = csv.writer(csvfile)
             writer.writerows(data)

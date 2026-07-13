@@ -296,18 +296,14 @@ def format_single_result(file_id: str, time_exp: float, duration: float, predict
         class_overall = numpy.zeros(len(class_names))
         class_name = "None"
         annotations = []
-
     return {"id": file_id, "annotated": False, "issues": False, "notes": "Automatically generated.", "time_exp": time_exp, "duration": round(float(duration), 4),
         "annotation": annotations, "class_name": class_name}
     
 def convert_results(file_id: str, time_exp: float, duration: float, params: ResultParams, predictions, nyquist_freq: Optional[float] = None) -> RunResults:
-
     pred_dict = format_single_result(file_id, time_exp, duration, predictions, params["class_names"])
-
     # Remove high frequency detections
     if nyquist_freq is not None:
         pred_dict["annotation"] = [pred for pred in pred_dict["annotation"] if pred["high_freq"] <= nyquist_freq]
-
     # combine into final results dictionary
     results: RunResults = {"pred_dict": pred_dict}
     return results
@@ -390,15 +386,19 @@ class Classifier():
                 else: preds_df = results_df[["det_prob", "start_time",  "end_time", "high_freq", "low_freq", "class", "class_prob", "event"]]
                 preds_df.to_csv(op_path + ".csv", sep=",")
                 summary = self.GetDfSummary(preds_df)
+                #create file for training as well
+                with open(op_path + ".json", "w", encoding="utf-8") as jsonfile:
+                    json.dump(preds_df, jsonfile, indent=2)
             else:
                 with open(op_path + ".csv", "w") as f:
                     f.write("id,det_prob,start_time,end_time,high_freq,low_freq,class,class_prob\n")
+                with open(op_path + ".json", "w", encoding="utf-8") as jsonfile:
+                    json.dump(results["pred_dict"], jsonfile, indent=2)
         else:
             with open(op_path + ".csv", "w") as f: # empty file so do not repeat classification
                 f.write("id,det_prob,start_time,end_time,high_freq,low_freq,class,class_prob\n")
-        #create file for training as well
-        with open(op_path + ".json", "w", encoding="utf-8") as jsonfile:
-            json.dump(results["pred_dict"], jsonfile, indent=2)
+                with open(op_path + ".json", "w", encoding="utf-8") as jsonfile:
+                    json.dump(results["pred_dict"], jsonfile, indent=2)
         return summary
  
     def process_file(self, audio_file: str, model: DetectionModel, device: torch.device=DEVICE) -> Union[RunResults, Any]:
