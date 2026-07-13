@@ -1,5 +1,6 @@
 import os, json, polars, glob, argparse, colorama
 from Classifier import Classifier
+MIN_IOU = 0.2 
 
 REFERENCE_COLS = [
     "reference_start",
@@ -49,27 +50,22 @@ EMPTY_REFERENCE = polars.DataFrame({
 
 def safe_concat(dfs):
     if not dfs:
-        print("[SAFE_CONCAT] dfs is empty → returning empty DF")
+        print(colorama.Back.RED + "[SAFE_CONCAT] dfs is empty → returning empty DF"+ colorama.Back.RESET )
         return polars.DataFrame()
     if len(dfs) == 1:
-        print("[SAFE_CONCAT] dfs has one DF → returning it directly")
+        print(colorama.Back.RED + "[SAFE_CONCAT] dfs has one DF → returning it directly"+ colorama.Back.RESET )
         return dfs[0]
     try:
         print("[SAFE_CONCAT] attempting concat of", len(dfs), "DFs")
         return polars.concat(dfs)
     except Exception as e:
-        print("\n=== SAFE_CONCAT FAILURE ===")
+        print(colorama.Back.RED + "=== SAFE_CONCAT FAILURE ==="+ colorama.Back.RESET )
+        print("Original error:", e)
         print("Concat failed. Dumping schemas:\n")
         for i, df in enumerate(dfs):
-            print(f"DF #{i}:")
-            print("  columns:", df.columns)
-            print("  dtypes:", df.dtypes)
-            print("  rows:", df.height)
-            print()
-        print("Original error:", e)
-        print("=== END SAFE_CONCAT FAILURE ===\n")
+            print(f"DF #{i}: {df.columns=} {df.dtypes=} {df.height=}")
         raise
-        
+    
 def enforce_schema(df, cols):
     # Ensure all required columns exist
     for col in cols:
@@ -137,8 +133,36 @@ def write_per_model_class_csv(best_matches_all, model_all, reference_all, class_
         "model_count",
         "ref_count"
     ])
+    summary = per_class.select([
+        polars.lit(model_name).alias("model_name"),
+        polars.lit("OVERALL").alias("model_class"),
+        polars.sum("true_positives").alias("true_positives"),
+        polars.sum("false_positives").alias("false_positives"),
+        polars.sum("false_negatives").alias("false_negatives"),
+        (polars.sum("true_positives") /
+         (polars.sum("true_positives") + polars.sum("false_positives"))
+        ).alias("precision"),
+        (polars.sum("true_positives") /
+         (polars.sum("true_positives") + polars.sum("false_negatives"))
+        ).alias("recall"),
+        (2 * polars.sum("true_positives") /
+         (2 * polars.sum("true_positives") +
+          polars.sum("false_positives") +
+          polars.sum("false_negatives"))
+        ).alias("f1_score"),
+        polars.sum("model_count").alias("model_count"),
+        polars.sum("ref_count").alias("ref_count"),
+    ])
+    per_class = polars.concat([per_class, summary])
+    # Round all float columns to the desired precision
+    DECIMALS = 3
+    per_class = per_class.select([
+        polars.col(col).round(DECIMALS) if per_class[col].dtype in (polars.Float32, polars.Float64) else polars.col(col)
+        for col in per_class.columns
+    ])
     # Write CSV
-    out_path = f"{model_name}_class_scores.csv"
+    model_dir = os.path.dirname(model_file_path)
+    out_path = os.path.join(model_dir, f"{model_name}_class_scores.csv")
     per_class.write_csv(out_path)
     print("Wrote:", out_path)
 
@@ -256,7 +280,7 @@ def validate_model(model_file_path, validation_data_directory):
         matches = pairs.filter(
             (polars.col("model_class") == polars.col("reference_class")) &
             (polars.col("model_event") == polars.col("reference_event")) &
-            (polars.col("iou") >= 0.3)
+            (polars.col("iou") >= MIN_IOU)
         )
         print(f"validate_model {filename=} model_df:{model_df.shape[0]}, reference_df:{reference_df.shape[0]}, iou>0.3: {pairs.filter((polars.col("iou") > 0.3)).shape[0]} matches: {matches.shape[0]}")        
         # Greedy best match per model call
