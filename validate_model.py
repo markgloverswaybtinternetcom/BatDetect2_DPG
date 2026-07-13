@@ -29,12 +29,61 @@ MATCH_COLS = [
     "time_iou", "frequency_iou", "iou",
 ]
 
-def normalize_schema(df: pl.DataFrame, required_cols: list[str]) -> pl.DataFrame:
-    for col in required_cols:
+EMPTY_MODEL = polars.DataFrame({
+    "model_start": polars.Series([], dtype=polars.Float64),
+    "model_end": polars.Series([], dtype=polars.Float64),
+    "model_low": polars.Series([], dtype=polars.Float64),
+    "model_high": polars.Series([], dtype=polars.Float64),
+    "model_class": polars.Series([], dtype=polars.Utf8),
+    "model_event": polars.Series([], dtype=polars.Utf8),
+})
+
+EMPTY_REFERENCE = polars.DataFrame({
+    "reference_start": polars.Series([], dtype=polars.Float64),
+    "reference_end": polars.Series([], dtype=polars.Float64),
+    "reference_low": polars.Series([], dtype=polars.Float64),
+    "reference_high": polars.Series([], dtype=polars.Float64),
+    "reference_class": polars.Series([], dtype=polars.Utf8),
+    "reference_event": polars.Series([], dtype=polars.Utf8),
+})
+
+def safe_concat(dfs):
+    if not dfs:
+        print("[SAFE_CONCAT] dfs is empty → returning empty DF")
+        return polars.DataFrame()
+    if len(dfs) == 1:
+        print("[SAFE_CONCAT] dfs has one DF → returning it directly")
+        return dfs[0]
+    try:
+        print("[SAFE_CONCAT] attempting concat of", len(dfs), "DFs")
+        return polars.concat(dfs)
+    except Exception as e:
+        print("\n=== SAFE_CONCAT FAILURE ===")
+        print("Concat failed. Dumping schemas:\n")
+        for i, df in enumerate(dfs):
+            print(f"DF #{i}:")
+            print("  columns:", df.columns)
+            print("  dtypes:", df.dtypes)
+            print("  rows:", df.height)
+            print()
+        print("Original error:", e)
+        print("=== END SAFE_CONCAT FAILURE ===\n")
+        raise
+        
+def enforce_schema(df, cols):
+    # Ensure all required columns exist
+    for col in cols:
         if col not in df.columns:
             df = df.with_columns(polars.lit(None).alias(col))
-    return df.select(required_cols)
+    # Drop extras and reorder
+    return df.select(cols)
 
+def cast_numeric(df, numeric_cols):
+    for col in numeric_cols:
+        if col in df.columns:
+            df = df.with_columns(polars.col(col).cast(polars.Float64, strict=False))
+    return df
+    
 def write_per_model_class_csv(best_matches_all, model_all, reference_all, class_names, model_file_path):
     # Count model calls per class
     model_counts = (model_all.group_by("model_class").count().rename({"count": "model_count"}))
@@ -92,7 +141,21 @@ def write_per_model_class_csv(best_matches_all, model_all, reference_all, class_
     out_path = f"{model_name}_class_scores.csv"
     per_class.write_csv(out_path)
     print("Wrote:", out_path)
-    
+
+def latest_model_file(models_dir):
+    files = glob.glob(os.path.join(models_dir, "model_*.pth.tar"))
+    if not files:
+        raise FileNotFoundError("No model files found in Models/")
+    # Sort by model number, then epoch
+    def extract_nums(f):
+        base = os.path.basename(f)
+        parts = base.split("_")
+        model_num = int(parts[1])
+        epoch = int(parts[2][1:].split(".")[0])  # strip leading E
+        return (model_num, epoch)
+    files.sort(key=extract_nums)
+    return files[-1]
+
 def validate_model(model_file_path, validation_data_directory):
     # Load classifier
     classifier = Classifier(model=model_file_path)
@@ -125,18 +188,7 @@ def validate_model(model_file_path, validation_data_directory):
         reference_df = polars.DataFrame(reference_json["annotation"])
         # Handle empty JSON (noise or no detections)
         if model_df.is_empty():
-            # Create an empty DataFrame with the correct schema
-            model_df = polars.DataFrame({
-                "model_class": [],
-                "model_start": [],
-                "model_end": [],
-                "model_low": [],
-                "model_high": [],
-                "model_event": [],
-                "class_prob": [],
-                "det_prob": [],
-                "individual": [],
-            })
+            model_df = EMPTY_MODEL
         else:
             # Normal rename path
             model_df = model_df.rename({
@@ -147,29 +199,22 @@ def validate_model(model_file_path, validation_data_directory):
                 "low_freq": "model_low",
                 "high_freq": "model_high",
             })
+        model_df = enforce_schema(model_df, MODEL_COLS)
+        model_df = cast_numeric(model_df, ["model_start", "model_end", "model_low", "model_high"])
         if reference_df.is_empty():
-            # Create an empty DataFrame with the correct schema
-            reference_df = polars.DataFrame({
-                "reference_class": [],
-                "reference_start": [],
-                "reference_end": [],
-                "reference_low": [],
-                "reference_high": [],
-                "reference_event": [],
-                "class_prob": [],
-                "det_prob": [],
-                "individual": [],
-            })
+            reference_df = EMPTY_REFERENCE 
         else:
-            # Normal rename path
             reference_df = reference_df.rename({
                 "class": "reference_class",
                 "event": "reference_event",
                 "start_time": "reference_start",
                 "end_time": "reference_end",
                 "low_freq": "reference_low",
-                "high_freq": "reference_high"
-            })
+                "high_freq": "reference_high",
+            })  
+        reference_df = enforce_schema(reference_df, REFERENCE_COLS)
+        reference_df = cast_numeric(reference_df, ["reference_start", "reference_end", "reference_low", "reference_high"])
+        all_reference_annotations.append(reference_df)
         # Cross join model × reference calls
         pairs = model_df.join(reference_df, how="cross")
         pairs = pairs.with_columns([
@@ -213,46 +258,27 @@ def validate_model(model_file_path, validation_data_directory):
             (polars.col("model_event") == polars.col("reference_event")) &
             (polars.col("iou") >= 0.3)
         )
+        print(f"validate_model {filename=} model_df:{model_df.shape[0]}, reference_df:{reference_df.shape[0]}, iou>0.3: {pairs.filter((polars.col("iou") > 0.3)).shape[0]} matches: {matches.shape[0]}")        
         # Greedy best match per model call
-        best_matches = (
-            matches.sort("iou", descending=True)
-            .group_by(["model_start", "model_end", "model_low", "model_high"])
-            .head(1)
-        )
+        best_matches = (matches.sort("iou", descending=True).group_by(["model_start", "model_end", "model_low", "model_high"]).head(1))
         all_best_matches.append(best_matches)
         all_model_annotations.append(model_df)
-        all_reference_annotations.append(reference_df)
+        all_reference_annotations.append(reference_df)   
     # Concatenate all results
-    normalized_refs = [normalize_schema(df, REFERENCE_COLS) for df in all_reference_annotations]
-    #initial validation files string floating point values
-    normalized_refs = [
-        df.with_columns([
-            polars.col("reference_start").cast(polars.Float64),
-            polars.col("reference_end").cast(polars.Float64),
-            polars.col("reference_low").cast(polars.Float64),
-            polars.col("reference_high").cast(polars.Float64),
-        ])
-        for df in normalized_refs
-    ]    
-    reference_all = polars.concat(normalized_refs)    
-    normalized_models = [normalize_schema(df, MODEL_COLS) for df in all_model_annotations]
-    model_all = polars.concat(normalized_models)
-    normalized_matches = [ normalize_schema(df, MATCH_COLS) for df in all_best_matches]
-    best_matches_all = polars.concat(normalized_matches)
-
+    reference_all = safe_concat(all_reference_annotations)  
+    model_all = safe_concat(all_model_annotations)
+    best_matches_all = safe_concat(all_best_matches)
     if model_all.is_empty():
-        print(colorama.Back.RED + WARNING: No model detections found in validation set." + colorama.Back.RESET)
+        print(colorama.Back.RED + "WARNING: No model detections found in validation set." + colorama.Back.RESET)
 
     if reference_all.is_empty():
         print(colorama.Back.RED + "WARNING: No reference annotations found in validation set." + colorama.Back.RESET)
 
     if best_matches_all.is_empty():
         print(colorama.Back.RED + "WARNING: No matches found (IoU threshold too high or no overlapping calls)." + colorama.Back.RESET)
-    
-    print("model_all rows:", model_all.height())
-    print("reference_all rows:", reference_all.height())
-    print("best_matches_all rows:", best_matches_all.height())
-
+    print("model_all rows:", model_all.height)
+    print("reference_all rows:", reference_all.height)
+    print("best_matches_all rows:", best_matches_all.height)
     # Compute per-class CSV
     write_per_model_class_csv(best_matches_all, model_all, reference_all, class_names, model_file_path)
     print("Validation complete.")
@@ -261,6 +287,8 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser( description="Run validation scoring on a trained model.")
     parser.add_argument("validation_data_dir", type=str, help="Path to the root directory of the validation dataset.")
-    parser.add_argument("model_path",type=str,help="Path to the trained model file.")
+    parser.add_argument("model_dir",type=str,help="Directory containing trained model files.")
     arguments = parser.parse_args()
-    validate_model(model_file_path=arguments.model_path,validation_data_directory=arguments.validation_data_dir)
+    model_file_path = latest_model_file(arguments.model_dir)
+    print(f"Validating latest model: {model_file_path}")
+    validate_model(model_file_path, validation_data_directory=arguments.validation_data_dir)
