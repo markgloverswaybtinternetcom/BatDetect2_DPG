@@ -95,6 +95,21 @@ def summarize_array(name, value):
     vals_greater_mean = (flat > numpy.mean(flat)).sum()
     print(colorama.Style.BRIGHT + f"{name + colorama.Style.RESET_ALL}: shape={arr.shape}, {arr.dtype}, min={numpy.min(flat):.3f}, max={numpy.max(flat):.3f} mean={numpy.mean(flat):.3f}, N above mean= {vals_greater_mean}, NANs={int(nan_count)}")
 
+def next_model_number(models_dir):
+    files = glob.glob(os.path.join(models_dir, "model_*.pth.tar"))
+    if not files:
+        return 1
+    nums = []
+    for f in files:
+        base = os.path.basename(f)
+        # model_<n>_E<epoch>.pth.tar
+        try:
+            n = int(base.split("_")[1])
+            nums.append(n)
+        except:
+            continue
+    return max(nums) + 1 if nums else 1
+    
 def summarize(functionName, data):
     if not DEBUG: return
     if isinstance(data, numpy.ndarray) or hasattr(data, "__array__"):
@@ -127,7 +142,9 @@ def load_set_of_anns(wav_path):
         for aa in ann["annotation"]:
             class_names_all.append(CompositeClass(aa["class"], aa["event"]))
     class_names, class_cnts = numpy.unique(class_names_all, return_counts=True)
-    class_inv_freq = class_cnts.sum() / (len(class_names) * class_cnts.astype(numpy.float32))
+    #class_inv_freq = class_cnts.sum() / (len(class_names) * class_cnts.astype(numpy.float32))
+    #class_inv_freq = (total_calls / num_classes) * (1 / class_cnts)
+    class_inv_freq = 1.0 / (class_cnts.astype(numpy.float32) + 1e-8)
     print("load_set_of_anns Class count:")
     str_len = numpy.max([len(cc) for cc in class_names]) + 5
     for cc in range(len(class_names)):
@@ -611,9 +628,9 @@ class Trainer():
                 outputs = self.model(data)
                 det_loss, size_loss, per_class_loss = loss_fun(outputs, target_det, target_size, target_class)
                 weighted_per_class_loss = per_class_loss * self.class_weight_vector
-                det_loss_sum += det_loss.item() * data.shape[0]; size_loss_sum += size_loss.item() * data.shape[0] 
-                weighted_per_class_loss_sum = weighted_per_class_loss_sum + (weighted_per_class_loss * data.shape[0])
-                unweighted_per_class_loss_total = unweighted_per_class_loss_total + per_class_loss
+                det_loss_sum += det_loss.item() * data.shape[0]; size_loss_sum += size_loss.item() * data.shape[0]
+                weighted_per_class_loss_sum += weighted_per_class_loss * data.shape[0]
+                unweighted_per_class_loss_total += per_class_loss * data.shape[0]
                 count += data.shape[0]
                 loss = det_loss + size_loss + weighted_per_class_loss.sum() 
                 loss.backward()
@@ -647,35 +664,50 @@ def main():
     # setup arg parser and populate it with exiting parameters - will not work with lists
     parser = argparse.ArgumentParser()
     parser.add_argument("training_data_dir", type=str, help="Path to root of datasets")
-    parser.add_argument("model_path",type=str,help="Path to the trained model file.")
+    parser.add_argument("model_dir",type=str,help="Directory containing trained model files.")
     for key, val in params.items():
         parser.add_argument("--" + key, type=type(val), default=val)
     params = vars(parser.parse_args())
     if torch.cuda.is_available(): print(colorama.Fore.GREEN + "torch.cuda.is_available" + colorama.Fore.RESET)
     else: print(colorama.Fore.RED + "torch.cuda is not available" + colorama.Fore.RESET)
+    model_num = next_model_number(params["model_dir"])
     
     with wakepy.keep.running():
         (data_train, params["class_names"], class_inv_freq) = load_set_of_anns(params["training_data_dir"])
-        loss_file = os.path.join(os.path.dirname(params["model_path"]), "loss")
+        loss_file = os.path.join(params["model_dir"], "loss.npy")
         if os.path.exists(loss_file):
             print("Loading previous difficulty values...")
             arr = numpy.load(loss_file)
             class_inv_freq = arr[0]          # row 0
             raw_difficulty = arr[1]          # row 1
-            # Normalise difficulty
-            difficulty = raw_difficulty / (raw_difficulty.mean() + 1e-8)
-            # Compute new weights
-            new_weights = difficulty / numpy.sqrt(class_inv_freq + 1e-8)
-            # Normalise weights to mean 1
-            new_weights = new_weights / new_weights.mean()
+            # --- 1. Compute per-example difficulty ---
+            # raw_difficulty is total loss; divide by call count to get mean loss
+            mean_loss = raw_difficulty / (class_inv_freq + 1e-8)
+            # --- 2. Log-scale to compress extremes ---
+            difficulty = numpy.log1p(mean_loss)
+            # --- 3. Clamp difficulty to avoid collapse/explosion ---
+            difficulty = numpy.clip(difficulty, 0.5, 3.0)
+            # --- 4. Apply special cases ---
+            adjusted = []
+            for cls, d in zip(params["class_names"], difficulty):
+                # Feeding Buzz → impossible → fixed weight = 0.0
+                if "Feeding Buzz" in cls:
+                    adjusted.append(0.0)
+                    continue
+                # Social → must not collapse
+                if "Social" in cls:
+                    d = max(d, 0.5)
+                adjusted.append(d)
+            adjusted = numpy.array(adjusted)
+            # --- 5. Normalise to mean 1 ---
+            new_weights = adjusted / adjusted.mean()
             print("Using difficulty-adjusted class weights:")
             for cls, w in zip(params["class_names"], new_weights):
                 print(f"{cls}: {w:.3f}")
             params["class_weight_vector"] = new_weights.astype(numpy.float32)
         else:
-            # reuse your existing helper
             params["class_weight_vector"] = build_class_weight_vector(params["class_names"], DEFAULT_CLASS_WEIGHTS, params["device"])
-
+    
         # train loader
         train_dataset = AudioLoader(data_train, params, is_train=True)
         train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, pin_memory=True,)
@@ -683,20 +715,18 @@ def main():
         params["ip_height"] = int(Classifier.SPEC_HEIGHT * Classifier.RESIZE_FACTOR)
         trainer = Trainer(params, len(train_loader))
         # main train loop
-        model_name  = None; model_file_path = None
         for epoch in range(0, MAX_EPOCHS + 1):
             train_loss = trainer.train(epoch, train_loader)
             if epoch > MIN_EPOCHS and epoch % NUM_SAVE_EPOCHS == 0:
                 # save trained model
-                model_name = f"E{trainer.best_epoch}_{datetime.datetime.now().strftime("%Y_%m_%d__%H_%M_%S")}"
-                print(f"saving model to: {params["model_path"]}.pth.tar")
                 op_state = {"epoch": trainer.best_epoch + 1, "state_dict": trainer.best_model.state_dict(), "params": params}
-                torch.save(op_state, params["model_path"] + ".pth.tar")
+                model_file_name = f"model_{model_num}_E{trainer.best_epoch}.pth.tar"
+                save_path = os.path.join(params["model_dir"], model_file_name)
+                torch.save(op_state, save_path)
+                print(f"Saved model: {save_path}")
                 if epoch - trainer.best_epoch > 50:
-                    numpy.save(os.path.join(os.path.dirname(params["model_path"]), "loss"), numpy.vstack((class_inv_freq, trainer.best_loss.detach().cpu().numpy())) )
+                    numpy.save(os.path.join(os.path.dirname(params["model_dir"]), "loss"), numpy.vstack((class_inv_freq, trainer.best_loss.detach().cpu().numpy())) )
                     break # have plateaued  
-        #del trainer
-        #torch.cuda.empty_cache()
             
 if __name__ == "__main__":
     main()
