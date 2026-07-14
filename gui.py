@@ -690,7 +690,7 @@ class MainWindow():
         if not os.path.isfile(callsCsvPath):
             print(f"LoadClassifiedFile {callsCsvPath=} not found")
             self.Status(f"Classifying file {f}", theme=self.yellow_align_right)
-            results = self.classify.File(f, debug=True)
+            results = self.classify.File(f, debug=True, speciesLanguage=self.SpeciesLanguage)
             if len(results) > 0:
                 self.Status(f"Classified file {f}", theme=self.green_align_right)
         display.LoadClassifiedFile(f, rememberDir=not self.MultiFile, nRow=nRow, dirList=dirList, minT=minT)                     
@@ -709,7 +709,7 @@ class MainWindow():
             r = 0;
             self.Status(f"Classifying '{os.path.basename(dir_path)}'", theme=self.yellow_align_right) 
             for index, audio_file in enumerate(files): 
-                result = self.classify.File(audio_file)
+                result = self.classify.File(audio_file, speciesLanguage=self.SpeciesLanguage)
                 if len(result) > 0: 
                     self.AddToFileTable(audio_file, result, r)
                     r += 1

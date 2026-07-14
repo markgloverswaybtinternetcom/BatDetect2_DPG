@@ -330,15 +330,16 @@ class Classifier():
         code_dir = os.path.dirname(os.path.abspath(__file__))
         self.model, self.modelParams = load_model(os.path.join(code_dir, model)) 
         #print(f"Classifier __init__ {self.modelParams=}")
-        speciesNames = pandas.read_csv(os.path.join(code_dir, "Resources", "SpeciesNames.csv"))
+        self.speciesNames = pandas.read_csv(os.path.join(code_dir, "Resources", "SpeciesNames.csv"))
         config = None
         configFile = os.path.join(code_dir, "gui_Config.json")
         if os.path.exists(configFile):
             with open(configFile, "r") as jsonfile:
                 config = json.load(jsonfile)
-                speciesLanguage = config["SpeciesLanguage"] 
-        else: speciesLanguage = "EnglishAbbrev"
-        if speciesLanguage != 'Latin' and  speciesLanguage != 'None': self.latinToLangDict = speciesNames.set_index('Latin')[speciesLanguage].to_dict()
+                self.speciesLanguage = config["SpeciesLanguage"] 
+        else: self.speciesLanguage = "EnglishAbbrev"
+        if self.speciesLanguage != 'Latin' and  self.speciesLanguage != 'None': 
+            self.latinToLangDict = self.speciesNames.set_index('Latin')[self.speciesLanguage].to_dict()
         else: self.latinToLangDict = None
 
     def GetDfSummary(self, df):
@@ -381,7 +382,7 @@ class Classifier():
                 if "-" in results_df.at[0, 'class']:
                     results_df[['species', 'call_type']] = results_df['class'].str.split('-', expand=True)
                     df = results_df[["det_prob", "start_time",  "end_time", "high_freq", "low_freq", "species", "class_prob", "call_type"]]
-                    preds_df = df[df["det_prob"] * df["class_prob"] > 0.3]
+                    preds_df = df[df["det_prob"] * df["class_prob"] > MIN_PROB]
                     preds_df.rename(columns={'species': 'class', 'call_type': 'event'}, inplace=True)
                 else: preds_df = results_df[["det_prob", "start_time",  "end_time", "high_freq", "low_freq", "class", "class_prob", "event"]]
                 preds_df.to_csv(op_path + ".csv", sep=",")
@@ -439,8 +440,10 @@ class Classifier():
             duration=audio_full.shape[0] / float(sampling_rate), params=self.modelParams, predictions=predictions, nyquist_freq=orig_samp_rate / 2)
         return calls
 
-    def File(self, filepath, debug=False, annForEmpty=True, annDir="ann"):
+    def File(self, filepath, debug=False, annForEmpty=True, annDir="ann", speciesLanguage=None):
         """Classifies one file using BatDetect2"""
+        if speciesLanguage is not None and speciesLanguage != self.speciesLanguage:
+            self.latinToLangDict = self.speciesNames.set_index('Latin')[speciesLanguage].to_dict()
         dir = os.path.dirname(filepath)
         file = os.path.basename(filepath)
         calls = self.process_file(filepath, self.model)
