@@ -129,6 +129,10 @@ class MainWindow():
             with dpg.theme_component(dpg.mvTable):
                 dpg.add_theme_color(dpg.mvThemeCol_HeaderActive, (0, 0, 0, 0), category=dpg.mvThemeCat_Core)
                 dpg.add_theme_color(dpg.mvThemeCol_Header, (0, 0, 0, 0), category=dpg.mvThemeCat_Core)
+        with dpg.theme() as self.no_hover_theme:
+            with dpg.theme_component(dpg.mvTableRow):
+                bg_color = (50, 50, 50, 255) 
+                dpg.add_theme_color(dpg.mvThemeCol_HeaderHovered, bg_color) # less distracting Hover colour
         with dpg.theme() as self.line_theme:
            with dpg.theme_component(dpg.mvLineSeries):
                   dpg.add_theme_color(dpg.mvPlotCol_Line, (200, 200, 200, 255), category=dpg.mvThemeCat_Plots)     
@@ -796,7 +800,8 @@ class MainWindow():
         file = os.path.basename(filename)
         new_row = polars.DataFrame({ "Filename": [file], "Bat Call": [result]})
         self.FilesDF.extend(new_row)
-        with dpg.table_row(parent=self.FileTable, height=ROW_PXL * config["scale"]):
+        with dpg.table_row(parent=self.FileTable, height=ROW_PXL * config["scale"]) as tRow:
+            dpg.bind_item_theme(tRow, self.no_hover_theme)  # Apply theme to row
             dt = utils.FileDate(file)
             if isinstance(dt, datetime.datetime): file = f"{file} ({dt.strftime("%d/%m/%Y %H:%M:%S")})"
             dpg.add_selectable(label=file, callback=self.TableRow_selected, span_columns=True, user_data=[self.FileTable, self.FilesDF, r, r])
@@ -831,6 +836,7 @@ class MainWindow():
                         nRow -= 1
                         break # ignore file that does not exist
                     tRow = dpg.add_table_row(parent=table, height=ROW_PXL * config["scale"])
+                    dpg.bind_item_theme(tRow, self.no_hover_theme)  # Apply theme to row
                     dt = utils.FileDate(a)
                     if isinstance(dt, datetime.datetime):
                         a = f"{a} ({dt.strftime("%d/%m/%Y %H:%M:%S")})"
@@ -863,7 +869,8 @@ class MainWindow():
         self.GpsSpeciesCells = []
         nRow = 0
         for r in range(nRows):
-            with dpg.table_row(parent=table, height=ROW_PXL * config["scale"]):
+            with dpg.table_row(parent=table, height=ROW_PXL * config["scale"]) as tRow:
+                dpg.bind_item_theme(tRow, self.no_hover_theme)  # Apply theme to row
                 for c in range(nCols):  
                     col_name = self.FilesDF.columns[c]
                     a = self.FilesDF[r, col_name] 
