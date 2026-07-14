@@ -1,52 +1,26 @@
 import os, json, polars, glob, argparse, colorama
 from Classifier import Classifier
+
 MIN_IOU = 0.2 
-
-REFERENCE_COLS = [
-    "reference_start",
-    "reference_end",
-    "reference_low",
-    "reference_high",
-    "reference_class",
-    "reference_event",
-]
-
-MODEL_COLS = [
-    "model_start",
-    "model_end",
-    "model_low",
-    "model_high",
-    "model_class",
-    "model_event",
-]
-
-MATCH_COLS = [
-    "model_start", "model_end",
-    "model_low", "model_high",
-    "model_class", "model_event",
-    "reference_start", "reference_end",
-    "reference_low", "reference_high",
-    "reference_class", "reference_event",
-    "time_iou", "frequency_iou", "iou",
-]
-
+REFERENCE_COLS = [ "reference_start", "reference_end", "reference_low", "reference_high", "reference_class", "reference_event"]
+MODEL_COLS = [ "model_start", "model_end", "model_low", "model_high", "model_class", "model_event"]
+MATCH_COLS = ["model_start", "model_end", "model_low", "model_high", "model_class", "model_event", 
+    "reference_start", "reference_end", "reference_low", "reference_high", "reference_class", "reference_event",
+    "time_iou", "frequency_iou", "iou"]
 EMPTY_MODEL = polars.DataFrame({
     "model_start": polars.Series([], dtype=polars.Float64),
     "model_end": polars.Series([], dtype=polars.Float64),
     "model_low": polars.Series([], dtype=polars.Float64),
     "model_high": polars.Series([], dtype=polars.Float64),
     "model_class": polars.Series([], dtype=polars.Utf8),
-    "model_event": polars.Series([], dtype=polars.Utf8),
-})
-
+    "model_event": polars.Series([], dtype=polars.Utf8)})
 EMPTY_REFERENCE = polars.DataFrame({
     "reference_start": polars.Series([], dtype=polars.Float64),
     "reference_end": polars.Series([], dtype=polars.Float64),
     "reference_low": polars.Series([], dtype=polars.Float64),
     "reference_high": polars.Series([], dtype=polars.Float64),
     "reference_class": polars.Series([], dtype=polars.Utf8),
-    "reference_event": polars.Series([], dtype=polars.Utf8),
-})
+    "reference_event": polars.Series([], dtype=polars.Utf8)})
 
 def safe_concat(dfs):
     if not dfs:
@@ -56,7 +30,6 @@ def safe_concat(dfs):
         print(colorama.Back.RED + "[SAFE_CONCAT] dfs has one DF → returning it directly"+ colorama.Back.RESET )
         return dfs[0]
     try:
-        print("[SAFE_CONCAT] attempting concat of", len(dfs), "DFs")
         return polars.concat(dfs)
     except Exception as e:
         print(colorama.Back.RED + "=== SAFE_CONCAT FAILURE ==="+ colorama.Back.RESET )
@@ -98,58 +71,35 @@ def write_per_model_class_csv(best_matches_all, model_all, reference_all, class_
     ])
     # Compute precision, recall, F1
     per_class = per_class.with_columns([
-        (polars.col("true_positives") /
-         (polars.col("true_positives") + polars.col("false_positives")))
+        (polars.col("true_positives") / (polars.col("true_positives") + polars.col("false_positives")))
          .alias("precision"),
-
-        (polars.col("true_positives") /
-         (polars.col("true_positives") + polars.col("false_negatives")))
+        (polars.col("true_positives") / (polars.col("true_positives") + polars.col("false_negatives")))
          .alias("recall"),
     ])
     per_class = per_class.with_columns([
-        (polars.col("true_positives") /
-         (polars.col("true_positives") + polars.col("false_positives")))
+        (polars.col("true_positives") / (polars.col("true_positives") + polars.col("false_positives")))
          .alias("precision"),
-        (polars.col("true_positives") /
-         (polars.col("true_positives") + polars.col("false_negatives")))
+        (polars.col("true_positives") / (polars.col("true_positives") + polars.col("false_negatives")))
          .alias("recall"),
-        (2 * polars.col("precision") * polars.col("recall") /
-         (polars.col("precision") + polars.col("recall")))
+        (2 * polars.col("precision") * polars.col("recall") / (polars.col("precision") + polars.col("recall")))
          .alias("f1_score")
     ])
     # Add model name column
     model_name = os.path.basename(model_file_path)
     per_class = per_class.with_columns([polars.lit(model_name).alias("model_name")])
     # Reorder columns
-    per_class = per_class.select([
-        "model_name",
-        "model_class",
-        "true_positives",
-        "false_positives",
-        "false_negatives",
-        "precision",
-        "recall",
-        "f1_score",
-        "model_count",
-        "ref_count"
-    ])
+    per_class = per_class.select([ "model_name", "model_class", "true_positives", "false_positives", "false_negatives",
+        "precision", "recall", "f1_score", "model_count", "ref_count"])
     summary = per_class.select([
         polars.lit(model_name).alias("model_name"),
         polars.lit("OVERALL").alias("model_class"),
         polars.sum("true_positives").alias("true_positives"),
         polars.sum("false_positives").alias("false_positives"),
         polars.sum("false_negatives").alias("false_negatives"),
-        (polars.sum("true_positives") /
-         (polars.sum("true_positives") + polars.sum("false_positives"))
-        ).alias("precision"),
-        (polars.sum("true_positives") /
-         (polars.sum("true_positives") + polars.sum("false_negatives"))
-        ).alias("recall"),
-        (2 * polars.sum("true_positives") /
-         (2 * polars.sum("true_positives") +
-          polars.sum("false_positives") +
-          polars.sum("false_negatives"))
-        ).alias("f1_score"),
+        (polars.sum("true_positives") / (polars.sum("true_positives") + polars.sum("false_positives"))).alias("precision"),
+        (polars.sum("true_positives") / (polars.sum("true_positives") + polars.sum("false_negatives"))).alias("recall"),
+        (2 * polars.sum("true_positives") / (2 * polars.sum("true_positives") +
+          polars.sum("false_positives") + polars.sum("false_negatives"))).alias("f1_score"),
         polars.sum("model_count").alias("model_count"),
         polars.sum("ref_count").alias("ref_count"),
     ])
@@ -215,29 +165,17 @@ def validate_model(model_file_path, validation_data_directory):
             model_df = EMPTY_MODEL
         else:
             # Normal rename path
-            model_df = model_df.rename({
-                "class": "model_class",
-                "event": "model_event",
-                "start_time": "model_start",
-                "end_time": "model_end",
-                "low_freq": "model_low",
-                "high_freq": "model_high",
-            })
+            model_df = model_df.rename({"class": "model_class","event": "model_event", "start_time": "model_start",
+                "end_time": "model_end", "low_freq": "model_low", "high_freq": "model_high"})
         model_df = enforce_schema(model_df, MODEL_COLS)
-        model_df = cast_numeric(model_df, ["model_start", "model_end", "model_low", "model_high"])
+        model_df = cast_numeric(model_df, ["model_start", "model_end", "model_low", "model_high"]) # still needed as freq is INT64
         if reference_df.is_empty():
             reference_df = EMPTY_REFERENCE 
         else:
-            reference_df = reference_df.rename({
-                "class": "reference_class",
-                "event": "reference_event",
-                "start_time": "reference_start",
-                "end_time": "reference_end",
-                "low_freq": "reference_low",
-                "high_freq": "reference_high",
-            })  
+            reference_df = reference_df.rename({"class": "reference_class","event": "reference_event","start_time": "reference_start",
+                "end_time": "reference_end","low_freq": "reference_low","high_freq": "reference_high"})  
         reference_df = enforce_schema(reference_df, REFERENCE_COLS)
-        reference_df = cast_numeric(reference_df, ["reference_start", "reference_end", "reference_low", "reference_high"])
+        reference_df = cast_numeric(reference_df, ["reference_start", "reference_end", "reference_low", "reference_high"])  # still needed as freq is INT64
         all_reference_annotations.append(reference_df)
         # Cross join model × reference calls
         pairs = model_df.join(reference_df, how="cross")
@@ -266,22 +204,14 @@ def validate_model(model_file_path, validation_data_directory):
             -
             polars.max_horizontal("model_low", "reference_low")
         ).clip(lower_bound=0)
-        freq_union = (
-            polars.max_horizontal("model_high", "reference_high") -
-            polars.min_horizontal("model_low", "reference_low")
-        )
-        pairs = pairs.with_columns([
-            (freq_intersection / freq_union).alias("frequency_iou")
-        ])
-        pairs = pairs.with_columns([
-            (polars.col("time_iou") * polars.col("frequency_iou")).alias("iou")
-        ])        
+        freq_union = (polars.max_horizontal("model_high", "reference_high") - polars.min_horizontal("model_low", "reference_low"))
+        pairs = pairs.with_columns([ (freq_intersection / freq_union).alias("frequency_iou") ])
+        pairs = pairs.with_columns([ (polars.col("time_iou") * polars.col("frequency_iou")).alias("iou")])        
         # Filter valid matches
         matches = pairs.filter(
             (polars.col("model_class") == polars.col("reference_class")) &
             (polars.col("model_event") == polars.col("reference_event")) &
-            (polars.col("iou") >= MIN_IOU)
-        )
+            (polars.col("iou") >= MIN_IOU))
         print(f"validate_model {filename=} model_df:{model_df.shape[0]}, reference_df:{reference_df.shape[0]}, iou>0.3: {pairs.filter((polars.col("iou") > 0.3)).shape[0]} matches: {matches.shape[0]}")        
         # Greedy best match per model call
         best_matches = (matches.sort("iou", descending=True).group_by(["model_start", "model_end", "model_low", "model_high"]).head(1))
@@ -294,10 +224,8 @@ def validate_model(model_file_path, validation_data_directory):
     best_matches_all = safe_concat(all_best_matches)
     if model_all.is_empty():
         print(colorama.Back.RED + "WARNING: No model detections found in validation set." + colorama.Back.RESET)
-
     if reference_all.is_empty():
         print(colorama.Back.RED + "WARNING: No reference annotations found in validation set." + colorama.Back.RESET)
-
     if best_matches_all.is_empty():
         print(colorama.Back.RED + "WARNING: No matches found (IoU threshold too high or no overlapping calls)." + colorama.Back.RESET)
     print("model_all rows:", model_all.height)
