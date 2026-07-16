@@ -653,6 +653,7 @@ class Trainer():
             if epoch >= MIN_EPOCHS: 
                 self.best_model = copy.deepcopy(self.model)
                 self.best_loss = unweighted_per_class_loss_total
+                print(f"train {unweighted_per_class_loss_total.shape=}")
                 style = colorama.Style.BRIGHT
         print(style + f"{epoch=} Train loss {train_loss:.3f} = detection {det_loss_avg:.3f} + box size {size_loss_avg:.3f} + class {class_loss_avg:.3f}" + colorama.Style.RESET_ALL)
         return float(train_loss)
@@ -674,38 +675,46 @@ def main():
     model_num = next_model_number(params["model_dir"])
     
     with wakepy.keep.running():
-        (data_train, params["class_names"], class_inv_freq) = load_set_of_anns(params["training_data_dir"])
+        (data_train, class_names, class_inv_freq) = load_set_of_anns(params["training_data_dir"])
+        model_params = dict()
+        params["class_names"] = model_params["class_names"] = class_names
+        print(f"main {class_inv_freq.shape=}")
         loss_file = os.path.join(params["model_dir"], "loss.npy")
         if os.path.exists(loss_file):
-            print("Loading previous difficulty values...")
             arr = numpy.load(loss_file)
-            class_inv_freq = arr[0]          # row 0
+            loss_class_inv_freq = arr[0]     # row 0
             raw_difficulty = arr[1]          # row 1
-            # --- 1. Compute per-example difficulty ---
-            # raw_difficulty is total loss; divide by call count to get mean loss
-            mean_loss = raw_difficulty / (class_inv_freq + 1e-8)
-            # --- 2. Log-scale to compress extremes ---
-            difficulty = numpy.log1p(mean_loss)
-            # --- 3. Clamp difficulty to avoid collapse/explosion ---
-            difficulty = numpy.clip(difficulty, 0.5, 3.0)
-            # --- 4. Apply special cases ---
-            adjusted = []
-            for cls, d in zip(params["class_names"], difficulty):
-                # Feeding Buzz → impossible → fixed weight = 0.0
-                if "Feeding Buzz" in cls:
-                    adjusted.append(0.0)
-                    continue
-                # Social → must not collapse
-                if "Social" in cls:
-                    d = max(d, 0.5)
-                adjusted.append(d)
-            adjusted = numpy.array(adjusted)
-            # --- 5. Normalise to mean 1 ---
-            new_weights = adjusted / adjusted.mean()
-            print("Using difficulty-adjusted class weights:")
-            for cls, w in zip(params["class_names"], new_weights):
-                print(f"{cls}: {w:.3f}")
-            params["class_weight_vector"] = new_weights.astype(numpy.float32)
+            if class_inv_freq.shape == loss_class_inv_freq.shape:
+                print("Loading previous difficulty values...")
+                # --- 1. Compute per-example difficulty ---
+                # raw_difficulty is total loss; divide by call count to get mean loss
+                mean_loss = raw_difficulty / (loss_class_inv_freq + 1e-8)
+                # --- 2. Log-scale to compress extremes ---
+                difficulty = numpy.log1p(mean_loss)
+                # --- 3. Clamp difficulty to avoid collapse/explosion ---
+                difficulty = numpy.clip(difficulty, 0.5, 3.0)
+                # --- 4. Apply special cases ---
+                adjusted = []
+                for cls, d in zip(params["class_names"], difficulty):
+                    # Feeding Buzz → impossible → fixed weight = 0.0
+                    if "Feeding Buzz" in cls:
+                        adjusted.append(0.0)
+                        continue
+                    # Social → must not collapse
+                    if "Social" in cls:
+                        d = max(d, 0.5)
+                    adjusted.append(d)
+                adjusted = numpy.array(adjusted)
+                # --- 5. Normalise to mean 1 ---
+                new_weights = adjusted / adjusted.mean()
+                print("Using difficulty-adjusted class weights:")
+                for cls, w in zip(params["class_names"], new_weights):
+                    print(f"{cls}: {w:.3f}")
+                params["class_weight_vector"] = new_weights.astype(numpy.float32)
+            else:
+                # DO NOT LOAD — mismatch
+                print(colorama.Back.RED + f"Loss file ignored: JSON has {class_inv_freq.shape} classes, loss file has {loss_class_inv_freq.shape}." + colorama.Back.RESET)
+                params["class_weight_vector"] = build_class_weight_vector(params["class_names"], DEFAULT_CLASS_WEIGHTS, params["device"])
         else:
             params["class_weight_vector"] = build_class_weight_vector(params["class_names"], DEFAULT_CLASS_WEIGHTS, params["device"])
     
@@ -713,14 +722,14 @@ def main():
         train_dataset = AudioLoader(data_train, params, is_train=True)
         train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, pin_memory=True,)
         inputs_train = next(iter(train_loader))
-        params["ip_height"] = int(Classifier.SPEC_HEIGHT * Classifier.RESIZE_FACTOR)
+        model_params["ip_height"] = params["ip_height"] = int(Classifier.SPEC_HEIGHT * Classifier.RESIZE_FACTOR)
         trainer = Trainer(params, len(train_loader))
         # main train loop
         for epoch in range(0, MAX_EPOCHS + 1):
             train_loss = trainer.train(epoch, train_loader)
             if epoch > MIN_EPOCHS and epoch % NUM_SAVE_EPOCHS == 0:
                 # save trained model
-                op_state = {"epoch": trainer.best_epoch + 1, "state_dict": trainer.best_model.state_dict(), "params": params}
+                op_state = {"epoch": trainer.best_epoch + 1, "state_dict": trainer.best_model.state_dict(), "params": model_params}
                 model_file_name = f"model_{model_num}_E{trainer.best_epoch}.pth.tar"
                 save_path = os.path.join(params["model_dir"], model_file_name)
                 torch.save(op_state, save_path)
