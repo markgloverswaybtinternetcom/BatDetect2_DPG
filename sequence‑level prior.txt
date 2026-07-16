@@ -1,0 +1,204 @@
+⭐ About your deeper observation
+
+You’re absolutely right:
+    “Calls together are more likely from the same species.”
+
+This is a sequence‑level prior, and your current model is purely frame‑local.
+That’s why it sometimes switches species ID mid‑sequence.
+
+You can fix that later with:
+
+    sequence‑aware smoothing
+    Temporal Conditional Random Field
+    RNN/Transformer post‑classifier
+
+But you’re right to leave that for later
+
+https://www.codegenes.net/blog/conditional-random-field-pytorch/
+
+pip install pytorch-crf torch
+
+Example: Temporal CRF for Sequence Tagging
+
+Python
+import torch
+import torch.nn as nn
+from torchcrf import CRF
+
+# Example configuration
+BATCH_SIZE = 2
+SEQ_LEN = 5
+FEATURE_DIM = 10
+NUM_TAGS = 4  # Number of possible labels per time step
+
+class TemporalCRFModel(nn.Module):
+    def __init__(self, feature_dim, num_tags):
+        super().__init__()
+        # Simple linear layer to map features to tag scores
+        self.fc = nn.Linear(feature_dim, num_tags)
+        # CRF layer for temporal dependencies
+        self.crf = CRF(num_tags, batch_first=True)
+
+    def forward(self, x, tags=None, mask=None):
+        emissions = self.fc(x)  # Shape: (batch, seq_len, num_tags)
+        if tags is not None:
+            # Compute negative log-likelihood loss
+            loss = -self.crf(emissions, tags, mask=mask, reduction='mean')
+            return loss
+        else:
+            # Decode the best tag sequence
+            return self.crf.decode(emissions, mask=mask)
+# Create model
+model = TemporalCRFModel(FEATURE_DIM, NUM_TAGS)
+# Dummy input: batch of sequences with random features
+inputs = torch.randn(BATCH_SIZE, SEQ_LEN, FEATURE_DIM)
+# Dummy target tags (integers in [0, NUM_TAGS-1])
+tags = torch.randint(0, NUM_TAGS, (BATCH_SIZE, SEQ_LEN), dtype=torch.long)
+# Mask to indicate valid sequence positions (1 = valid, 0 = padding)
+mask = torch.ones(BATCH_SIZE, SEQ_LEN, dtype=torch.bool)
+# Training step
+loss = model(inputs, tags, mask)
+print(f"Training loss: {loss.item():.4f}")
+# Inference step
+with torch.no_grad():
+    predictions = model(inputs, mask=mask)
+    print("Predicted tag sequences:", predictions)
+
+Key Points
+
+    CRF Layer
+        Models dependencies between adjacent time steps.
+        Learns transition scores between tags.
+
+    mask Handling
+        Allows variable-length sequences by masking padded positions.
+
+    Training
+        Use negative log-likelihood from CRF as the loss.
+
+    Inference
+        decode() uses the Viterbi algorithm to find the most likely tag sequence.
+
+✅ This setup works for temporal labeling tasks like:
+
+    POS tagging
+    Named Entity Recognition
+    Video frame labeling
+    Sensor time-series event detection
+
+If you want, I can also give you a version without external libraries — a pure PyTorch temporal CRF implementation — so you can customize the transition logic.
+Do you want me to prepare that?
+
+PyTorch RNN/Transformer Post‑Classifier
+
+Python
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+# -----------------------------
+# Configurable Post-Classifier
+# -----------------------------
+class SequenceClassifier(nn.Module):
+    def __init__(self, vocab_size, embed_dim, hidden_dim, num_classes,
+                 model_type="rnn", num_layers=1, num_heads=2, dropout=0.1):
+        """
+        Args:
+            vocab_size: Size of vocabulary
+            embed_dim: Embedding dimension
+            hidden_dim: Hidden size for RNN or Transformer feedforward
+            num_classes: Number of output classes
+            model_type: 'rnn' or 'transformer'
+            num_layers: Number of RNN/Transformer layers
+            num_heads: Number of attention heads (Transformer only)
+            dropout: Dropout rate
+        """
+        super().__init__()
+        self.model_type = model_type.lower()
+        self.embedding = nn.Embedding(vocab_size, embed_dim)
+
+        if self.model_type == "rnn":
+            self.encoder = nn.LSTM(embed_dim, hidden_dim, num_layers=num_layers,
+                                   batch_first=True, dropout=dropout if num_layers > 1 else 0)
+            self.fc = nn.Linear(hidden_dim, num_classes)
+
+        elif self.model_type == "transformer":
+            encoder_layer = nn.TransformerEncoderLayer(
+                d_model=embed_dim,
+                nhead=num_heads,
+                dim_feedforward=hidden_dim,
+                dropout=dropout,
+                batch_first=True
+            )
+            self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+            self.fc = nn.Linear(embed_dim, num_classes)
+
+        else:
+            raise ValueError("model_type must be 'rnn' or 'transformer'")
+
+    def forward(self, x, lengths=None):
+        """
+        Args:
+            x: Tensor of shape (batch, seq_len)
+            lengths: Optional tensor of sequence lengths (for RNN packing)
+        """
+        emb = self.embedding(x)  # (batch, seq_len, embed_dim)
+
+        if self.model_type == "rnn":
+            if lengths is not None:
+                # Pack padded sequences for efficiency
+                packed = nn.utils.rnn.pack_padded_sequence(emb, lengths.cpu(),
+                                                           batch_first=True, enforce_sorted=False)
+                packed_out, (h_n, _) = self.encoder(packed)
+            else:
+                _, (h_n, _) = self.encoder(emb)
+            out = h_n[-1]  # Last layer's hidden state
+
+        elif self.model_type == "transformer":
+            # Transformer expects no packing; mask padding if needed
+            out_seq = self.encoder(emb)
+            out = out_seq.mean(dim=1)  # Simple mean pooling
+
+        logits = self.fc(out)
+        return logits
+
+
+# -----------------------------
+# Example usage
+# -----------------------------
+if __name__ == "__main__":
+    torch.manual_seed(42)
+
+    vocab_size = 100
+    embed_dim = 64
+    hidden_dim = 128
+    num_classes = 5
+    seq_len = 20
+    batch_size = 4
+
+    # Example: RNN-based classifier
+    rnn_model = SequenceClassifier(vocab_size, embed_dim, hidden_dim, num_classes, model_type="rnn")
+    sample_input = torch.randint(0, vocab_size, (batch_size, seq_len))
+    output = rnn_model(sample_input)
+    print("RNN output shape:", output.shape)  # (batch_size, num_classes)
+
+    # Example: Transformer-based classifier
+    transformer_model = SequenceClassifier(vocab_size, embed_dim, hidden_dim, num_classes, model_type="transformer")
+    output = transformer_model(sample_input)
+    print("Transformer output shape:", output.shape)
+
+Key Points
+
+    Embedding Layer: Converts token IDs to dense vectors.
+    Backbone Choice:
+        RNN (LSTM): Uses the last hidden state for classification.
+        Transformer: Uses mean pooling over sequence outputs.
+    Post‑Classifier: A simple nn.Linear layer mapping backbone output to class logits.
+    Padding Handling:
+        RNN: Uses pack_padded_sequence if lengths are provided.
+        Transformer: Can use attention masks for padding (not shown here, but easy to add).
+    Extensible: You can swap in GRU, BiLSTM, or more complex Transformer encoders.
+
+If you want, I can extend this so the post‑classifier is multi‑layer with dropout and batch norm, which often improves accuracy for NLP tasks.
+
+Do you want me to upgrade this into a production‑ready post‑classifier head?

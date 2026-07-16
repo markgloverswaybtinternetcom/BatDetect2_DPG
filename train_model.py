@@ -61,6 +61,7 @@ DEFAULT_CLASS_WEIGHTS = {
     "Plecotus auritus-Echolocation": 3.5,
     "Plecotus auritus-Social": 3.5, 
     "Plecotus austriacus-Echolocation": 2.0,
+    "Plecotus austriacus-Social": 2.0,
     "Rhinolophus ferrumequinum-Echolocation": 1.5,
     "Rhinolophus ferrumequinum-Social": 1.5,
     "Rhinolophus hipposideros-Echolocation": 1.5, 
