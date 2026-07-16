@@ -1,9 +1,9 @@
 # Python-generated files
 __pycache__/
 *.py[oc]
-TrainingData/
-ValidationData/
-Models/
+TrainingData/*
+ValidationData/*
+Models/*
 *.egg-info
 Resources/temp.wav
 README.md.backup

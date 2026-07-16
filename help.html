@@ -225,4 +225,30 @@ The min is automatically adjusted when the spectrogram moves.</p>
     <br/>Hence the heatmap itself crudely used for the selection rectangle and annotation is used for the audio replay cursor and intervals.</li>
     <li>Use PyTorch for processing, which is fast but is sensitive to the sampling rate, BatDetect2 does not use PyTorch for this (though it is used for machine learning).</li>
 </ul>
+
+
+<h2>Model Training</h2>
+<p>The BatDetect2 training has difficulty with wide calls like Noctules and Horseshoes, social calls are just possible, whole feeding buzzes not possible. 
+<br/>The Gaussian heatmap has been altered to better fit wide calls, and extra pure noise and false call training data added. 
+<br/>Augmentations randomly corrupt the training data to avoid over fitting of the model, some have been remove and more added to better fit Horseshoes. 
+<br/>The model stops training when the loss value plateaus. 
+<br/>The end of run loss values are recorded to set the class difficulty weight for the next training run.</p>
+
+<h3>Training Data</h3>
+<p>PyTorch needs all data involved in operations to be the same size. 
+<br/>To do this I have used audio files of the same size (choosen to be default length the GUI uses to save sound file clips)</p>
+
+<h3>Model Validation</h3>
+<p>Each training run has a large random element, so each run does a validation run, to pick the best. 
+<br/>The validation data should remain constant with no overlap with training data.</p>
+<h4>Validation Output is per class and total sum</h4>
+<p>The models predictions are compared for Validation using the following values</p>
+<ul>
+    <li>true positives: model calls that match validation annotation</li>
+    <li>false positives: model calls that do not match validation annotation</li>
+    <li>false negatives: validation annotation calls that the model does not predict</li>
+    <li>precision: is the fraction of model predictions that were correct</li>
+    <li>recall: is the fraction of correct model predations against validation annotations</li>
+    <li>f1 score: 2 * precision * recall / (precision + recall).</li>
+</ul>
 </body></html>
