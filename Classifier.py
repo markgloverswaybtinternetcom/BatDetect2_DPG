@@ -328,7 +328,7 @@ class Classifier():
         if model != DEFAULT_MODEL_PATH: print(f"Classifier __init__ {model=}")
         args = {'cnn_features': False, 'spec_features': False, 'quiet': False, 'save_preds_if_empty': False, 'model_path': model}
         code_dir = os.path.dirname(os.path.abspath(__file__))
-        self.model, self.modelParams = load_model(os.path.join(code_dir, model)) 
+        self.model, self.modelParams = load_model(os.path.join(code_dir, model), weights_only=False) 
         #print(f"Classifier __init__ {self.modelParams=}")
         self.speciesNames = pandas.read_csv(os.path.join(code_dir, "Resources", "SpeciesNames.csv"))
         config = None
