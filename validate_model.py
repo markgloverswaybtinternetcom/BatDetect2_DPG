@@ -55,15 +55,15 @@ def cast_numeric(df, numeric_cols):
     
 def write_per_model_class_csv(best_matches_all, model_all, reference_all, class_names, model_file_path):
     # Count model calls per class
-    model_counts = (model_all.group_by("model_class").count().rename({"count": "model_count"}))
+    model_counts = (model_all.group_by("model_class", "model_event").count().rename({"count": "model_count"}))
     # Count reference calls per class
-    ref_counts = (reference_all.group_by("reference_class").count().rename({"count": "ref_count"}))
+    ref_counts = (reference_all.group_by("reference_class", "reference_event").count().rename({"count": "ref_count"}))
     # Count true positives per class
-    tp_per_class = (best_matches_all.group_by("model_class").count().rename({"count": "true_positives"}))
+    tp_per_class = (best_matches_all.group_by("model_class", "model_event" ).count().rename({"count": "true_positives"}))
     # Merge TP, model_count, ref_count
     per_class = (tp_per_class
-        .join(model_counts, left_on="model_class", right_on="model_class", how="left")
-        .join(ref_counts, left_on="model_class", right_on="reference_class", how="left"))
+        .join(model_counts, left_on=["model_class", "model_event"], right_on=["model_class", "model_event"], how="left")  
+        .join(ref_counts, left_on=["model_class", "model_event"], right_on=["reference_class", "reference_event"], how="left"))
     # Compute FP and FN
     per_class = per_class.with_columns([
         (polars.col("model_count") - polars.col("true_positives")).alias("false_positives"),
@@ -88,11 +88,12 @@ def write_per_model_class_csv(best_matches_all, model_all, reference_all, class_
     model_name = os.path.basename(model_file_path)
     per_class = per_class.with_columns([polars.lit(model_name).alias("model_name")])
     # Reorder columns
-    per_class = per_class.select([ "model_name", "model_class", "true_positives", "false_positives", "false_negatives",
+    per_class = per_class.select([ "model_name", "model_class", "model_event", "true_positives", "false_positives", "false_negatives",
         "precision", "recall", "f1_score", "model_count", "ref_count"])
     summary = per_class.select([
         polars.lit(model_name).alias("model_name"),
-        polars.lit("OVERALL").alias("model_class"),
+        polars.lit("ALL").alias("model_class"),
+        polars.lit("ALL").alias("model_event"),
         polars.sum("true_positives").alias("true_positives"),
         polars.sum("false_positives").alias("false_positives"),
         polars.sum("false_negatives").alias("false_negatives"),
@@ -103,6 +104,7 @@ def write_per_model_class_csv(best_matches_all, model_all, reference_all, class_
         polars.sum("model_count").alias("model_count"),
         polars.sum("ref_count").alias("ref_count"),
     ])
+    per_class = per_class.sort(["model_class", "model_event"])
     per_class = polars.concat([per_class, summary])
     # Round all float columns to the desired precision
     DECIMALS = 3
