@@ -151,11 +151,6 @@ def load_set_of_anns(wav_path):
     for cc in range(len(class_names)):
         print(f"{str(cc).ljust(5)}, {class_names[cc].ljust(str_len)}, {str(class_cnts[cc])}")
     return anns, class_names.tolist(), class_inv_freq 
-    
-def get_params():
-    params = {}
-    params["class_names"] = []
-    return params
 
 #batdetect2.train.audio_dataloader AudioLoader
 def echo_aug(audio, sampling_rate):
@@ -396,11 +391,11 @@ def CompositeClass(species, call_type="Echolocation"):
     return species + "-" + call_type
     
 class AudioLoader(torch.utils.data.Dataset):
-    def __init__(self, data_anns_ip, params, dataset_name=None, is_train=False):
+    def __init__(self, data_anns_ip, class_names, dataset_name=None, is_train=False):
         self.data_anns = []
         self.audio_file = []
         self.is_train = is_train
-        self.params = params
+        self.class_names = class_names
         for ii in range(len(data_anns_ip)):
             dd = copy.deepcopy(data_anns_ip[ii])
             # filter out unused annotation here
@@ -413,8 +408,8 @@ class AudioLoader(torch.utils.data.Dataset):
                         aa["individual"] = 0
                 # convert class name into class label
                 compositeClass = CompositeClass(aa["class"], aa["event"])
-                if compositeClass in self.params["class_names"]:
-                    aa["class_id"] = self.params["class_names"].index(compositeClass)
+                if compositeClass in class_names:
+                    aa["class_id"] = class_names.index(compositeClass)
                 else:
                     print(colorama.Back.RED + f"AudioLoader __init__ class {compositeClass} NOT FOUND for {dd["file_path"]}" + colorama.Back.RESET)
                     aa["class_id"] = -1
@@ -429,8 +424,8 @@ class AudioLoader(torch.utils.data.Dataset):
             # file level class name
             if "class_name" in dd.keys(): # file level value, call one is 'class'
                 compositeClass = CompositeClass(dd["class_name"])
-                if compositeClass in self.params["class_names"]:
-                    dd["class_id_file"] = self.params["class_names"].index(compositeClass)
+                if compositeClass in class_names:
+                    dd["class_id_file"] = class_names.index(compositeClass)
                 else: 
                     print(colorama.Back.RED + f"AudioLoader __init__ class_name {compositeClass} NOT FOUND for {dd["file_path"]}" + colorama.Back.RESET)
                     dd["class_id_file"] = -1
@@ -441,7 +436,7 @@ class AudioLoader(torch.utils.data.Dataset):
         
         self.Horseshoe_CF = {}
         for key, value in HORSESHOE_CF.items():
-            id = self.params["class_names"].index(key)
+            id = class_names.index(key)
             self.Horseshoe_CF[id] = value
             
         print("\n")
@@ -519,7 +514,7 @@ class AudioLoader(torch.utils.data.Dataset):
             outputs = {}
             outputs["spec"] = spec
             # create ground truth heatmaps
-            (outputs["y_2d_det"],  outputs["y_2d_size"], outputs["y_2d_classes"], ann_aug) = target_heatmaps(spec_op_shape, sampling_rate, ann, self.params["class_names"], spec)
+            (outputs["y_2d_det"],  outputs["y_2d_size"], outputs["y_2d_classes"], ann_aug) = target_heatmaps(spec_op_shape, sampling_rate, ann, self.class_names, spec)
             # hack to get around requirement that all vectors are the same length in the output batch
             pad_size = self.max_num_anns - len(ann_aug["individual_ids"])
             outputs["is_valid"] = numpy.hstack((numpy.ones(len(ann_aug["individual_ids"])), numpy.ones(pad_size, dtype=numpy.int32) * -1))
@@ -601,13 +596,13 @@ def build_class_weight_vector(class_names, class_weight_dict, device):
     return torch.tensor(weights, dtype=torch.float32).to(device)
 
 class Trainer():
-    def __init__(self, params, len_train_loader):
-        self.device = params["device"]
-        self.classes = params["class_names"]
-        self.num_classes =len(self.classes)
-        self.class_weight_vector = torch.tensor(params["class_weight_vector"], device=params["device"])
+    def __init__(self, device, class_names, class_weight_vector, ip_height, len_train_loader):
+        self.device = device
+        self.classes = class_names
+        self.num_classes =len(class_names)
+        self.class_weight_vector = torch.tensor(class_weight_vector, device=self.device)
         self.min_loss = 1.79e308
-        model = Net2dFast.Net2dFast(Classifier.NUM_FILTERS, num_classes=self.num_classes, ip_height=params["ip_height"])
+        model = Net2dFast.Net2dFast(Classifier.NUM_FILTERS, num_classes=self.num_classes, ip_height=ip_height)
         self.model = model.to(Classifier.DEVICE)
         self.optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
         self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, MAX_EPOCHS * len_train_loader)
@@ -659,27 +654,24 @@ class Trainer():
         return float(train_loss)
 
 def main():
-    params = get_params()
-    if torch.cuda.is_available(): params["device"] = "cuda"
-    else: params["device"] = "cpu"
+    if torch.cuda.is_available(): device = "cuda"
+    else: device = "cpu"
 
     # setup arg parser and populate it with exiting parameters - will not work with lists
     parser = argparse.ArgumentParser()
     parser.add_argument("training_data_dir", type=str, help="Path to root of datasets")
     parser.add_argument("model_dir",type=str,help="Directory containing trained model files.")
-    for key, val in params.items():
-        parser.add_argument("--" + key, type=type(val), default=val)
-    params = vars(parser.parse_args())
+    args = parser.parse_args()
     if torch.cuda.is_available(): print(colorama.Fore.GREEN + "torch.cuda.is_available" + colorama.Fore.RESET)
     else: print(colorama.Fore.RED + "torch.cuda is not available" + colorama.Fore.RESET)
-    model_num = next_model_number(params["model_dir"])
+    model_num = next_model_number(args.model_dir)
     
     with wakepy.keep.running():
-        (data_train, class_names, class_inv_freq) = load_set_of_anns(params["training_data_dir"])
+        (data_train, class_names, class_inv_freq) = load_set_of_anns(args.training_data_dir)
         model_params = dict()
-        params["class_names"] = model_params["class_names"] = class_names
+        model_params["class_names"] = class_names
         print(f"main {class_inv_freq.shape=}")
-        loss_file = os.path.join(params["model_dir"], "loss.npy")
+        loss_file = os.path.join(args.model_dir, "loss.npy")
         if os.path.exists(loss_file):
             arr = numpy.load(loss_file)
             loss_class_inv_freq = arr[0]     # row 0
@@ -695,7 +687,7 @@ def main():
                 difficulty = numpy.clip(difficulty, 0.5, 3.0)
                 # --- 4. Apply special cases ---
                 adjusted = []
-                for cls, d in zip(params["class_names"], difficulty):
+                for cls, d in zip(class_names, difficulty):
                     # Feeding Buzz → impossible → fixed weight = 0.0
                     if "Feeding Buzz" in cls:
                         adjusted.append(0.0)
@@ -708,22 +700,22 @@ def main():
                 # --- 5. Normalise to mean 1 ---
                 new_weights = adjusted / adjusted.mean()
                 print("Using difficulty-adjusted class weights:")
-                for cls, w in zip(params["class_names"], new_weights):
+                for cls, w in zip(class_names, new_weights):
                     print(f"{cls}: {w:.3f}")
-                params["class_weight_vector"] = new_weights.astype(numpy.float32)
+                class_weight_vector = new_weights.astype(numpy.float32)
             else:
                 # DO NOT LOAD — mismatch
                 print(colorama.Back.RED + f"Loss file ignored: JSON has {class_inv_freq.shape} classes, loss file has {loss_class_inv_freq.shape}." + colorama.Back.RESET)
-                params["class_weight_vector"] = build_class_weight_vector(params["class_names"], DEFAULT_CLASS_WEIGHTS, params["device"])
+                class_weight_vector = build_class_weight_vector(class_names, DEFAULT_CLASS_WEIGHTS, device)
         else:
-            params["class_weight_vector"] = build_class_weight_vector(params["class_names"], DEFAULT_CLASS_WEIGHTS, params["device"])
+            class_weight_vector = build_class_weight_vector(class_names, DEFAULT_CLASS_WEIGHTS, device)
     
         # train loader
-        train_dataset = AudioLoader(data_train, params, is_train=True)
+        train_dataset = AudioLoader(data_train, class_names, is_train=True)
         train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, pin_memory=True,)
         inputs_train = next(iter(train_loader))
-        model_params["ip_height"] = params["ip_height"] = int(Classifier.SPEC_HEIGHT * Classifier.RESIZE_FACTOR)
-        trainer = Trainer(params, len(train_loader))
+        model_params["ip_height"] = ip_height = int(Classifier.SPEC_HEIGHT * Classifier.RESIZE_FACTOR)
+        trainer = Trainer(device, class_names, class_weight_vector, ip_height, len(train_loader))
         # main train loop
         for epoch in range(0, MAX_EPOCHS + 1):
             train_loss = trainer.train(epoch, train_loader)
@@ -731,11 +723,11 @@ def main():
                 # save trained model
                 op_state = {"epoch": trainer.best_epoch + 1, "state_dict": trainer.best_model.state_dict(), "params": model_params}
                 model_file_name = f"model_{model_num}_E{trainer.best_epoch}.pth.tar"
-                save_path = os.path.join(params["model_dir"], model_file_name)
+                save_path = os.path.join(args.model_dir, model_file_name)
                 torch.save(op_state, save_path)
                 print(f"Saved model: {save_path}")
                 if epoch - trainer.best_epoch > 50:
-                    numpy.save(os.path.join(params["model_dir"], "loss"), numpy.vstack((class_inv_freq, trainer.best_loss.detach().cpu().numpy())) )
+                    numpy.save(os.path.join(args.model_dir, "loss"), numpy.vstack((class_inv_freq, trainer.best_loss.detach().cpu().numpy())) )
                     break # have plateaued  
             
 if __name__ == "__main__":
