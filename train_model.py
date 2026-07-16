@@ -726,7 +726,7 @@ def main():
                 torch.save(op_state, save_path)
                 print(f"Saved model: {save_path}")
                 if epoch - trainer.best_epoch > 50:
-                    numpy.save(os.path.join(os.path.dirname(params["model_dir"]), "loss"), numpy.vstack((class_inv_freq, trainer.best_loss.detach().cpu().numpy())) )
+                    numpy.save(os.path.join(params["model_dir"], "loss"), numpy.vstack((class_inv_freq, trainer.best_loss.detach().cpu().numpy())) )
                     break # have plateaued  
             
 if __name__ == "__main__":
