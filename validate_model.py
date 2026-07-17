@@ -2,10 +2,10 @@ import os, json, polars, glob, argparse, colorama
 from Classifier import Classifier
 
 MIN_IOU = 0.2 
-REFERENCE_COLS = [ "reference_start", "reference_end", "reference_low", "reference_high", "reference_class", "reference_event"]
+REFERENCE_COLS = [ "reference_start", "reference_end", "reference_low", "reference_high", "species", "call_type"]
 MODEL_COLS = [ "model_start", "model_end", "model_low", "model_high", "model_class", "model_event"]
 MATCH_COLS = ["model_start", "model_end", "model_low", "model_high", "model_class", "model_event", 
-    "reference_start", "reference_end", "reference_low", "reference_high", "reference_class", "reference_event",
+    "reference_start", "reference_end", "reference_low", "reference_high", "species", "call_type",
     "time_iou", "frequency_iou", "iou"]
 EMPTY_MODEL = polars.DataFrame({
     "model_start": polars.Series([], dtype=polars.Float64),
@@ -19,8 +19,8 @@ EMPTY_REFERENCE = polars.DataFrame({
     "reference_end": polars.Series([], dtype=polars.Float64),
     "reference_low": polars.Series([], dtype=polars.Float64),
     "reference_high": polars.Series([], dtype=polars.Float64),
-    "reference_class": polars.Series([], dtype=polars.Utf8),
-    "reference_event": polars.Series([], dtype=polars.Utf8)})
+    "species": polars.Series([], dtype=polars.Utf8),
+    "call_type": polars.Series([], dtype=polars.Utf8)})
 
 def safe_concat(dfs):
     if not dfs:
@@ -54,16 +54,24 @@ def cast_numeric(df, numeric_cols):
     return df
     
 def write_per_model_class_csv(best_matches_all, model_all, reference_all, class_names, model_file_path):
+    # Build full reference grid (all species × all events)
+    ref_species = reference_all["species"].unique().sort()
+    ref_events  = reference_all["call_type"].unique().sort()
+
+    full_grid = polars.DataFrame({"species": [s for s in ref_species for _ in ref_events],
+        "call_type": [e for _ in ref_species for e in ref_events]})
+
     # Count model calls per class
     model_counts = (model_all.group_by("model_class", "model_event").count().rename({"count": "model_count"}))
     # Count reference calls per class
-    ref_counts = (reference_all.group_by("reference_class", "reference_event").count().rename({"count": "ref_count"}))
+    ref_counts = (reference_all.group_by("species", "call_type").count().rename({"count": "ref_count"}))
     # Count true positives per class
-    tp_per_class = (best_matches_all.group_by("model_class", "model_event" ).count().rename({"count": "true_positives"}))
-    # Merge TP, model_count, ref_count
-    per_class = (tp_per_class
-        .join(model_counts, left_on=["model_class", "model_event"], right_on=["model_class", "model_event"], how="left")  
-        .join(ref_counts, left_on=["model_class", "model_event"], right_on=["reference_class", "reference_event"], how="left"))
+    tp_per_class = (best_matches_all.group_by("species", "call_type" ).count().rename({"count": "true_positives"}))
+    # Merge TP, model_count, ref_count onto full reference grid
+    per_class = (full_grid.join(tp_per_class, on=["species", "call_type"], how="left")
+        .join(ref_counts, on=["species", "call_type"], how="left")
+        .join(model_counts, left_on=["species", "call_type"], right_on=["model_class", "model_event"], how="left"))
+    per_class = per_class.fill_null(0)
     # Compute FP and FN
     per_class = per_class.with_columns([
         (polars.col("model_count") - polars.col("true_positives")).alias("false_positives"),
@@ -88,12 +96,12 @@ def write_per_model_class_csv(best_matches_all, model_all, reference_all, class_
     model_name = os.path.basename(model_file_path)
     per_class = per_class.with_columns([polars.lit(model_name).alias("model_name")])
     # Reorder columns
-    per_class = per_class.select([ "model_name", "model_class", "model_event", "true_positives", "false_positives", "false_negatives",
+    per_class = per_class.select([ "model_name", "species", "call_type", "true_positives", "false_positives", "false_negatives",
         "precision", "recall", "f1_score", "model_count", "ref_count"])
     summary = per_class.select([
         polars.lit(model_name).alias("model_name"),
-        polars.lit("ALL").alias("model_class"),
-        polars.lit("ALL").alias("model_event"),
+        polars.lit("ALL").alias("species"),
+        polars.lit("ALL").alias("call_type"),
         polars.sum("true_positives").alias("true_positives"),
         polars.sum("false_positives").alias("false_positives"),
         polars.sum("false_negatives").alias("false_negatives"),
@@ -104,7 +112,7 @@ def write_per_model_class_csv(best_matches_all, model_all, reference_all, class_
         polars.sum("model_count").alias("model_count"),
         polars.sum("ref_count").alias("ref_count"),
     ])
-    per_class = per_class.sort(["model_class", "model_event"])
+    per_class = per_class.sort(["species", "call_type"])
     per_class = polars.concat([per_class, summary])
     # Round all float columns to the desired precision
     DECIMALS = 3
@@ -174,7 +182,7 @@ def validate_model(model_file_path, validation_data_directory):
         if reference_df.is_empty():
             reference_df = EMPTY_REFERENCE 
         else:
-            reference_df = reference_df.rename({"class": "reference_class","event": "reference_event","start_time": "reference_start",
+            reference_df = reference_df.rename({"class": "species","event": "call_type","start_time": "reference_start",
                 "end_time": "reference_end","low_freq": "reference_low","high_freq": "reference_high"})  
         reference_df = enforce_schema(reference_df, REFERENCE_COLS)
         reference_df = cast_numeric(reference_df, ["reference_start", "reference_end", "reference_low", "reference_high"])  # still needed as freq is INT64
@@ -211,8 +219,8 @@ def validate_model(model_file_path, validation_data_directory):
         pairs = pairs.with_columns([ (polars.col("time_iou") * polars.col("frequency_iou")).alias("iou")])        
         # Filter valid matches
         matches = pairs.filter(
-            (polars.col("model_class") == polars.col("reference_class")) &
-            (polars.col("model_event") == polars.col("reference_event")) &
+            (polars.col("model_class") == polars.col("species")) &
+            (polars.col("model_event") == polars.col("call_type")) &
             (polars.col("iou") >= MIN_IOU))
         print(f"validate_model {filename=} model_df:{model_df.shape[0]}, reference_df:{reference_df.shape[0]}, iou>0.3: {pairs.filter((polars.col("iou") > 0.3)).shape[0]} matches: {matches.shape[0]}")        
         # Greedy best match per model call
