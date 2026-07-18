@@ -32,20 +32,20 @@ DEFAULT_CLASS_WEIGHTS = {
     "Myotis alcathoe-Echolocation": 2.0,
     "Myotis alcathoe-Feeding Buzz": 0.0,
     "Myotis alcathoe-Social": 2.0,
-    "Myotis bechsteinii-Echolocation": 2.0,
+    "Myotis bechsteinii-Echolocation": 3.0,
     "Myotis bechsteinii-Social": 2.0,
-    "Myotis brandtii-Echolocation": 2.0,
+    "Myotis brandtii-Echolocation": 2.5,
     "Myotis brandtii-Feeding Buzz": 0.0,
     "Myotis brandtii-Social": 2.0,
     "Myotis daubentonii-Echolocation": 2.0,
     "Myotis daubentonii-Feeding Buzz": 0.0,
     "Myotis daubentonii-Social": 2.0,
-    "Myotis mystacinus-Echolocation": 2.0,
+    "Myotis mystacinus-Echolocation": 3.0,
     "Myotis mystacinus-Social": 2.0,
     "Myotis nattereri-Echolocation": 3.5,
     "Myotis nattereri-Social": 3.0,
-    "Nyctalus leisleri-Echolocation": 2.0,
-    "Nyctalus leisleri-Social": 2.0,
+    "Nyctalus leisleri-Echolocation": 3.0,
+    "Nyctalus leisleri-Social": 3.0,
     "Nyctalus noctula-Echolocation": 2.0,
     "Nyctalus noctula-Feeding Buzz": 0.0,
     "Nyctalus noctula-Social": 2.0,
@@ -636,9 +636,6 @@ class Trainer():
                 print(colorama.Back.BLUE + f"[WARNING] Skipping batch {batch_idx}: {e}" + colorama.Back.RESET)
                 traceback.print_exc()
                 continue
-        if epoch >= MIN_EPOCHS and epoch % NUM_SAVE_EPOCHS == 0:
-            for idx, value in enumerate(weighted_per_class_loss):
-                print(f"{epoch=} Train, {self.classes[idx]}, {value:.3f}")
         det_loss_avg = det_loss_sum / count; size_loss_avg = size_loss_sum / count; class_loss_avg = weighted_per_class_loss_sum.sum() / count
         train_loss = det_loss_avg + size_loss_avg + class_loss_avg
         style = ""
@@ -647,8 +644,6 @@ class Trainer():
             self.min_loss = train_loss
             if epoch >= MIN_EPOCHS: 
                 self.best_model = copy.deepcopy(self.model)
-                self.best_loss = unweighted_per_class_loss_total
-                print(f"train {unweighted_per_class_loss_total.shape=}")
                 style = colorama.Style.BRIGHT
         print(style + f"{epoch=} Train loss {train_loss:.3f} = detection {det_loss_avg:.3f} + box size {size_loss_avg:.3f} + class {class_loss_avg:.3f}" + colorama.Style.RESET_ALL)
         return float(train_loss)
@@ -672,43 +667,7 @@ def main():
         model_params["class_names"] = class_names
         print(f"main {class_inv_freq.shape=}")
         loss_file = os.path.join(args.model_dir, "loss.npy")
-        if os.path.exists(loss_file):
-            arr = numpy.load(loss_file)
-            loss_class_inv_freq = arr[0]     # row 0
-            raw_difficulty = arr[1]          # row 1
-            if class_inv_freq.shape == loss_class_inv_freq.shape:
-                print("Loading previous difficulty values...")
-                # --- 1. Compute per-example difficulty ---
-                # raw_difficulty is total loss; divide by call count to get mean loss
-                mean_loss = raw_difficulty / (loss_class_inv_freq + 1e-8)
-                # --- 2. Log-scale to compress extremes ---
-                difficulty = numpy.log1p(mean_loss)
-                # --- 3. Clamp difficulty to avoid collapse/explosion ---
-                difficulty = numpy.clip(difficulty, 0.5, 3.0)
-                # --- 4. Apply special cases ---
-                adjusted = []
-                for cls, d in zip(class_names, difficulty):
-                    # Feeding Buzz → impossible → fixed weight = 0.0
-                    if "Feeding Buzz" in cls:
-                        adjusted.append(0.0)
-                        continue
-                    # Social → must not collapse
-                    if "Social" in cls:
-                        d = max(d, 0.5)
-                    adjusted.append(d)
-                adjusted = numpy.array(adjusted)
-                # --- 5. Normalise to mean 1 ---
-                new_weights = adjusted / adjusted.mean()
-                print("Using difficulty-adjusted class weights:")
-                for cls, w in zip(class_names, new_weights):
-                    print(f"{cls}: {w:.3f}")
-                class_weight_vector = new_weights.astype(numpy.float32)
-            else:
-                # DO NOT LOAD — mismatch
-                print(colorama.Back.RED + f"Loss file ignored: JSON has {class_inv_freq.shape} classes, loss file has {loss_class_inv_freq.shape}." + colorama.Back.RESET)
-                class_weight_vector = build_class_weight_vector(class_names, DEFAULT_CLASS_WEIGHTS, device)
-        else:
-            class_weight_vector = build_class_weight_vector(class_names, DEFAULT_CLASS_WEIGHTS, device)
+        class_weight_vector = build_class_weight_vector(class_names, DEFAULT_CLASS_WEIGHTS, device)
     
         # train loader
         train_dataset = AudioLoader(data_train, class_names, is_train=True)
@@ -727,7 +686,6 @@ def main():
                 torch.save(op_state, save_path)
                 print(f"Saved model: {save_path}")
                 if epoch - trainer.best_epoch > 50:
-                    numpy.save(os.path.join(args.model_dir, "loss"), numpy.vstack((class_inv_freq, trainer.best_loss.detach().cpu().numpy())) )
                     break # have plateaued  
             
 if __name__ == "__main__":
