@@ -1,4 +1,4 @@
-import os, json, polars, glob, argparse, colorama
+import os, json, polars, glob, argparse, colorama, sys
 from Classifier import Classifier
 
 MIN_IOU = 0.2 
@@ -24,10 +24,10 @@ EMPTY_REFERENCE = polars.DataFrame({
 
 def safe_concat(dfs):
     if not dfs:
-        print(colorama.Back.RED + "[SAFE_CONCAT] dfs is empty → returning empty DF"+ colorama.Back.RESET )
+        print(colorama.Back.RED + "[SAFE_CONCAT] dfs is empty → returning empty DF"+ colorama.Back.RESET)
         return polars.DataFrame()
     if len(dfs) == 1:
-        print(colorama.Back.RED + "[SAFE_CONCAT] dfs has one DF → returning it directly"+ colorama.Back.RESET )
+        print(colorama.Back.RED + "[SAFE_CONCAT] dfs has one DF → returning it directly"+ colorama.Back.RESET)
         return dfs[0]
     try:
         return polars.concat(dfs)
@@ -251,6 +251,9 @@ if __name__ == "__main__":
     parser.add_argument("validation_data_dir", type=str, help="Path to the root directory of the validation dataset.")
     parser.add_argument("model_dir",type=str,help="Directory containing trained model files.")
     arguments = parser.parse_args()
-    model_file_path = latest_model_file(arguments.model_dir)
+    if os.path.isdir(arguments.model_dir):
+        model_file_path = latest_model_file(arguments.model_dir)
+    elif arguments.model_dir.endswith(".pth.tar"): model_file_path = arguments.model_dir
+    else: sys.exit(colorama.Back.RED +  f"Invalid model path {arguments.model_dir}" + colorama.Back.RESET) 
     print(f"Validating latest model: {model_file_path}")
     validate_model(model_file_path, validation_data_directory=arguments.validation_data_dir)
