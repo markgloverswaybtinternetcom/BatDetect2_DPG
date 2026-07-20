@@ -204,6 +204,7 @@ class FileDialog():
                     if vInfo[4] == "exFAT" or vInfo[4] == "FAT32": name += " " + vInfo[0] # exchangable drive
                     dpg.add_selectable(label=name, parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
                 else:
+                    if os.path.basename(entry).startswith("Session_"): self.DirActionButtons(True) # echometer session(s)
                     dpg.add_selectable(label=name, parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
                     dpg.add_selectable(label="", parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
                     dpg.add_selectable(label="", parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
