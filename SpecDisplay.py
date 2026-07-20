@@ -338,8 +338,9 @@ class SpecDisplay():
             spectrogram = spectrogram[:, :-removeHighBins, :]
             self.freqBins = spectrogram.shape[1]
             lowPassFreq = self.maxF * 1000
-            lowPassFilter = torchaudio_filters.LowPass(lowPassFreq, self.sample_rate) 
-            waveformTensor = lowPassFilter(waveformTensor)
+            if lowPassFreq < self.sample_rate / 2.0:
+                lowPassFilter = torchaudio_filters.LowPass(lowPassFreq, self.sample_rate) 
+                waveformTensor = lowPassFilter(waveformTensor)
 
         if self.minF > 0.0:
             removeLowBins = int(self.freqBins / self.maxF * self.minF)
