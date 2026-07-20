@@ -166,6 +166,7 @@ class MainWindow():
         self.classify = Classifier()
         if sys.platform.startswith("win"): DragAndDrop.set_drop(self.FileDrop)
         self.SpecDisplay1.dir = config['dir']; self.SpecDisplay1.file = config['file']
+        self.SpeciesLanguageCombo_changed(None, self.SpeciesLanguage, None)
         if len(config['echoMeterDir']) > 0:
             self.LoadEchoMeterDir(config['echoMeterDir'])
             matches = self.FilesDF.filter(polars.col("Filename") == config["file"])
@@ -207,7 +208,6 @@ class MainWindow():
                 self.LoadClassifiedFile(lastFile, self.SpecDisplay1, minT=config["minT"])
             else:
                 self.Status(f"LAST FILE '{lastFile}' NO LONGER EXISTS", error=True)
-        self.SpeciesLanguageCombo_changed(None, self.SpeciesLanguage, None)
         self.EditModeListbox_changed(None, self.EditMode, None)
 
     def notify_exception(self, type, value, tb):
