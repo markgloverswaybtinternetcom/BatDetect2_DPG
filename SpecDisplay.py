@@ -74,6 +74,7 @@ class SpecDisplay():
                     PlaySoundbutton = dpg.add_button(label="Play Sound", callback=self.PlaySound)
                     self.PlaySpeedCombo = dpg.add_combo(label="Speed", items=("1", "1/2", "1/5", "1/10", "1/20"), width=66*config["scale"], default_value=f"1/10")
                     self.SaveSoundbutton = dpg.add_button(label="Save Sound",  callback=self.saveSound_click)
+                    self.TimeExpandbutton = dpg.add_button(label="Time Expand", show=False, callback=self.timeExpand_click)
                     self.showSpeciesCombo = dpg.add_combo(label="Find Species", show=False, width=180 * config["scale"], callback=self.ShowSpeciesCombo_changed)
                     self.ClassifyLabel = dpg.add_text(color= (0, 200, 0, 255))                
         # style for the GUI elements
@@ -104,6 +105,7 @@ class SpecDisplay():
                 dpg.add_theme_color(dpg.mvThemeCol_SliderGrab, self.colours[255], category=dpg.mvThemeCat_Core)                
         dpg.bind_item_theme(PlaySoundbutton, lBlueButton_theme)
         dpg.bind_item_theme(self.SaveSoundbutton, lBlueButton_theme)
+        dpg.bind_item_theme(self.TimeExpandbutton, lBlueButton_theme)
         dpg.bind_item_theme(self.showSpeciesCombo, orangeText_theme) 
         dpg.bind_item_theme(self.MinSlider, minSlider_theme)
         dpg.bind_item_theme(self.MaxSlider, maxSlider_theme)
@@ -240,24 +242,22 @@ class SpecDisplay():
         dpg.set_value(self.ScrollBar, self.minT) 
         
  
-    def LoadFile(self, filepath, titleExtra="", minT=None):
+    def LoadFile(self, filepath, titleExtra="", minT=None, timeExpand=False):
         """Loads the summary data for the whole sound file"""
         self.Status("")
         filename = os.path.basename(os.path.splitext(filepath)[0])
         if self.SoundFile is not None: self.SoundFile.close()
         self.SoundFile = soundfile.SoundFile(filepath, 'r')
         self.sample_rate = self.SoundFile.samplerate
-        self.duration = self.SoundFile.frames / self.sample_rate
-        
-        if filename.endswith("TE"):
+        self.duration = self.SoundFile.frames / self.sample_rate 
+        if filename.endswith("TE") or timeExpand:
             self.timeExpand = True            
             self.sample_rate *= 10
             self.duration = self.duration / 10
             c = f"Time expanded file increasing sampling rate to {self.sample_rate}"
             print(f"LoadFile {c}")
             self.Status(c)
-        else:  self.timeExpand = False
-        
+        else:  self.timeExpand = False       
         print(f"LoadFile {filepath=}  {self.duration=} {titleExtra=} {self.minT}")
         userPath = os.path.expanduser("~")
         if userPath.lower() in filepath.lower():
@@ -281,8 +281,10 @@ class SpecDisplay():
         else: self.maxT = self.minT + self.Range
         dpg.set_value(self.ScrollBar, self.minT)
         self.DisplaySpectogram()
-        if self.sample_rate < 45000:
+        if self.sample_rate < 50000:
             self.Status(f"Sample rate = {self.sample_rate / 1000:.1f}kHz FILE NOT ULTRASONIC")
+            dpg.configure_item(self.TimeExpandbutton, show=True)
+        else: dpg.configure_item(self.TimeExpandbutton, show=False)
     
     def TruncateFile(self, maxT):
         self.SoundFile.seek(0)
@@ -501,6 +503,11 @@ class SpecDisplay():
         else:
             sounddevice.play(Recording, replayRate)
 
+    def timeExpand_click(self):
+        """Time expands a file by a factor of 10 in the display"""
+        filepath = os.path.join(self.dir, self.file);
+        self.LoadFile(filepath, timeExpand=True)
+            
     def saveSound_click(self):
         """Saves sound being displayed in spectrogram, expanding it to the user selected rate"""
         file,_ = os.path.splitext(self.file)
