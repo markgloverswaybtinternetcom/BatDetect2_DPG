@@ -4,6 +4,7 @@ __pycache__/
 TrainingData/*
 ValidationData/*
 Models/*
+Archive/
 *.egg-info
 Resources/temp.wav
 README.md.backup

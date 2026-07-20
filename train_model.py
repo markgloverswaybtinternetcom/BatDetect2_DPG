@@ -12,7 +12,7 @@ LEARNING_RATE = 0.001
 BATCH_SIZE = 8
 NUM_WORKERS = 4
 MIN_EPOCHS = 300
-MAX_EPOCHS = 800
+MAX_EPOCHS = 900
 NUM_SAVE_EPOCHS = 50
 TRAIN_FILE_USED_SEC = 1   # standarised length in seconds
 SPEC_TRAIN_WIDTH = 2560   # equivalent to 1 seoond,  units are number of time steps (before resizing is performed)
@@ -154,14 +154,12 @@ def load_set_of_anns(wav_path):
 
 #batdetect2.train.audio_dataloader AudioLoader
 def echo_aug(audio, sampling_rate):
-    if DEBUG: print(f"echo_aug")
     sample_offset = ( int(ECHO_MAX_DELAY * numpy.random.random() * sampling_rate) + 1)
     audio[:-sample_offset] += numpy.random.random() * audio[sample_offset:]
     return audio
     
 def mask_time_aug(spec):
     # Mask out a random block of time - repeat up to 3 times
-    if DEBUG: print(f"mask_time_aug")
     fm = torchaudio.transforms.TimeMasking(int(spec.shape[1] * MASK_MAX_TIME_PERC))
     for ii in range(numpy.random.randint(1, 4)):
         spec = fm(spec)
@@ -169,20 +167,16 @@ def mask_time_aug(spec):
 
 def mask_freq_aug(spec):
     # Mask out a random frequncy range - repeat up to 3 times
-    if DEBUG: print(f"mask_freq_aug")
     fm = torchaudio.transforms.FrequencyMasking(int(spec.shape[1] * MASK_MAX_FREQ_PERC))
     for ii in range(numpy.random.randint(1, 4)):
         spec = fm(spec)
     return spec
     
 def scale_vol_aug(spec):
-    if DEBUG: print(f"scale_vol_aug")
     return spec * numpy.random.random() * SPEC_AMP_SCALING
 
 def warp_spec_aug(spec, ann):
     # Randomly stretch or squeeze the time axis only
-    if DEBUG:
-        print("warp_spec_aug")
     # Original output size (C, F, T)
     op_size = (spec.shape[1], spec.shape[2])
     # Random stretch/squeeze factor
@@ -360,7 +354,6 @@ def target_heatmaps(spec_op_shape: Tuple[int, int], sampling_rate: int, ann: Ann
 
 def resample_audio(num_samples, sampling_rate, audio2, sampling_rate2):
     if sampling_rate != sampling_rate2:
-        if DEBUG: print(f"resample_audio {sampling_rate=} {sampling_rate2=}")
         audio2 = librosa.resample(audio2,  orig_sr=sampling_rate2, target_sr=sampling_rate, res_type="polyphase")
         sampling_rate2 = sampling_rate
     if audio2.shape[0] < num_samples:
@@ -391,7 +384,7 @@ def CompositeClass(species, call_type="Echolocation"):
     return species + "-" + call_type
     
 class AudioLoader(torch.utils.data.Dataset):
-    def __init__(self, data_anns_ip, class_names, dataset_name=None, is_train=False):
+    def __init__(self, data_anns_ip, class_names, is_train=False):
         self.data_anns = []
         self.audio_file = []
         self.is_train = is_train
@@ -438,12 +431,7 @@ class AudioLoader(torch.utils.data.Dataset):
         for key, value in HORSESHOE_CF.items():
             id = class_names.index(key)
             self.Horseshoe_CF[id] = value
-            
-        print("\n")
-        if dataset_name is not None:
-            print("Dataset     : " + dataset_name)
-        print("Num files   : " + str(len(self.data_anns)))
-        print("Num calls   : " + str(numpy.sum(ann_cnt)))
+        print(f"     Num files: {len(self.data_anns)},                  Num calls: {numpy.sum(ann_cnt)}")
 
     def get_file_and_anns(self, index=None):
         # if no file specified, choose random one
@@ -483,7 +471,6 @@ class AudioLoader(torch.utils.data.Dataset):
     def __getitem__(self, index):
         try:
             # load audio file
-            if DEBUG: print()
             audio, sampling_rate, duration, ann = self.get_file_and_anns(index)
             if AUGMENT:
                 # augment on raw audio - combine with random audio file
@@ -543,7 +530,6 @@ def focal_loss(pred, gt, valid_mask=None, IsClass=False):
     """ Focal loss adapted from CornerNet: Detecting Objects as Paired Keypoints
     pred  (batch x c x h x w)
     gt    (batch x c x h x w)"""
-    if DEBUG: print(f"focal_loss {pred.shape=} {gt.shape=}")
     eps = 1e-5
     beta = 4
     alpha = 2 # Balances the importance of positive and negative samples.
@@ -651,7 +637,7 @@ class Trainer():
 def main():
     if torch.cuda.is_available(): device = "cuda"
     else: device = "cpu"
-
+    #boosted_learning_rate = False
     # setup arg parser and populate it with exiting parameters - will not work with lists
     parser = argparse.ArgumentParser()
     parser.add_argument("training_data_dir", type=str, help="Path to root of datasets")
@@ -665,7 +651,6 @@ def main():
         (data_train, class_names, class_inv_freq) = load_set_of_anns(args.training_data_dir)
         model_params = dict()
         model_params["class_names"] = class_names
-        print(f"main {class_inv_freq.shape=}")
         loss_file = os.path.join(args.model_dir, "loss.npy")
         class_weight_vector = build_class_weight_vector(class_names, DEFAULT_CLASS_WEIGHTS, device)
     
@@ -686,7 +671,13 @@ def main():
                 torch.save(op_state, save_path)
                 print(f"Saved model: {save_path}")
                 if epoch - trainer.best_epoch > 50:
-                    break # have plateaued  
-            
+                    break # have plateaued
+                    """if boosted_learning_rate == False:
+                        boosted_learning_rate = True
+                        for g in trainer.optimizer.param_groups:
+                            g['lr'] *= LEARNING_RATE
+                    else:
+                        break # have plateaued already"""
+
 if __name__ == "__main__":
     main()
