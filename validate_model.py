@@ -222,7 +222,7 @@ def validate_model(model_file_path, validation_data_directory):
             (polars.col("model_class") == polars.col("species")) &
             (polars.col("model_event") == polars.col("call_type")) &
             (polars.col("iou") >= MIN_IOU))
-        print(f"validate_model {filename=} model_df:{model_df.shape[0]}, reference_df:{reference_df.shape[0]}, iou>0.3: {pairs.filter((polars.col("iou") > 0.3)).shape[0]} matches: {matches.shape[0]}")        
+        #print(f"validate_model {filename=} model_df:{model_df.shape[0]}, reference_df:{reference_df.shape[0]}, iou>0.3: {pairs.filter((polars.col("iou") > 0.3)).shape[0]} matches: {matches.shape[0]}")        
         # Greedy best match per model call
         best_matches = (matches.sort("iou", descending=True).group_by(["model_start", "model_end", "model_low", "model_high"]).head(1))
         all_best_matches.append(best_matches)
@@ -238,9 +238,9 @@ def validate_model(model_file_path, validation_data_directory):
         print(colorama.Back.RED + "WARNING: No reference annotations found in validation set." + colorama.Back.RESET)
     if best_matches_all.is_empty():
         print(colorama.Back.RED + "WARNING: No matches found (IoU threshold too high or no overlapping calls)." + colorama.Back.RESET)
-    print("model_all rows:", model_all.height)
-    print("reference_all rows:", reference_all.height)
-    print("best_matches_all rows:", best_matches_all.height)
+    #print("model_all rows:", model_all.height)
+    #print("reference_all rows:", reference_all.height)
+    #print("best_matches_all rows:", best_matches_all.height)
     # Compute per-class CSV
     write_per_model_class_csv(best_matches_all, model_all, reference_all, class_names, model_file_path)
     print("Validation complete.")

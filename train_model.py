@@ -29,7 +29,7 @@ DEFAULT_CLASS_WEIGHTS = {
     "Eptesicus serotinus-Echolocation": 4.5, 
     "Eptesicus serotinus-Feeding Buzz": 0.0,
     "Eptesicus serotinus-Social": 3.0,
-    "Myotis alcathoe-Echolocation": 2.0,
+    "Myotis alcathoe-Echolocation": 2.5,
     "Myotis alcathoe-Feeding Buzz": 0.0,
     "Myotis alcathoe-Social": 2.0,
     "Myotis bechsteinii-Echolocation": 3.0,
