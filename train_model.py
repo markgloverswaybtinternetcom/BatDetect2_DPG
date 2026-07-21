@@ -28,8 +28,8 @@ DEFAULT_CLASS_WEIGHTS = {
     "Barbastella barbastellus-Social": 3.0,
     "Eptesicus serotinus-Echolocation": 4.5, 
     "Eptesicus serotinus-Feeding Buzz": 0.0,
-    "Eptesicus serotinus-Social": 3.0,
-    "Myotis alcathoe-Echolocation": 2.5,
+    "Eptesicus serotinus-Social": 3.5,
+    "Myotis alcathoe-Echolocation": 2.0,
     "Myotis alcathoe-Feeding Buzz": 0.0,
     "Myotis alcathoe-Social": 2.0,
     "Myotis bechsteinii-Echolocation": 3.0,
@@ -37,18 +37,18 @@ DEFAULT_CLASS_WEIGHTS = {
     "Myotis brandtii-Echolocation": 2.5,
     "Myotis brandtii-Feeding Buzz": 0.0,
     "Myotis brandtii-Social": 2.0,
-    "Myotis daubentonii-Echolocation": 2.0,
+    "Myotis daubentonii-Echolocation": 2.5,
     "Myotis daubentonii-Feeding Buzz": 0.0,
-    "Myotis daubentonii-Social": 2.0,
-    "Myotis mystacinus-Echolocation": 3.0,
+    "Myotis daubentonii-Social": 3.0,
+    "Myotis mystacinus-Echolocation": 3.5,
     "Myotis mystacinus-Social": 2.0,
     "Myotis nattereri-Echolocation": 3.5,
     "Myotis nattereri-Social": 3.0,
-    "Nyctalus leisleri-Echolocation": 3.0,
-    "Nyctalus leisleri-Social": 3.0,
-    "Nyctalus noctula-Echolocation": 2.0,
+    "Nyctalus leisleri-Echolocation": 3.5,
+    "Nyctalus leisleri-Social": 3.5,
+    "Nyctalus noctula-Echolocation": 2.5,
     "Nyctalus noctula-Feeding Buzz": 0.0,
-    "Nyctalus noctula-Social": 2.0,
+    "Nyctalus noctula-Social": 2.5,
     "Pipistrellus nathusii-Echolocation": 2.0,
     "Pipistrellus nathusii-Feeding Buzz": 0.0,
     "Pipistrellus nathusii-Social": 2.0,
@@ -628,9 +628,9 @@ class Trainer():
         if train_loss < self.min_loss:
             self.best_epoch = epoch
             self.min_loss = train_loss
+            style = colorama.Style.BRIGHT
             if epoch >= MIN_EPOCHS: 
                 self.best_model = copy.deepcopy(self.model)
-                style = colorama.Style.BRIGHT
         print(style + f"{epoch=} Train loss {train_loss:.3f} = detection {det_loss_avg:.3f} + box size {size_loss_avg:.3f} + class {class_loss_avg:.3f}" + colorama.Style.RESET_ALL)
         return float(train_loss)
 

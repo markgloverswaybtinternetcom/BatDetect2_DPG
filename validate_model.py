@@ -79,18 +79,13 @@ def write_per_model_class_csv(best_matches_all, model_all, reference_all, class_
     ])
     # Compute precision, recall, F1
     per_class = per_class.with_columns([
-        (polars.col("true_positives") / (polars.col("true_positives") + polars.col("false_positives")))
-         .alias("precision"),
-        (polars.col("true_positives") / (polars.col("true_positives") + polars.col("false_negatives")))
-         .alias("recall"),
+        (polars.col("true_positives") / (polars.col("true_positives") + polars.col("false_positives"))).alias("precision"),
+        (polars.col("true_positives") / (polars.col("true_positives") + polars.col("false_negatives"))).alias("recall"),
     ])
     per_class = per_class.with_columns([
-        (polars.col("true_positives") / (polars.col("true_positives") + polars.col("false_positives")))
-         .alias("precision"),
-        (polars.col("true_positives") / (polars.col("true_positives") + polars.col("false_negatives")))
-         .alias("recall"),
-        (2 * polars.col("precision") * polars.col("recall") / (polars.col("precision") + polars.col("recall")))
-         .alias("f1_score")
+        (polars.col("true_positives") / (polars.col("true_positives") + polars.col("false_positives"))).alias("precision"),
+        (polars.col("true_positives") / (polars.col("true_positives") + polars.col("false_negatives"))).alias("recall"),
+        (2 * polars.col("precision") * polars.col("recall") / (polars.col("precision") + polars.col("recall"))).alias("f1_score")
     ])
     # Add model name column
     model_name = os.path.basename(model_file_path)
@@ -125,6 +120,7 @@ def write_per_model_class_csv(best_matches_all, model_all, reference_all, class_
     out_path = os.path.join(model_dir, f"{model_name}_class_scores.csv")
     per_class.write_csv(out_path)
     print("Wrote:", out_path)
+    print(f"TOTAL true_positives = {polars.sum("true_positives")}, false_positives = {polars.sum("false_positives")} false_negatives={polars.sum("false_negatives")}")
 
 def latest_model_file(models_dir):
     files = glob.glob(os.path.join(models_dir, "model_*.pth.tar"))
@@ -238,9 +234,6 @@ def validate_model(model_file_path, validation_data_directory):
         print(colorama.Back.RED + "WARNING: No reference annotations found in validation set." + colorama.Back.RESET)
     if best_matches_all.is_empty():
         print(colorama.Back.RED + "WARNING: No matches found (IoU threshold too high or no overlapping calls)." + colorama.Back.RESET)
-    #print("model_all rows:", model_all.height)
-    #print("reference_all rows:", reference_all.height)
-    #print("best_matches_all rows:", best_matches_all.height)
     # Compute per-class CSV
     write_per_model_class_csv(best_matches_all, model_all, reference_all, class_names, model_file_path)
     print("Validation complete.")
