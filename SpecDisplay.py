@@ -110,7 +110,10 @@ class SpecDisplay():
         dpg.bind_item_theme(self.MinSlider, minSlider_theme)
         dpg.bind_item_theme(self.MaxSlider, maxSlider_theme)
 
-    def LoadClassifiedFile(self, filepath, nRow=None, dirList=None, rememberDir=True, minT=None):
+    def LoadClassifiedFile(self, filepath, nRow=None, dirList=None, rememberDir=True, minT=None, timeExpand=False, refreshAnn=False):
+        if refreshAnn:
+            self.classify = Classifier()
+            results = self.classify.File(filepath, speciesLanguage=self.SpeciesLanguage, timeExpand=timeExpand)
         titleExtra = ""
         dir = os.path.dirname(filepath); file = os.path.basename(filepath)
         if rememberDir: 
@@ -138,7 +141,7 @@ class SpecDisplay():
             else:
                 if self.SpeciesLanguage != 'None': dpg.set_value(self.ClassifyLabel, "No bat calls found")
                 dpg.configure_item(self.ClassifyLabel, color=(200, 0, 0, 255))
-        self.LoadFile(filepath, titleExtra, minT) 
+        self.LoadFile(filepath, titleExtra, minT, timeExpand) 
 
     def GenerateSpectrum(self):
         """Genenertes the coloured spectrum used in the spectrogram, DearPyGui does not allow access to standard spectrums"""
@@ -506,7 +509,7 @@ class SpecDisplay():
     def timeExpand_click(self):
         """Time expands a file by a factor of 10 in the display"""
         filepath = os.path.join(self.dir, self.file);
-        self.LoadFile(filepath, timeExpand=True)
+        self.LoadClassifiedFile(filepath, timeExpand=True, refreshAnn=True)
             
     def saveSound_click(self):
         """Saves sound being displayed in spectrogram, expanding it to the user selected rate"""

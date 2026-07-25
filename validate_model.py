@@ -120,7 +120,7 @@ def write_per_model_class_csv(best_matches_all, model_all, reference_all, class_
     out_path = os.path.join(model_dir, f"{model_name}_class_scores.csv")
     per_class.write_csv(out_path)
     print("Wrote:", out_path)
-    print(f"TOTAL true_positives = {polars.sum("true_positives")}, false_positives = {polars.sum("false_positives")} false_negatives={polars.sum("false_negatives")}")
+    print(colorama.Back.GREEN + f"TOTAL true_positives = {summary.get_column("true_positives").sum()}, false_positives = {summary.get_column("false_positives").sum()} false_negatives = {summary.get_column("false_negatives").sum()}"+ colorama.Back.RESET)
 
 def latest_model_file(models_dir):
     files = glob.glob(os.path.join(models_dir, "model_*.pth.tar"))
@@ -147,7 +147,7 @@ def validate_model(model_file_path, validation_data_directory):
     all_reference_annotations = []
     for audio_file in audio_files:
         # Run classifier and write model annotation JSON
-        classifier.File(audio_file)
+        classifier.File(audio_file, printSummary=False)
         audio_dir = os.path.dirname(audio_file)
         filename = os.path.basename(audio_file)
         model_json_path = os.path.join(audio_dir, "ann", filename + ".json")
@@ -157,7 +157,7 @@ def validate_model(model_file_path, validation_data_directory):
             print("Missing model JSON in:", model_json_path)
             continue
         if not os.path.exists(reference_json_path):
-            print("Missing reference JSON in:", reference_json_path)
+            print(colorama.Back.RED + f"Missing reference JSON in: {reference_json_path}" + colorama.Back.RESET)
             continue
         with open(model_json_path) as f:
             model_json = json.load(f)

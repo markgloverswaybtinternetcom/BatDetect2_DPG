@@ -32,23 +32,23 @@ DEFAULT_CLASS_WEIGHTS = {
     "Myotis alcathoe-Echolocation": 2.0,
     "Myotis alcathoe-Feeding Buzz": 0.0,
     "Myotis alcathoe-Social": 2.0,
-    "Myotis bechsteinii-Echolocation": 3.0,
+    "Myotis bechsteinii-Echolocation": 4.0,
     "Myotis bechsteinii-Social": 2.0,
-    "Myotis brandtii-Echolocation": 2.5,
+    "Myotis brandtii-Echolocation": 3.0,
     "Myotis brandtii-Feeding Buzz": 0.0,
     "Myotis brandtii-Social": 2.0,
     "Myotis daubentonii-Echolocation": 2.5,
     "Myotis daubentonii-Feeding Buzz": 0.0,
     "Myotis daubentonii-Social": 3.0,
-    "Myotis mystacinus-Echolocation": 3.5,
+    "Myotis mystacinus-Echolocation": 4.0,
     "Myotis mystacinus-Social": 2.0,
     "Myotis nattereri-Echolocation": 3.5,
-    "Myotis nattereri-Social": 3.0,
-    "Nyctalus leisleri-Echolocation": 3.5,
-    "Nyctalus leisleri-Social": 3.5,
-    "Nyctalus noctula-Echolocation": 2.5,
+    "Myotis nattereri-Social": 3.5,
+    "Nyctalus leisleri-Echolocation": 4.0,
+    "Nyctalus leisleri-Social": 4.0,
+    "Nyctalus noctula-Echolocation": 2.8,
     "Nyctalus noctula-Feeding Buzz": 0.0,
-    "Nyctalus noctula-Social": 2.5,
+    "Nyctalus noctula-Social": 3.5,
     "Pipistrellus nathusii-Echolocation": 2.0,
     "Pipistrellus nathusii-Feeding Buzz": 0.0,
     "Pipistrellus nathusii-Social": 2.0,
@@ -80,6 +80,7 @@ HORSESHOE_CF = {
     "Rhinolophus ferrumequinum-Echolocation": 80000,   # Greater Horseshoe CF (Hz)
     "Rhinolophus hipposideros-Echolocation": 110000,   # Lesser Horseshoe CF (Hz)
 }
+IMPROVEMENT_IMPATIENCE = 50 # max Epochs without improvement
 
 def summarize_array(name, value):
     if not DEBUG: return
@@ -431,7 +432,7 @@ class AudioLoader(torch.utils.data.Dataset):
         for key, value in HORSESHOE_CF.items():
             id = class_names.index(key)
             self.Horseshoe_CF[id] = value
-        print(f"     Num files: {len(self.data_anns)},                  Num calls: {numpy.sum(ann_cnt)}")
+        print(f"       Num files: {len(self.data_anns)},                 Num calls: {numpy.sum(ann_cnt)}")
 
     def get_file_and_anns(self, index=None):
         # if no file specified, choose random one
@@ -592,6 +593,14 @@ class Trainer():
         self.model = model.to(Classifier.DEVICE)
         self.optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
         self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, MAX_EPOCHS * len_train_loader)
+        """scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',
+            factor=0.1,       # Multiply LR by this factor
+            patience=IMPROVEMENT_IMPATIENCE,       # Wait IMPROVEMENT_IMPATIENCE epochs with no improvement
+            threshold=1e-4,   # Minimum change to qualify as improvement
+            cooldown=0,       # Epochs to wait after LR reduction
+            min_lr=1e-6,      # Lower bound on LR
+            verbose=True      # Print LR updates
+        )""" 
         
     def train(self, epoch, data_loader):
         self.model.train()
@@ -631,7 +640,7 @@ class Trainer():
             style = colorama.Style.BRIGHT
             if epoch >= MIN_EPOCHS: 
                 self.best_model = copy.deepcopy(self.model)
-        print(style + f"{epoch=} Train loss {train_loss:.3f} = detection {det_loss_avg:.3f} + box size {size_loss_avg:.3f} + class {class_loss_avg:.3f}" + colorama.Style.RESET_ALL)
+        print(style + f"{epoch=}, Train loss {train_loss:>9,.3f} = detection {det_loss_avg:>9,.3f} + box size {size_loss_avg:>5,.3f} + class {class_loss_avg:>5,.3f}, learning rate = {self.scheduler.get_last_lr()[0]:.6f}" + colorama.Style.RESET_ALL)
         return float(train_loss)
 
 def main():
@@ -670,8 +679,9 @@ def main():
                 save_path = os.path.join(args.model_dir, model_file_name)
                 torch.save(op_state, save_path)
                 print(f"Saved model: {save_path}")
-                if epoch - trainer.best_epoch > 50:
+                if epoch - trainer.best_epoch > IMPROVEMENT_IMPATIENCE:
                     break # have plateaued
+
                     """if boosted_learning_rate == False:
                         boosted_learning_rate = True
                         for g in trainer.optimizer.param_groups:

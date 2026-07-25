@@ -27,6 +27,7 @@ class MainWindow():
         self.lastMousePos = self.LabelStartPlot = self.StatusLabel = self.AssignSpeciesID = self.AssignCallTypeID = None
         self.lastRow = self.FileTableRow = self.FilesDF = self.SoundProcess = self.soundLine = self.lastMousePlotPos = self.calls = None
         self.MultiFile = config["MultiFile"]
+        self.refreshAnn = False
         if torch.cuda.is_available(): print(colorama.Fore.GREEN + "torch.cuda.is_available" + colorama.Fore.RESET)
         else: print(colorama.Fore.RED + "torch.cuda is not available" + colorama.Fore.RESET)
 
@@ -502,8 +503,15 @@ class MainWindow():
             displayN = 2;
             self.SetActiveDisplayN(2)
         elif self.ActiveDisplay == self.SpecDisplay2: displayN = 2;
-        f = data[0]
-        self.LoadFileOrDir(f, displayN)
+        filePath = data[0]
+        if filePath.endswith(".pth.tar"):
+            print(f"FileDrop new model {filePath}")
+            self.refreshAnn = True
+            self.classify = Classifier(filePath)
+            if self.MultiFile: self.ClassifyDir(self.ActiveDisplay.dir)
+            else: self.LoadClassifiedFile(os.path,join(self.ActiveDisplay.dir, self.ActiveDisplay.file))
+        else:
+            self.LoadFileOrDir(filePath, displayN)
     
     def SetActiveDisplayN(self, displayN):
         """Make the display N active for arrow keys of file drops"""
@@ -556,7 +564,7 @@ class MainWindow():
                 self.Status(f"Classifying single echo meter session at {f}", theme=self.yellow_align_right)
                 self.LoadEchoMeterDir(f)
                 config['echoMeterDir'] = f
-            elif os.path.isfile(dirResults_file):
+            elif os.path.isfile(dirResults_file) and not self.refreshAnn:
                 self.LoadBatDetectTable(self.FileTable, f)
                 if self.FilesDF.height > 0:
                     user_data = [self.FileTable,  self.FilesDF, 0, 0]
@@ -691,10 +699,10 @@ class MainWindow():
         print(f"LoadClassifiedFile {f=} {minT=}") 
         dir = os.path.dirname(f); file = os.path.basename(f)
         callsCsvPath = os.path.join(dir,"ann", file+".csv")
-        if not os.path.isfile(callsCsvPath):
+        if not os.path.isfile(callsCsvPath) or self.refreshAnn:
             print(f"LoadClassifiedFile {callsCsvPath=} not found")
             self.Status(f"Classifying file {f}", theme=self.yellow_align_right)
-            results = self.classify.File(f, debug=True, speciesLanguage=self.SpeciesLanguage)
+            results = self.classify.File(f, speciesLanguage=self.SpeciesLanguage)
             if len(results) > 0:
                 self.Status(f"Classified file {f}", theme=self.green_align_right)
         display.LoadClassifiedFile(f, rememberDir=not self.MultiFile, nRow=nRow, dirList=dirList, minT=minT)                     
