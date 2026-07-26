@@ -30,7 +30,7 @@ class SpecDisplay():
         self.classifyEnabled = True
         sys.excepthook = self.notify_exception
         self.FileTableRow = self.lastMousePlotPos = self.lastMousePos = self.soundLine = self.duration = None
-        self.dirIndex = self.PlayObject = self.ZoomStart = self.SoundFile = None 
+        self.dirIndex = self.PlayObject = self.ZoomStart = self.SoundFile = self.dir = self.file = None 
         self.activeButtonCallback = activeButtonCallback        
         self.minF = MIN_FREQ_KHZ; self.maxF = MAX_FREQ_KHZ
         self.colours = self.GenerateSpectrum()
@@ -127,7 +127,7 @@ class SpecDisplay():
             titleExtra = f"file {self.dirIndex +1} of {len(self.dirFiles)}"
         self.dir = dir; self.file = file
         if self.classifyEnabled:            
-            callsCsvPath = os.path.join(dir,"ann", file+".csv")
+            callsCsvPath = os.path.join(dir,"ann", file + ".csv")
             if os.path.isfile(callsCsvPath) and self.SpeciesLanguage != 'None':
                 summary = self.calls.fromCSV(callsCsvPath)
                 self.SetClassifyLabel(summary)                
@@ -405,7 +405,7 @@ class SpecDisplay():
         self.maxA = self.minA + pRange * self.maxPercent
         #print(f"DisplaySpectogram {self.minA=}, {self.maxA=}")
         values = numpy.flipud(self.npSpec).flatten().tolist()
-        self.specRows = self.npSpec.shape[0]; self.specCols = self.npSpec.shape[1] ##################
+        self.specRows = self.npSpec.shape[0]; self.specCols = self.npSpec.shape[1] 
         if self.heatSeries is not None: dpg.delete_item(self.heatSeries); self.heatSeries = None
         self.heatSeries = dpg.add_heat_series(values, rows=self.specRows, cols=self.specCols, parent=self.specYaxis, 
             format="", scale_min=self.minA, scale_max=self.maxA, bounds_min=[self.minT,self.minF], bounds_max=[self.maxT,self.maxF]) 
@@ -429,15 +429,12 @@ class SpecDisplay():
         powerF = numpy.arange(self.minF, self.maxF,  (self.maxF - self.minF)/ (self.freqBins-1))
         self.psdSeries = dpg.add_line_series(self.npPsd, powerF, parent=self.psdYaxis)
         dpg.set_axis_limits(self.psdYaxis, self.minF, self.maxF) 
-        dpg.set_axis_limits(self.psdXaxis, minPsd, maxPsd)
-        
+        dpg.set_axis_limits(self.psdXaxis, minPsd, maxPsd)        
         peak = numpy.argmax(self.npPsd) / (self.freqBins-1) * (self.maxF - self.minF) + self.minF
-        dpg.set_item_label(self.psdXaxis, f"Peak {peak:.1f} kHz")
-        
+        dpg.set_item_label(self.psdXaxis, f"Peak {peak:.1f} kHz")        
         dpg.bind_item_theme(self.psdSeries, self.line_theme)
         self.species, exception = self.calls.DisplayAnnotations(self.specPlot, self.minT, self.maxT)
         if len(exception) > 0: self.Status(exception, error=True)
-
         if sound: self.PlaySound(cursor=None)
     
     def Range_changed(self, range):

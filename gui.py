@@ -509,7 +509,7 @@ class MainWindow():
             self.refreshAnn = True
             self.classify = Classifier(filePath)
             if self.MultiFile: self.ClassifyDir(self.ActiveDisplay.dir)
-            else: self.LoadClassifiedFile(os.path,join(self.ActiveDisplay.dir, self.ActiveDisplay.file))
+            else: self.LoadClassifiedFile(os.path.join(self.ActiveDisplay.dir, self.ActiveDisplay.file))
             self.refreshAnn = False
         else:
             self.LoadFileOrDir(filePath, displayN)
@@ -753,6 +753,8 @@ class MainWindow():
     def SpeciesLanguageCombo_changed(self, sender, app_data, user_data):
         """Alters language of species call annotation and combo boxes"""
         print(f"SpeciesLanguageCombo_changed {sender=} {app_data=} {user_data=}")
+        wasNone = False
+        if self.SpeciesLanguage == "None": wasNone = True           
         self.SpeciesLanguage = self.SpecDisplay1.SpeciesLanguage = self.SpecDisplay2.SpeciesLanguage = self.SpecDisplay1.calls.SpeciesLanguage = self.SpecDisplay2.calls.SpeciesLanguage = app_data
         self.AbbrevSpeciesLanguage = self.FullSpeciesLanguage = self.SpeciesLanguage
         if self.SpeciesLanguage == "LatinAbbrev": self.FullSpeciesLanguage = "Latin"
@@ -762,7 +764,15 @@ class MainWindow():
         if self.SpeciesLanguage != "None":
             sortedSpecies = list(self.SpeciesNames.sort_values(by=["bat",self.FullSpeciesLanguage], ascending=[False,True])[self.FullSpeciesLanguage])
             sortedSpecies.insert(0, "DELETE")
-        else: sortedSpecies = []
+            if wasNone:
+                if self.SpecDisplay1.file is not None:                  
+                    self.SpecDisplay1.SetClassifyLabel(self.SpecDisplay1.calls.fromCSV(os.path.join(self.SpecDisplay1.dir, "ann", self.SpecDisplay1.file + ".csv")))
+                if self.SpecDisplay2.file is not None: 
+                    self.SpecDisplay2.SetClassifyLabel(self.SpecDisplay2.calls.fromCSV(os.path.join(self.SpecDisplay2.dir, "ann", self.SpecDisplay2.file + ".csv")))
+        else: 
+            sortedSpecies = []
+            dpg.set_value(self.SpecDisplay1.ClassifyLabel, "")
+            dpg.set_value(self.SpecDisplay2.ClassifyLabel, "")
         dpg.configure_item(self.AssignSpeciesCombo, items=sortedSpecies)
         if sender is not None:
             self.SpecDisplay1.DisplaySpectogram(UpdateMin= False, sound = False)

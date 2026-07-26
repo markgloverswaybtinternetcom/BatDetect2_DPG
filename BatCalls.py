@@ -1,5 +1,5 @@
 import dearpygui.dearpygui as dpg
-import numpy, json, csv
+import numpy, json, csv, os
 
 class NumpyEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -20,6 +20,8 @@ class BatCalls():
         
     def fromCSV(self, callsCsvPath):
         """"Load annotation information from BatDetect2 classifier CSV file"""
+        if not os.path.isfile(callsCsvPath):
+            raise ValueError(f"fromCSV FILE DOES NOT EXIST {callsCsvPath}")
         with open(callsCsvPath, mode ='r')as file:
             csvLines = csv.reader(file)
             summaryDict = {}; arr = []
