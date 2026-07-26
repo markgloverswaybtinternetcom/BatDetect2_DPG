@@ -236,7 +236,6 @@ def validate_model(model_file_path, validation_data_directory):
         print(colorama.Back.RED + "WARNING: No matches found (IoU threshold too high or no overlapping calls)." + colorama.Back.RESET)
     # Compute per-class CSV
     write_per_model_class_csv(best_matches_all, model_all, reference_all, class_names, model_file_path)
-    print("Validation complete.")
  
 if __name__ == "__main__":
     import argparse

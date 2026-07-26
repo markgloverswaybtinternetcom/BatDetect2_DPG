@@ -69,7 +69,6 @@ class ConvBlockUpF(torch.nn.Module):
 class Net2dFast(torch.nn.Module):
     def __init__(self, num_filts, num_classes=0, ip_height=128):
         super().__init__()
-        print(f"Net2dFast {num_filts=} {num_classes=} {ip_height=}")
         self.num_classes = num_classes
         self.num_filts = num_filts
         self.ip_height_rs = ip_height
