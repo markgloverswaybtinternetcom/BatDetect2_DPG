@@ -509,7 +509,7 @@ class MainWindow():
             self.refreshAnn = True
             self.classify = Classifier(filePath)
             if self.MultiFile: self.ClassifyDir(self.ActiveDisplay.dir)
-            else: self.LoadClassifiedFile(os.path.join(self.ActiveDisplay.dir, self.ActiveDisplay.file))
+            else: self.LoadClassifiedFile(os.path.join(self.ActiveDisplay.dir, self.ActiveDisplay.file), self.ActiveDisplay)
             self.refreshAnn = False
         else:
             self.LoadFileOrDir(filePath, displayN)
