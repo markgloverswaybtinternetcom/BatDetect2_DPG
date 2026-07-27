@@ -36,6 +36,7 @@ class MainWindow():
             self.SpeciesLanguage = config["SpeciesLanguage"] 
             self.CallTypes = ("Echolocation", "Social", "Feeding Buzz")
             self.Range = float(config["Range"]);
+            self.SpecDisplay3 = SpecDisplay(self.mainWindow, config, parentSelf=self, activeButtonCallback=self.activeButton3, showDisplay=False, showAmp=False)
             self.SpecDisplay2 = SpecDisplay(self.mainWindow, config, parentSelf=self, activeButtonCallback=self.activeButton2, showDisplay=False, showAmp=False)
             self.ActiveDisplay = self.SpecDisplay1 = SpecDisplay(self.mainWindow, config, parentSelf=self, activeButtonCallback=self.activeButton1)                   
             self.FileDialog = FileDialog(self.FileDialog_Finished)
@@ -44,9 +45,9 @@ class MainWindow():
                 self.RangeCombo = dpg.add_combo(label="Range", items=("0.25s", "0.5s", "1.0s", "2.0s", "5.0s", "10s", "15s"), 
                     width=60*config["scale"], default_value=f"{self.SpecDisplay1.Range}s", callback=self.RangeListbox_changed)
                 self.LowFilterCombo = dpg.add_combo(label="Low Filter", 
-                    items=("> 0 kHz", "> 5 kHz", "> 10 kHz", "> 15 kHz", "> 20 kHz", "> 25 kHz", "> 30 kHz", "> 35 kHz", "> 40 kHz", "> 50 kHz", "> 60 kHz"), 
+                    items=("> 0 kHz", "> 5 kHz", "> 10 kHz", "> 15 kHz", "> 20 kHz", "> 25 kHz", "> 30 kHz", "> 35 kHz", "> 40 kHz", "> 50 kHz", "> 60 kHz", "> 70 kHz"), 
                     width=95*config["scale"],  callback=self.LowFilterListBox_changed)
-                self.HighFilterCombo = dpg.add_combo(label="High Filter", items=("< 125 kHz", "< 100 kHz", "< 80 kHz", "< 70 kHz", "< 60 kHz", "< 50 kHz", "< 40 kHz"), 
+                self.HighFilterCombo = dpg.add_combo(label="High Filter", items=("< 125 kHz", "< 110 kHz", "< 100 kHz", "< 90 kHz", "< 80 kHz", "< 70 kHz", "< 60 kHz", "< 50 kHz", "< 40 kHz"), 
                     width=95*config["scale"], callback=self.HighFilterListBox_changed)
                 self.SpeciesLanguageCombo = dpg.add_combo(label="Species Language", items=("Latin","LatinAbbrev", "English", "EnglishAbbrev", "None"),
                     width=115*config["scale"], default_value=self.SpeciesLanguage, callback=self.SpeciesLanguageCombo_changed)
@@ -259,9 +260,17 @@ class MainWindow():
             specHeight = (topHeight - (2*SCROLL_HT + 3*BUTTON_HT + STATUS_HT + HEADER ) * config["scale"] - SPACING *8)//2 
             #print(f"resize_handler 2 displays {specHeight=}")
             dpg.configure_item(self.SpecDisplay1.ampPlot, show=False) 
-            dpg.configure_item(self.SpecDisplay2.bottomGroup, show=True)
-            dpg.configure_item(self.SpecDisplay1.topGroup, height=specHeight)
-            dpg.configure_item(self.SpecDisplay2.topGroup, height=specHeight)
+            dpg.configure_item(self.SpecDisplay2.bottomGroup, show=True)      
+            if dpg.get_item_configuration(self.SpecDisplay3.topGroup)['show']:
+                specHeight = (topHeight - (3*SCROLL_HT + 4*BUTTON_HT + STATUS_HT + HEADER ) * config["scale"] - SPACING *8)//3 
+                dpg.configure_item(self.SpecDisplay1.topGroup, height=specHeight)
+                dpg.configure_item(self.SpecDisplay2.topGroup, height=specHeight)
+                dpg.configure_item(self.SpecDisplay3.topGroup, height=specHeight)
+                dpg.configure_item(self.SpecDisplay3.bottomGroup, show=True)      
+            else:
+                specHeight = (topHeight - (2*SCROLL_HT + 3*BUTTON_HT + STATUS_HT + HEADER ) * config["scale"] - SPACING *8)//2 
+                dpg.configure_item(self.SpecDisplay1.topGroup, height=specHeight)
+                dpg.configure_item(self.SpecDisplay2.topGroup, height=specHeight)
         elif dpg.get_item_configuration(self.SpecDisplay1.topGroup)['show']:
                 specHeight = topHeight - (AMP_HT + SCROLL_HT + 2*BUTTON_HT + STATUS_HT+ HEADER ) * config["scale"] - SPACING *6
                 #print(f"resize_handler 1 display {specHeight=}")
@@ -343,11 +352,15 @@ class MainWindow():
         plotRect1 = dpg.get_item_rect_size(self.SpecDisplay1.specPlot)
         plotPos2 = dpg.get_item_pos(self.SpecDisplay2.specPlot)
         plotRect2 = dpg.get_item_rect_size(self.SpecDisplay2.specPlot)
+        plotPos3 = dpg.get_item_pos(self.SpecDisplay3.specPlot)
+        plotRect3 = dpg.get_item_rect_size(self.SpecDisplay3.specPlot)
         display = None
         if mousePos[1] > plotPos1[1] and mousePos[1] < plotPos1[1] + plotRect1[1] and mousePos[0] > plotPos1[0]: # click on spectrogram1
             display = self.SpecDisplay1
         elif mousePos[1] > plotPos2[1] and mousePos[1] < plotPos2[1] + plotRect2[1] and mousePos[0] > plotPos2[0]: # click on spectrogram2
             display = self.SpecDisplay2
+        elif mousePos[1] > plotPos3[1] and mousePos[1] < plotPos3[1] + plotRect3[1] and mousePos[0] > plotPos3[0]: # click on spectrogram3
+            display = self.SpecDisplay3
         return display
         
     def zoom_release_handler(self, sender, app_data, user_data):
@@ -379,13 +392,15 @@ class MainWindow():
             mousePlotPos = dpg.get_plot_mouse_pos()             
             print(f"click on spectrogram {mousePlotPos=} {display.minT=}")
             if dpg.is_key_down(dpg.mvKey_Prior): 
-                self.SpecDisplay1.minF = self.SpecDisplay2.minF = mousePlotPos[1]
+                self.SpecDisplay1.minF = self.SpecDisplay2.minF = self.SpecDisplay3.minF = mousePlotPos[1]
                 self.SpecDisplay1.DisplaySpectogram()                
                 if dpg.is_item_shown(self.SpecDisplay2.topGroup): self.SpecDisplay2.DisplaySpectogram()
+                if dpg.is_item_shown(self.SpecDisplay3.topGroup): self.SpecDisplay3.DisplaySpectogram()
             elif dpg.is_key_down(dpg.mvKey_Next): 
-                self.SpecDisplay1.maxF = self.SpecDisplay2.maxF = mousePlotPos[1]
+                self.SpecDisplay1.maxF = self.SpecDisplay2.maxF = self.SpecDisplay3.maxF = mousePlotPos[1]
                 self.SpecDisplay1.DisplaySpectogram()   
                 if dpg.is_item_shown(self.SpecDisplay2.topGroup): self.SpecDisplay2.DisplaySpectogram()
+                if dpg.is_item_shown(self.SpecDisplay3.topGroup): self.SpecDisplay3.DisplaySpectogram()
             elif self.lastMousePlotPos is not None:
                 print(f"second click {self.lastMousePlotPos=} {mousePlotPos=}")
                 xLim = dpg.get_axis_limits(display.specXaxis)
@@ -521,12 +536,24 @@ class MainWindow():
             self.ActiveDisplay = self.SpecDisplay1
             self.SpecDisplay1.ShowActiveDisplay(True)
             self.SpecDisplay2.ShowActiveDisplay(False)
-        else:
+            self.SpecDisplay3.ShowActiveDisplay(False)
+        elif displayN == 2:
             # compare display
             self.ActiveDisplay = self.SpecDisplay2
             self.SpecDisplay2.ShowActiveDisplay(True)
             self.SpecDisplay1.ShowActiveDisplay(False)
+            self.SpecDisplay3.ShowActiveDisplay(False)
+        else:
+            # compare display
+            self.ActiveDisplay = self.SpecDisplay3
+            self.SpecDisplay3.ShowActiveDisplay(True)
+            self.SpecDisplay2.ShowActiveDisplay(False)
+            self.SpecDisplay1.ShowActiveDisplay(False)
             
+    def activeButton3(self):
+        """Make the compare display (2) active for arrow keys of file drops"""
+        self.SetActiveDisplayN(3)
+    
     def activeButton2(self):
         """Make the compare display (2) active for arrow keys of file drops"""
         self.SetActiveDisplayN(2)
@@ -537,16 +564,21 @@ class MainWindow():
             
     def LoadFileOrDir(self, f, displayN, nRow=None, dirList=None):
         """Load a file or directory classifying if needed"""
-        if displayN == 2:
+        if displayN > 1:
             print(f"LoadFileOrDir Use Ref SpecDisplay 2")
             if os.path.isdir(f):
                 self.Status("Single files only on second display", error=True)
                 return
-            display = self.SpecDisplay2
-            # not space for file table need to keep track of position in directory
+            # no space for file table need to keep track of position in directory
             self.MultiFile = False
             self.SpecDisplay1.RememberDirectory(self.SpecDisplay1.dir, os.path.join(self.SpecDisplay1.dir, self.SpecDisplay1.file))
-            dpg.configure_item(self.SpecDisplay2.topGroup, show=True)
+            if displayN == 2:
+                display = self.SpecDisplay2
+                dpg.configure_item(self.SpecDisplay2.topGroup, show=True)
+            else:
+                display = self.SpecDisplay3
+                # not space for file table need to keep track of position in directory
+                dpg.configure_item(self.SpecDisplay3.topGroup, show=True)
         else:
             print(f"LoadFileOrDir Use normal Window")
             display= self.SpecDisplay1
@@ -555,11 +587,12 @@ class MainWindow():
         if os.path.isdir(f):
             dirResults_file = os.path.join(f, "BatDetect2 Results.csv")
             display.dir = f
-            if display == self.SpecDisplay2:
+            if display == self.SpecDisplay2 or display == self.SpecDisplay3:
                 self.Status("Single files only on second display", error=True)
                 return
             self.MultiFile = True;
             dpg.configure_item(self.SpecDisplay2.topGroup, show=False)
+            dpg.configure_item(self.SpecDisplay3.topGroup, show=False)
             if os.path.basename(f).startswith("Session_"):
                 print(f"LoadFileOrDir single echometer directory {f} found")
                 self.Status(f"Classifying single echo meter session at {f}", theme=self.yellow_align_right)
@@ -755,7 +788,9 @@ class MainWindow():
         print(f"SpeciesLanguageCombo_changed {sender=} {app_data=} {user_data=}")
         wasNone = False
         if self.SpeciesLanguage == "None": wasNone = True           
-        self.SpeciesLanguage = self.SpecDisplay1.SpeciesLanguage = self.SpecDisplay2.SpeciesLanguage = self.SpecDisplay1.calls.SpeciesLanguage = self.SpecDisplay2.calls.SpeciesLanguage = app_data
+        self.SpeciesLanguage = self.SpecDisplay1.SpeciesLanguage = self.SpecDisplay1.calls.SpeciesLanguage = app_data
+        self.SpecDisplay2.calls.SpeciesLanguage = self.SpecDisplay2.SpeciesLanguage = app_data
+        self.SpecDisplay3.SpeciesLanguage = self.SpecDisplay3.calls.SpeciesLanguage = app_data
         self.AbbrevSpeciesLanguage = self.FullSpeciesLanguage = self.SpeciesLanguage
         if self.SpeciesLanguage == "LatinAbbrev": self.FullSpeciesLanguage = "Latin"
         elif self.SpeciesLanguage == "EnglishAbbrev": self.FullSpeciesLanguage = "English"
@@ -769,34 +804,41 @@ class MainWindow():
                     self.SpecDisplay1.SetClassifyLabel(self.SpecDisplay1.calls.fromCSV(os.path.join(self.SpecDisplay1.dir, "ann", self.SpecDisplay1.file + ".csv")))
                 if self.SpecDisplay2.file is not None: 
                     self.SpecDisplay2.SetClassifyLabel(self.SpecDisplay2.calls.fromCSV(os.path.join(self.SpecDisplay2.dir, "ann", self.SpecDisplay2.file + ".csv")))
+                if self.SpecDisplay3.file is not None: 
+                    self.SpecDisplay3.SetClassifyLabel(self.SpecDisplay3.calls.fromCSV(os.path.join(self.SpecDisplay3.dir, "ann", self.SpecDisplay3.file + ".csv")))
         else: 
             sortedSpecies = []
             dpg.set_value(self.SpecDisplay1.ClassifyLabel, "")
             dpg.set_value(self.SpecDisplay2.ClassifyLabel, "")
+            dpg.set_value(self.SpecDisplay3.ClassifyLabel, "")
         dpg.configure_item(self.AssignSpeciesCombo, items=sortedSpecies)
         if sender is not None:
             self.SpecDisplay1.DisplaySpectogram(UpdateMin= False, sound = False)
             self.SpecDisplay2.DisplaySpectogram(UpdateMin= False, sound = False)
-        
+            self.SpecDisplay3.DisplaySpectogram(UpdateMin= False, sound = False)
+            
     def LowFilterListBox_changed(self, sender, app_data, user_data):
         """Filters low frequencies in sound and spectrogram no longer displays these frequencies"""
-        self.SpecDisplay1.minF = self.SpecDisplay2.minF = int(app_data.split()[1])
+        self.SpecDisplay1.minF = self.SpecDisplay2.minF = self.SpecDisplay3.minF = int(app_data.split()[1])
         print(f"LowFilterListBox_changed {sender=} {app_data=} {user_data=} {self.SpecDisplay1.minF=}")
         self.SpecDisplay1.DisplaySpectogram(UpdateMin= False, sound = False)
         self.SpecDisplay2.DisplaySpectogram(UpdateMin= False, sound = False)
+        self.SpecDisplay3.DisplaySpectogram(UpdateMin= False, sound = False)
     
     def HighFilterListBox_changed(self, sender, app_data, user_data):
         """Filters high frequencies in sound and spectrogram no longer displays these frequencies"""
-        self.SpecDisplay1.maxF = self.SpecDisplay2.maxF = int(app_data.split()[1])
+        self.SpecDisplay1.maxF = self.SpecDisplay2.maxF = self.SpecDisplay3.maxF = int(app_data.split()[1])
         print(f"FilterListBox_changed {sender=} {app_data=} {user_data=} {self.SpecDisplay1.maxF=}")
         self.SpecDisplay1.DisplaySpectogram(UpdateMin= False, sound = False)
         self.SpecDisplay2.DisplaySpectogram(UpdateMin= False, sound = False)
+        self.SpecDisplay3.DisplaySpectogram(UpdateMin= False, sound = False)
 
     def RangeListbox_changed(self, sender, app_data, user_data):
         """Alters scale of Spectrogram displayed"""
         self.Range = float(app_data.rstrip("s"))
         self.SpecDisplay1.Range_changed(self.Range)
         self.SpecDisplay2.Range_changed(self.Range)
+        self.SpecDisplay3.Range_changed(self.Range)
         
     def TableRow_selected(self, sender, app_data, user_data):
         """Displays and plays selected file"""

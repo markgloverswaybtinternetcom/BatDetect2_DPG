@@ -32,6 +32,7 @@ class FileDialog():
         self.RoostDirs.extend(drives)
         
         self.history = []
+        self.SecondDisplayShown = False
         self.displayFileActionButtons = self.displayDirActionButtons = False
         hwidth, hheight, _, hdata = dpg.load_image( "Resources/home.png")
         mfwidth, mfheight, _, mfdata = dpg.load_image("Resources/mini_folder.png")
@@ -57,6 +58,7 @@ class FileDialog():
                     self.loadFileButton = dpg.add_button(label="Load WAV", show=False, callback=self.LoadFileSelected_callback)
                     self.loadDirButton = dpg.add_button(label="Load all WAVs", show=False, callback=self.LoadDir_callback)
                     self.loadCompareButton = dpg.add_button(label="Load comparison WAV", show=False, callback=self.LoadFileComparison_callback)
+                    self.load2ndCompareButton = dpg.add_button(label="Load 2nd comparison WAV", show=False, callback=self.LoadFile2ndComparison_callback)
                     self.SplitLongWavs = dpg.add_button(label="Split Long WAVs", show=False, callback=self.SplitLongWavs_callback)
                     self.WavMetadataButton = dpg.add_button(label="WAV Metadata in Console", show=False, callback=self.WavMetadata_callback)                               
         with dpg.item_handler_registry(tag="file dialog resize handler"):
@@ -94,6 +96,7 @@ class FileDialog():
         dpg.bind_item_theme(self.loadFileButton, greenButton_theme)
         dpg.bind_item_theme(self.loadDirButton, greenButton_theme)
         dpg.bind_item_theme(self.loadCompareButton, gbButton_theme)
+        dpg.bind_item_theme(self.load2ndCompareButton, gbButton_theme)
         dpg.bind_item_theme(self.RoostDirButton, navButton_theme)
         dpg.bind_item_theme(self.RoostAddDirButton, navButton_theme)
         dpg.bind_item_theme(self.UpDirButton, navButton_theme)
@@ -105,7 +108,6 @@ class FileDialog():
         if len(self.history) == 0: 
             LastRowSelected = self.selectedDir = self.selectedFile = None;
             self.DisplayRoost()
-        #else: self.DisplayDir(self.history[-1])
         dpg.configure_item(self.window, show=True) 
     
     def Shown(self):
@@ -176,6 +178,7 @@ class FileDialog():
         if self.displayFileActionButtons != selected:
             dpg.configure_item(self.loadFileButton, show=selected)
             dpg.configure_item(self.loadCompareButton, show=selected)                    
+            if self.SecondDisplayShown: dpg.configure_item(self.load2ndCompareButton, show=selected)                    
             dpg.configure_item(self.WavMetadataButton, show=selected)
             self.displayFileActionButtons = selected
             
@@ -296,6 +299,16 @@ class FileDialog():
             dpg.configure_item(self.window, show=False)
             if self.selectedFile is not None:
                 self.loadCallback(self.selectedFile, 2, self.nRow, self.GetDirList())
+            self.selectedFile = None
+            self.SecondDisplayShown = True
+            dpg.configure_item(self.load2ndCompareButton, show=True)
+    
+    def LoadFile2ndComparison_callback(self):
+        """Selected file goes to a third display for comparision"""
+        if self.loadCallback is not None:
+            dpg.configure_item(self.window, show=False)
+            if self.selectedFile is not None:
+                self.loadCallback(self.selectedFile, 3, self.nRow, self.GetDirList())
             self.selectedFile = None
     
     def UpDir_callback(self):
