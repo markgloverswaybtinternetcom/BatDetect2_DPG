@@ -273,19 +273,24 @@ class FileDialog():
             # do not add code as will stop selecting rows or buttons
    
     def GetDirList(self):
-        dirList = []
+        dirList = []; dirIndex = -1
+        i = 0
         for row in dpg.get_item_children(self.table, 1):
             filenameCell = dpg.get_item_children(row, 1)[1]
-            if dpg.get_item_label(filenameCell).lower().endswith(".wav"):
-                dirList.append(os.path.join(self.selectedDir, dpg.get_item_label(filenameCell)))
-        return dirList
+            f = os.path.join(self.selectedDir, dpg.get_item_label(filenameCell))
+            if f.lower().endswith(".wav"):       
+                dirList.append(f)
+                if self.selectedFile == f: dirIndex = i
+                i += 1
+        return dirIndex, dirList
             
     def LoadFileSelected_callback(self):
         """Selected file or directory goes to the main display"""
         if self.loadCallback is not None:
             dpg.configure_item(self.window, show=False)
             if self.selectedFile is not None:
-                self.loadCallback(self.selectedFile, 1, self.nRow, self.GetDirList())
+                dirIndex, dirList = self.GetDirList()
+                self.loadCallback(self.selectedFile, 1, dirIndex, dirList)
             self.selectedFile = None
     
     def LoadDir_callback(self):
@@ -298,7 +303,8 @@ class FileDialog():
         if self.loadCallback is not None:
             dpg.configure_item(self.window, show=False)
             if self.selectedFile is not None:
-                self.loadCallback(self.selectedFile, 2, self.nRow, self.GetDirList())
+                dirIndex, dirList = self.GetDirList()
+                self.loadCallback(self.selectedFile, 2, dirIndex, dirList)
             self.selectedFile = None
             self.SecondDisplayShown = True
             dpg.configure_item(self.load2ndCompareButton, show=True)
@@ -308,7 +314,8 @@ class FileDialog():
         if self.loadCallback is not None:
             dpg.configure_item(self.window, show=False)
             if self.selectedFile is not None:
-                self.loadCallback(self.selectedFile, 3, self.nRow, self.GetDirList())
+                dirIndex, dirList = self.GetDirList()
+                self.loadCallback(self.selectedFile, 3, dirIndex, dirList)
             self.selectedFile = None
     
     def UpDir_callback(self):
