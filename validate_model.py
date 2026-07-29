@@ -1,5 +1,6 @@
-import os, json, polars, glob, argparse, colorama, sys
+import os, json, polars, glob, argparse, colorama, sys, warnings
 from Classifier import Classifier
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 MIN_IOU = 0.2 
 REFERENCE_COLS = [ "reference_start", "reference_end", "reference_low", "reference_high", "species", "call_type"]
@@ -53,7 +54,7 @@ def cast_numeric(df, numeric_cols):
             df = df.with_columns(polars.col(col).cast(polars.Float64, strict=False))
     return df
     
-def write_per_model_class_csv(best_matches_all, model_all, reference_all, class_names, model_file_path):
+def write_per_model_class_csv(best_matches_all, model_all, reference_all, class_names, model_file_path, writeFile=True):
     # Build full reference grid (all species × all events)
     ref_species = reference_all["species"].unique().sort()
     ref_events  = reference_all["call_type"].unique().sort()
@@ -88,7 +89,9 @@ def write_per_model_class_csv(best_matches_all, model_all, reference_all, class_
         (2 * polars.col("precision") * polars.col("recall") / (polars.col("precision") + polars.col("recall"))).alias("f1_score")
     ])
     # Add model name column
-    model_name = os.path.basename(model_file_path)
+    model_name = ""
+    if model_file_path is not None:
+        model_name = os.path.basename(model_file_path)
     per_class = per_class.with_columns([polars.lit(model_name).alias("model_name")])
     # Reorder columns
     per_class = per_class.select([ "model_name", "species", "call_type", "true_positives", "false_positives", "false_negatives",
@@ -115,12 +118,14 @@ def write_per_model_class_csv(best_matches_all, model_all, reference_all, class_
         polars.col(col).round(DECIMALS) if per_class[col].dtype in (polars.Float32, polars.Float64) else polars.col(col)
         for col in per_class.columns
     ])
-    # Write CSV
-    model_dir = os.path.dirname(model_file_path)
-    out_path = os.path.join(model_dir, f"{model_name}_class_scores.csv")
-    per_class.write_csv(out_path)
-    print("Wrote:", out_path)
-    print(colorama.Back.GREEN + f"TOTAL true_positives = {summary.get_column("true_positives").sum()}, false_positives = {summary.get_column("false_positives").sum()} false_negatives = {summary.get_column("false_negatives").sum()}"+ colorama.Back.RESET)
+    if writeFile:
+        # Write CSV
+        model_dir = os.path.dirname(model_file_path)
+        out_path = os.path.join(model_dir, f"{model_name}_class_scores.csv")
+        per_class.write_csv(out_path)
+        print("Wrote:", out_path)
+    print(colorama.Back.CYAN + f"TOTAL true_positives = {summary.get_column("true_positives").sum()}, false_positives = {summary.get_column("false_positives").sum()} false_negatives = {summary.get_column("false_negatives").sum()} f1_score = {summary.get_column("f1_score").sum()}"+ colorama.Back.RESET)
+    return summary.get_column("f1_score").sum()
 
 def latest_model_file(models_dir):
     files = glob.glob(os.path.join(models_dir, "model_*.pth.tar"))
@@ -136,9 +141,9 @@ def latest_model_file(models_dir):
     files.sort(key=extract_nums)
     return files[-1]
 
-def validate_model(model_file_path, validation_data_directory):
+def validate_model(model_file_path, validation_data_directory, model=None, modelParams=None, writeFile=True):
     # Load classifier
-    classifier = Classifier(model=model_file_path)
+    classifier = Classifier(modelPath=model_file_path, model=model, modelParams=modelParams)
     class_names = classifier.modelParams["class_names"]
     # Collect all WAV files in validation directory
     audio_files = glob.glob(os.path.join(validation_data_directory, "**", "*.wav"), recursive=True)
@@ -218,7 +223,6 @@ def validate_model(model_file_path, validation_data_directory):
             (polars.col("model_class") == polars.col("species")) &
             (polars.col("model_event") == polars.col("call_type")) &
             (polars.col("iou") >= MIN_IOU))
-        #print(f"validate_model {filename=} model_df:{model_df.shape[0]}, reference_df:{reference_df.shape[0]}, iou>0.3: {pairs.filter((polars.col("iou") > 0.3)).shape[0]} matches: {matches.shape[0]}")        
         # Greedy best match per model call
         best_matches = (matches.sort("iou", descending=True).group_by(["model_start", "model_end", "model_low", "model_high"]).head(1))
         all_best_matches.append(best_matches)
@@ -235,7 +239,8 @@ def validate_model(model_file_path, validation_data_directory):
     if best_matches_all.is_empty():
         print(colorama.Back.RED + "WARNING: No matches found (IoU threshold too high or no overlapping calls)." + colorama.Back.RESET)
     # Compute per-class CSV
-    write_per_model_class_csv(best_matches_all, model_all, reference_all, class_names, model_file_path)
+    f1_score = write_per_model_class_csv(best_matches_all, model_all, reference_all, class_names, model_file_path, writeFile)
+    return f1_score
  
 if __name__ == "__main__":
     import argparse
@@ -247,5 +252,4 @@ if __name__ == "__main__":
         model_file_path = latest_model_file(arguments.model_dir)
     elif arguments.model_dir.endswith(".pth.tar"): model_file_path = arguments.model_dir
     else: sys.exit(colorama.Back.RED +  f"Invalid model path {arguments.model_dir}" + colorama.Back.RESET) 
-    print(f"Validating latest model: {model_file_path}")
     validate_model(model_file_path, validation_data_directory=arguments.validation_data_dir)

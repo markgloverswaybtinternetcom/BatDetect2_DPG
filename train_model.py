@@ -1,6 +1,6 @@
 import argparse, json, warnings, numpy, torch, datetime, os, glob, copy, polars
 import torchaudio, librosa, traceback, colorama, inspect, wakepy, random, math, scipy
-import Net2dFast, Classifier
+import Net2dFast, Classifier, validate_model
 
 warnings.filterwarnings("ignore", category=UserWarning)
 torch.set_printoptions(threshold=torch.inf, linewidth=200, precision=3)
@@ -90,7 +90,7 @@ def summarize_array(name, value):
     try:
         arr = numpy.asarray(value)  # Convert lists or other sequences to NumPy array
     except Exception as e:
-        print(fcolorama.Back.RED + "{name}: Could not convert to NumPy array ({e})")
+        print(colorama.Back.RED + f"{name}: Could not convert to NumPy array ({e})" + colorama.Back.RESET)
         return
     flat = arr.flatten()
     nan_count = numpy.isnan(flat).sum() if numpy.issubdtype(arr.dtype, numpy.floating) else 0
@@ -147,10 +147,9 @@ def load_set_of_anns(wav_path):
     #class_inv_freq = class_cnts.sum() / (len(class_names) * class_cnts.astype(numpy.float32))
     #class_inv_freq = (total_calls / num_classes) * (1 / class_cnts)
     class_inv_freq = 1.0 / (class_cnts.astype(numpy.float32) + 1e-8)
-    print("load_set_of_anns Class count:")
     str_len = numpy.max([len(cc) for cc in class_names]) + 5
     for cc in range(len(class_names)):
-        print(f"{str(cc).ljust(5)}, {class_names[cc].ljust(str_len)}, {str(class_cnts[cc])}")
+        print(f"{str(cc).ljust(5)}, {class_names[cc].ljust(str_len)}, {str(class_cnts[cc]).rjust(3)}")
     return anns, class_names.tolist(), class_inv_freq 
 
 #batdetect2.train.audio_dataloader AudioLoader
@@ -432,7 +431,7 @@ class AudioLoader(torch.utils.data.Dataset):
         for key, value in HORSESHOE_CF.items():
             id = class_names.index(key)
             self.Horseshoe_CF[id] = value
-        print(f"       Num files: {len(self.data_anns)},                 Num calls: {numpy.sum(ann_cnt)}")
+        print(f"       Num files: {len(self.data_anns)},                  Num calls: {numpy.sum(ann_cnt)}")
 
     def get_file_and_anns(self, index=None):
         # if no file specified, choose random one
@@ -588,19 +587,10 @@ class Trainer():
         self.classes = class_names
         self.num_classes =len(class_names)
         self.class_weight_vector = torch.tensor(class_weight_vector, device=self.device)
-        self.min_loss = 1.79e308
         model = Net2dFast.Net2dFast(Classifier.NUM_FILTERS, num_classes=self.num_classes, ip_height=ip_height)
         self.model = model.to(Classifier.DEVICE)
         self.optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
         self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, MAX_EPOCHS * len_train_loader)
-        """scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',
-            factor=0.1,       # Multiply LR by this factor
-            patience=IMPROVEMENT_IMPATIENCE,       # Wait IMPROVEMENT_IMPATIENCE epochs with no improvement
-            threshold=1e-4,   # Minimum change to qualify as improvement
-            cooldown=0,       # Epochs to wait after LR reduction
-            min_lr=1e-6,      # Lower bound on LR
-            verbose=True      # Print LR updates
-        )""" 
         
     def train(self, epoch, data_loader):
         self.model.train()
@@ -632,16 +622,8 @@ class Trainer():
                 traceback.print_exc()
                 continue
         det_loss_avg = det_loss_sum / count; size_loss_avg = size_loss_sum / count; class_loss_avg = weighted_per_class_loss_sum.sum() / count
-        train_loss = det_loss_avg + size_loss_avg + class_loss_avg
-        style = ""
-        if train_loss < self.min_loss:
-            self.best_epoch = epoch
-            self.min_loss = train_loss
-            style = colorama.Style.BRIGHT
-            if epoch >= MIN_EPOCHS: 
-                self.best_model = copy.deepcopy(self.model)
-        print(style + f"{epoch=}, Train loss {train_loss:>9,.3f} = detection {det_loss_avg:>9,.3f} + box size {size_loss_avg:>5,.3f} + class {class_loss_avg:>5,.3f}, learning rate = {self.scheduler.get_last_lr()[0]:.6f}" + colorama.Style.RESET_ALL)
-        return float(train_loss)
+        #return float(train_loss)
+        return float(det_loss_avg), float(size_loss_avg), float(class_loss_avg), self.scheduler.get_last_lr()[0]
 
 def main():
     if torch.cuda.is_available(): device = "cuda"
@@ -651,11 +633,14 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("training_data_dir", type=str, help="Path to root of datasets")
     parser.add_argument("model_dir",type=str,help="Directory containing trained model files.")
+    parser.add_argument("validation_data_dir", type=str, help="Path to the root directory of the validation dataset.")
     args = parser.parse_args()
     if torch.cuda.is_available(): print(colorama.Fore.GREEN + "torch.cuda.is_available" + colorama.Fore.RESET)
     else: print(colorama.Fore.RED + "torch.cuda is not available" + colorama.Fore.RESET)
     model_num = next_model_number(args.model_dir)
-    
+    last_f1_score = 0
+    min_loss = 1.79e308
+        
     with wakepy.keep.running():
         (data_train, class_names, class_inv_freq) = load_set_of_anns(args.training_data_dir)
         model_params = dict()
@@ -671,23 +656,32 @@ def main():
         trainer = Trainer(device, class_names, class_weight_vector, ip_height, len(train_loader))
         # main train loop
         for epoch in range(0, MAX_EPOCHS + 1):
-            train_loss = trainer.train(epoch, train_loader)
-            if epoch > MIN_EPOCHS and epoch % NUM_SAVE_EPOCHS == 0:
-                # save trained model
-                op_state = {"epoch": trainer.best_epoch + 1, "state_dict": trainer.best_model.state_dict(), "params": model_params}
-                model_file_name = f"model_{model_num}_E{trainer.best_epoch}.pth.tar"
-                save_path = os.path.join(args.model_dir, model_file_name)
-                torch.save(op_state, save_path)
-                print(f"Saved model: {save_path}")
-                if epoch - trainer.best_epoch > IMPROVEMENT_IMPATIENCE:
-                    break # have plateaued
-
-                    """if boosted_learning_rate == False:
-                        boosted_learning_rate = True
-                        for g in trainer.optimizer.param_groups:
-                            g['lr'] *= LEARNING_RATE
+            #train_loss = trainer.train(epoch, train_loader)
+            
+            det_loss_avg, size_loss_avg, class_loss_avg, learning_rate = trainer.train(epoch, train_loader)
+            train_loss = det_loss_avg + size_loss_avg + class_loss_avg
+            if train_loss < min_loss:
+                best_epoch = epoch
+                min_loss = train_loss
+                if epoch >= MIN_EPOCHS: 
+                    print(colorama.Style.BRIGHT + f"epoch= {epoch:>3}, Total_Loss={train_loss:>9,.3f}, detection={det_loss_avg:>9,.3f}, box_size={size_loss_avg:>5,.3f}, class={class_loss_avg:>6,.3f}, learning_rate= {learning_rate:.6f}" + colorama.Style.RESET_ALL)
+                    best_model = copy.deepcopy(trainer.model)
+                    f1_score = validate_model.validate_model(None, args.validation_data_dir, model=best_model, modelParams=model_params, writeFile=False)
+                    if f1_score < last_f1_score:
+                        print(colorama.Back.RED + f"OVER FITTING {f1_score=} {last_f1_score=}" + colorama.Back.RESET)
+                        break
                     else:
-                        break # have plateaued already"""
-
+                        # save trained model
+                        op_state = {"epoch": best_epoch + 1, "state_dict": best_model.state_dict(), "params": model_params}
+                        model_file_name = f"model_{model_num}_E{best_epoch}.pth.tar"
+                        save_path = os.path.join(args.model_dir, model_file_name)
+                        torch.save(op_state, save_path)
+                        print(f"Saved model: {save_path}") 
+                        last_f1_score = f1_score
+                else:
+                    print(f"epoch= {epoch:>3}, Total_Loss={train_loss:>9,.3f}, detection={det_loss_avg:>9,.3f}, box_size={size_loss_avg:>5,.3f}, class={class_loss_avg:>6,.3f}, learning_rate= {learning_rate:.6f}")                    
+            else:
+                print(colorama.Style.DIM + f"epoch= {epoch:>3}, Total_Loss={train_loss:>9,.3f}, detection={det_loss_avg:>9,.3f}, box_size={size_loss_avg:>5,.3f}, class={class_loss_avg:>6,.3f}, learning_rate= {learning_rate:.6f}" + colorama.Style.RESET_ALL)
+                    
 if __name__ == "__main__":
     main()

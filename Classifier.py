@@ -324,12 +324,14 @@ def load_audio(path: AudioPath, time_exp_fact: float, target_samp_rate: int) -> 
 
 class Classifier():
     """Uses BatDetect2 lower level code without modification any modifications are in this class"""
-    def __init__(self, model=DEFAULT_MODEL_PATH):
-        if model != DEFAULT_MODEL_PATH: print(f"Classifier __init__ {model=}")
-        args = {'cnn_features': False, 'spec_features': False, 'quiet': False, 'save_preds_if_empty': False, 'model_path': model}
+    def __init__(self, modelPath=DEFAULT_MODEL_PATH, model=None, modelParams=None):
         code_dir = os.path.dirname(os.path.abspath(__file__))
-        self.model, self.modelParams = load_model(os.path.join(code_dir, model), weights_only=False) 
-        #print(f"Classifier __init__ {self.modelParams=}")
+        if model is None:
+            if modelPath != DEFAULT_MODEL_PATH: print(f"Classifier __init__ {modelPath=}")
+            self.model, self.modelParams = load_model(os.path.join(code_dir, modelPath), weights_only=False)
+        else: 
+            self.model = model
+            self.modelParams = modelParams
         self.speciesNames = pandas.read_csv(os.path.join(code_dir, "Resources", "SpeciesNames.csv"))
         config = None
         configFile = os.path.join(code_dir, "gui_Config.json")
@@ -407,7 +409,7 @@ class Classifier():
                     json.dump(results["pred_dict"], jsonfile, indent=2)
         return summary
  
-    def process_file(self, audio_file: str, model: DetectionModel, device: torch.device=DEVICE, timeExpand=False) -> Union[RunResults, Any]:
+    def process_file(self, audio_file: str, model: DetectionModel, device: torch.device=DEVICE) -> Union[RunResults, Any]:
         """Replaces function of same name in BatDetect2"""
         predictions = []; spec_feats = []
         try:
@@ -417,7 +419,7 @@ class Classifier():
             raise
         file_samp_rate = info.samplerate
         filename = os.path.basename(os.path.splitext(audio_file)[0])
-        if filename.endswith("TE") or timeExpand: timeExpFact = 10
+        if filename.endswith("TE"): timeExpFact = 10
         else: timeExpFact = 1
         orig_samp_rate = file_samp_rate * timeExpFact
         sampling_rate, audio_full = load_audio(audio_file, time_exp_fact=timeExpFact,  target_samp_rate=TARGET_SAMPLERATE_HZ)
@@ -440,13 +442,13 @@ class Classifier():
             duration=audio_full.shape[0] / float(sampling_rate), params=self.modelParams, predictions=predictions, nyquist_freq=orig_samp_rate / 2)
         return calls
 
-    def File(self, filepath, annForEmpty=True, annDir="ann", speciesLanguage=None, printSummary=True, timeExpand=False):
+    def File(self, filepath, debug=False, annForEmpty=True, annDir="ann", speciesLanguage=None, printSummary=True):
         """Classifies one file using BatDetect2"""
         if speciesLanguage is not None and speciesLanguage != self.speciesLanguage:
             self.latinToLangDict = self.speciesNames.set_index('Latin')[speciesLanguage].to_dict()
         dir = os.path.dirname(filepath)
         file = os.path.basename(filepath)
-        calls = self.process_file(filepath, self.model, timeExpand=timeExpand)
+        calls = self.process_file(filepath, self.model)
         op_dir = os.path.join(dir, annDir)
         if not os.path.isdir(op_dir): # make directory if it does not exist
             os.makedirs(op_dir)
