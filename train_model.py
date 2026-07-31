@@ -13,7 +13,6 @@ BATCH_SIZE = 8
 NUM_WORKERS = 4
 MIN_EPOCHS = 300
 MAX_EPOCHS = 900
-NUM_SAVE_EPOCHS = 50
 TRAIN_FILE_USED_SEC = 1   # standarised length in seconds
 SPEC_TRAIN_WIDTH = 2560   # equivalent to 1 seoond,  units are number of time steps (before resizing is performed)
 
@@ -638,7 +637,7 @@ def main():
     if torch.cuda.is_available(): print(colorama.Fore.GREEN + "torch.cuda.is_available" + colorama.Fore.RESET)
     else: print(colorama.Fore.RED + "torch.cuda is not available" + colorama.Fore.RESET)
     model_num = next_model_number(args.model_dir)
-    last_f1_score = 0
+    f1_history = []
     min_loss = 1.79e308
         
     with wakepy.keep.running():
@@ -665,19 +664,21 @@ def main():
                 min_loss = train_loss
                 if epoch >= MIN_EPOCHS: 
                     print(colorama.Style.BRIGHT + f"epoch= {epoch:>3}, Total_Loss={train_loss:>9,.3f}, detection={det_loss_avg:>9,.3f}, box_size={size_loss_avg:>5,.3f}, class={class_loss_avg:>6,.3f}, learning_rate= {learning_rate:.6f}" + colorama.Style.RESET_ALL)
-                    best_model = copy.deepcopy(trainer.model)
-                    f1_score = validate_model.validate_model(None, args.validation_data_dir, model=best_model, modelParams=model_params, writeFile=False)
-                    if f1_score < last_f1_score:
-                        print(colorama.Back.RED + f"OVER FITTING {f1_score=} {last_f1_score=}" + colorama.Back.RESET)
-                        break
+                    # save trained model
+                    op_state = {"epoch": best_epoch + 1, "state_dict": trainer.model.state_dict(), "params": model_params}
+                    model_file_name = f"model_{model_num}_E{best_epoch}.pth.tar"
+                    model_path = os.path.join(args.model_dir, model_file_name)
+                    torch.save(op_state, model_path)
+                    if len(f1_history) >= 1:
+                        f1_score = validate_model.validate_model(model_path, args.validation_data_dir , last=f1_history[-1], writeFile=False)
                     else:
-                        # save trained model
-                        op_state = {"epoch": best_epoch + 1, "state_dict": best_model.state_dict(), "params": model_params}
-                        model_file_name = f"model_{model_num}_E{best_epoch}.pth.tar"
-                        save_path = os.path.join(args.model_dir, model_file_name)
-                        torch.save(op_state, save_path)
-                        print(f"Saved model: {save_path}") 
-                        last_f1_score = f1_score
+                        f1_score = validate_model.validate_model(model_path, args.validation_data_dir , writeFile=False)
+                    if len(f1_history) >= 1 and f1_score < f1_history[-1]:
+                        os.remove(model_path)
+                        if len(f1_history) >= 2 and f1_history[-1] < f1_history[-2]:
+                            print(colorama.Back.RED + f"OVER FITTING" + colorama.Back.RESET)
+                            break
+                    f1_history.append(f1_score)
                 else:
                     print(f"epoch= {epoch:>3}, Total_Loss={train_loss:>9,.3f}, detection={det_loss_avg:>9,.3f}, box_size={size_loss_avg:>5,.3f}, class={class_loss_avg:>6,.3f}, learning_rate= {learning_rate:.6f}")                    
             else:

@@ -54,7 +54,7 @@ def cast_numeric(df, numeric_cols):
             df = df.with_columns(polars.col(col).cast(polars.Float64, strict=False))
     return df
     
-def write_per_model_class_csv(best_matches_all, model_all, reference_all, class_names, model_file_path, writeFile=True):
+def write_per_model_class_csv(best_matches_all, model_all, reference_all, class_names, model_file_path, last=None, writeFile=True):
     # Build full reference grid (all species × all events)
     ref_species = reference_all["species"].unique().sort()
     ref_events  = reference_all["call_type"].unique().sort()
@@ -124,8 +124,13 @@ def write_per_model_class_csv(best_matches_all, model_all, reference_all, class_
         out_path = os.path.join(model_dir, f"{model_name}_class_scores.csv")
         per_class.write_csv(out_path)
         print("Wrote:", out_path)
-    print(colorama.Back.CYAN + f"TOTAL true_positives = {summary.get_column("true_positives").sum()}, false_positives = {summary.get_column("false_positives").sum()} false_negatives = {summary.get_column("false_negatives").sum()} f1_score = {summary.get_column("f1_score").sum()}"+ colorama.Back.RESET)
-    return summary.get_column("f1_score").sum()
+    f1_score = summary.get_column("f1_score").sum(); 
+    true_positives = summary.get_column("true_positives").sum(); false_positives = summary.get_column("false_positives").sum(); false_negatives = summary.get_column("false_negatives").sum()
+    if last is not None and f1_score < last:       
+        print(colorama.Fore.RED + f"TOTAL {true_positives=}, {false_positives=}, {false_negatives=}, {f1_score=:.4f}"+ colorama.Fore.RESET)
+    else:
+        print(colorama.Fore.CYAN + f"TOTAL {true_positives=}, {false_positives=}, {false_negatives=}, {f1_score=:.4f}"+ colorama.Fore.RESET)
+    return f1_score
 
 def latest_model_file(models_dir):
     files = glob.glob(os.path.join(models_dir, "model_*.pth.tar"))
@@ -141,9 +146,9 @@ def latest_model_file(models_dir):
     files.sort(key=extract_nums)
     return files[-1]
 
-def validate_model(model_file_path, validation_data_directory, model=None, modelParams=None, writeFile=True):
+def validate_model(model_file_path, validation_data_directory, last=None, writeFile=True):
     # Load classifier
-    classifier = Classifier(modelPath=model_file_path, model=model, modelParams=modelParams)
+    classifier = Classifier(modelPath=model_file_path)
     class_names = classifier.modelParams["class_names"]
     # Collect all WAV files in validation directory
     audio_files = glob.glob(os.path.join(validation_data_directory, "**", "*.wav"), recursive=True)
@@ -239,7 +244,7 @@ def validate_model(model_file_path, validation_data_directory, model=None, model
     if best_matches_all.is_empty():
         print(colorama.Back.RED + "WARNING: No matches found (IoU threshold too high or no overlapping calls)." + colorama.Back.RESET)
     # Compute per-class CSV
-    f1_score = write_per_model_class_csv(best_matches_all, model_all, reference_all, class_names, model_file_path, writeFile)
+    f1_score = write_per_model_class_csv(best_matches_all, model_all, reference_all, class_names, model_file_path, last, writeFile)
     return f1_score
  
 if __name__ == "__main__":

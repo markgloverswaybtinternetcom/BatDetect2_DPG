@@ -324,14 +324,10 @@ def load_audio(path: AudioPath, time_exp_fact: float, target_samp_rate: int) -> 
 
 class Classifier():
     """Uses BatDetect2 lower level code without modification any modifications are in this class"""
-    def __init__(self, modelPath=DEFAULT_MODEL_PATH, model=None, modelParams=None):
+    def __init__(self, modelPath=DEFAULT_MODEL_PATH):
         code_dir = os.path.dirname(os.path.abspath(__file__))
-        if model is None:
-            if modelPath != DEFAULT_MODEL_PATH: print(f"Classifier __init__ {modelPath=}")
-            self.model, self.modelParams = load_model(os.path.join(code_dir, modelPath), weights_only=False)
-        else: 
-            self.model = model
-            self.modelParams = modelParams
+        if modelPath != DEFAULT_MODEL_PATH: print(f"Classifier __init__ {modelPath=}")
+        self.model, self.modelParams = load_model(os.path.join(code_dir, modelPath), weights_only=False)
         self.speciesNames = pandas.read_csv(os.path.join(code_dir, "Resources", "SpeciesNames.csv"))
         config = None
         configFile = os.path.join(code_dir, "gui_Config.json")
