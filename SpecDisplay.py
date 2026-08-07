@@ -14,6 +14,7 @@ numpy.set_printoptions(threshold=sys.maxsize)
 
 MIN_FREQ_KHZ = 0; MAX_FREQ_KHZ = 125; STD_SAMPLING = 250000; MAX_PLAY_RATE = 40000; MAX_PLAY_SEC = 30; LOUDNESS = 15
 NFFT = 512; RELATIVE_HOP_LENGTH = 0.5 # spectogram settings
+ZOOM_NFFT = 2048; ZOOM_WIN_LENGTH = 256; ZOOM_HOP_LENGTH = 128
 PSD_WIDTH = 80;  SLIDER_W = 17; AMP_HT=80; SCROLL_HT=19; BUTTON_HT=19; STATUS_HT=24; SPACING=7; HEADER=30; COLOR_SCALE_W=55
 ROW_PXL = 17 # table scrolling
 
@@ -310,20 +311,25 @@ class SpecDisplay():
         self.SoundFile.seek(int(self.sample_rate * self.minT))
         waveform_arr = numpy.swapaxes(self.SoundFile.read(nSamples, always_2d=True), 0, 1) #stereo wrong axis for Torch
         waveformTensor = torch.from_numpy(waveform_arr).float()
+        
         if self.sample_rate <= STD_SAMPLING: nfft=NFFT
         elif self.sample_rate > STD_SAMPLING: 
             nfft = int(NFFT * self.sample_rate / STD_SAMPLING) # allow for extra frequencies
             print(f"LoadFileSegment {self.sample_rate=} > {STD_SAMPLING} reducing {NFFT=} to {nfft=}")        
-        specTransform = torchaudio.transforms.Spectrogram(n_fft=nfft, hop_length=int(nfft*RELATIVE_HOP_LENGTH), power=1, window_fn=torch.blackman_window)#power: 1=magnitude, 2=power
+        
+        if self.Range <= 0.25:
+            specTransform = torchaudio.transforms.Spectrogram(n_fft=ZOOM_NFFT, hop_length=ZOOM_HOP_LENGTH, win_length=ZOOM_WIN_LENGTH, power=1, window_fn=torch.blackman_window)#power: 1=magnitude, 2=power            
+        else:
+            specTransform = torchaudio.transforms.Spectrogram(n_fft=nfft, hop_length=int(nfft*RELATIVE_HOP_LENGTH), power=1, window_fn=torch.blackman_window)#power: 1=magnitude, 2=power
         print(f"LoadFileSegment specTransform {waveformTensor.shape=}")  
         spectrogram = specTransform(waveformTensor) # [Channels, Frequency Bins ,Time Steps]
+        
         print(f"LoadFileSegment specTransform {waveformTensor.shape=} = {spectrogram.shape=}")    
         if self.sample_rate > STD_SAMPLING: 
             n =  NFFT // 2 +1
             print(f"LoadFileSegment top {spectrogram.shape[1] - n} frequencies cut off")
             spectrogram = spectrogram[:, :n, :]# cut off higher frequencies
         elif self.sample_rate < STD_SAMPLING:
-            #n = NFFT // 2 +1 - spectrogram.shape[1]
             n = int(spectrogram.shape[1] / self.sample_rate * STD_SAMPLING - spectrogram.shape[1])
             before = spectrogram.shape[1]
             spectrogram = torch.nn.functional.pad(input=spectrogram, pad=(0,0,0,n,0,0), mode='constant', value=0) # add padding of high frequencies

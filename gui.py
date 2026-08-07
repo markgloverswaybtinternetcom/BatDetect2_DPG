@@ -526,6 +526,7 @@ class MainWindow():
             if self.MultiFile: self.ClassifyDir(self.ActiveDisplay.dir)
             else: self.LoadClassifiedFile(os.path.join(self.ActiveDisplay.dir, self.ActiveDisplay.file), self.ActiveDisplay)
             self.refreshAnn = False
+            self.Status(f"Classified with Model {os.basename(filePath)}")
         else:
             self.LoadFileOrDir(filePath, displayN)
     
