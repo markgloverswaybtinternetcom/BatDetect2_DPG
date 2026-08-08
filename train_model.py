@@ -1,4 +1,4 @@
-import argparse, json, warnings, numpy, torch, datetime, os, glob, copy, polars
+import argparse, json, warnings, numpy, torch, datetime, os, glob, copy, polars, collections
 import torchaudio, librosa, traceback, colorama, inspect, wakepy, random, math, scipy
 import Net2dFast, Classifier, validate_model
 
@@ -18,7 +18,9 @@ SPEC_TRAIN_WIDTH = 2560   # equivalent to 1 seoond,  units are number of time st
 
 DET_LOSS_WEIGHT = 1.0     # weight for the detection part of the loss
 SIZE_LOSS_WEIGHT = 0.1    # weight for the bbox size loss
-#CLASS_LOSS_WEIGHT  = 2.0  # weight for the classification loss	
+#CLASS_LOSS_WEIGHT  = 2.0  # original weight for the classification loss
+CONSISTENCY_LOSS_WEIGHT = 0.3
+#CONSISTENCY_LOSS_WEIGHT = 0.1	
 GAUSSIAN_SIGMA = 12
 #Only used on first run until class difficulty found
 DEFAULT_CLASS_WEIGHTS = { 
@@ -69,7 +71,7 @@ DEFAULT_CLASS_WEIGHTS = {
     
 AUGMENT = True
 AUG_PROB = 0.15
-COMBINE_PROB = 0.08 ## try 1
+COMBINE_PROB = 0.08 
 ECHO_MAX_DELAY = 0.005          # simulate echo by adding copy of raw audio
 STRETCH_SQUEEZE_DELTA = 0.04    # stretch or squeeze spec
 MASK_MAX_TIME_PERC = 0.05       # max mask size - here percentage, not ideal
@@ -79,8 +81,7 @@ HORSESHOE_CF = {
     "Rhinolophus ferrumequinum-Echolocation": 80000,   # Greater Horseshoe CF (Hz)
     "Rhinolophus hipposideros-Echolocation": 110000,   # Lesser Horseshoe CF (Hz)
 }
-IMPROVEMENT_IMPATIENCE = 50 # max Epochs without improvement
-
+    
 def summarize_array(name, value):
     if not DEBUG: return
     if numpy.isscalar(value):
@@ -549,7 +550,6 @@ def focal_loss(pred, gt, valid_mask=None, IsClass=False):
     if IsClass:
         per_class_pos_sum = pos_loss.float().sum(dim=(0, 2, 3))
         per_class_neg_sum = neg_loss.float().sum(dim=(0, 2, 3))
-        #num_pos = pos_inds.float().sum(dim=(0, 2, 3)) #####
         class_counts = (gt * valid_mask).sum(dim=(0, 2, 3)) + eps
         if num_pos == 0:
             per_class_loss = -per_class_neg_sum
@@ -562,14 +562,6 @@ def bbox_size_loss(pred_size, target_size):
     """Bounding box size loss. Only compute loss where there is a bounding box."""
     target_size_mask = (target_size > 0).float()
     return torch.nn.functional.l1_loss(pred_size * target_size_mask, target_size, reduction="sum") / (target_size_mask.sum() + 1e-5)
-
-def loss_fun(outputs, target_det, target_size, target_class):
-    detectionLoss = DET_LOSS_WEIGHT * focal_loss(outputs.pred_det, target_det)  
-    boundingBoxSizeLoss = SIZE_LOSS_WEIGHT * bbox_size_loss(outputs.pred_size, target_size)
-    valid_mask = (target_class[:, :-1, :, :].sum(1) > 0).float().unsqueeze(1) 
-    p_class = outputs.pred_class[:, :-1, :]
-    per_class_loss = focal_loss(p_class, target_class[:, :-1, :], valid_mask=valid_mask, IsClass=True)
-    return detectionLoss, boundingBoxSizeLoss, per_class_loss
 
 def build_class_weight_vector(class_names, class_weight_dict, device):
     weights = []
@@ -584,21 +576,62 @@ class Trainer():
     def __init__(self, device, class_names, class_weight_vector, ip_height, len_train_loader):
         self.device = device
         self.classes = class_names
-        self.num_classes =len(class_names)
+        self.num_classes = len(class_names)
         self.class_weight_vector = torch.tensor(class_weight_vector, device=self.device)
+        
+        self.species_map = [c.split('-', 1)[0] for c in class_names] 
+        self.species_to_class_indices = collections.defaultdict(list)
+        for idx, species in enumerate(self.species_map):
+            self.species_to_class_indices[species].append(idx)
+        self.species_list = list(self.species_to_class_indices.keys())
+        self.num_species = len(self.species_list)
+        print(f"Trainer {self.num_species=}")
+        # Buzz classes (weight == 0)
+        self.buzz_class_mask = (self.class_weight_vector == 0).float().view(1, self.num_classes, 1, 1)
+        self.ignore_class_mask = (self.buzz_class_mask > 0).float()
+        
         model = Net2dFast.Net2dFast(Classifier.NUM_FILTERS, num_classes=self.num_classes, ip_height=ip_height)
         self.model = model.to(Classifier.DEVICE)
         self.optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
         self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, MAX_EPOCHS * len_train_loader)
-        
+
+    def loss_fun(self, outputs, target_det, target_size, target_class_minus1):
+        detectionLoss = DET_LOSS_WEIGHT * focal_loss(outputs.pred_det, target_det)  
+        boundingBoxSizeLoss = SIZE_LOSS_WEIGHT * bbox_size_loss(outputs.pred_size, target_size)
+        valid_mask = (target_class_minus1.sum(1) > 0).float().unsqueeze(1)
+        silent_mask = (valid_mask.sum(dim=(1,2,3)) == 0).float()
+        ignored_frame_mask = ((target_class_minus1 * self.ignore_class_mask).sum(dim=(1,2,3)) > 0).float()
+        frame_mask = (1 - silent_mask) * (1 - ignored_frame_mask)                   
+        p_class = outputs.pred_class[:, :-1, :]
+        per_class_loss = focal_loss(p_class, target_class_minus1, valid_mask=valid_mask, IsClass=True)
+        # === Consistency loss ===
+        # Collapse spatial grid → per-frame species probabilities
+        p_frame = p_class.mean(dim=(2,3)) # (batch, num_classes)
+        batch_size = p_frame.shape[0]
+        species_frame = torch.zeros(batch_size, self.num_species, device=self.device)
+        for s_idx, species in enumerate(self.species_list):
+            class_indices = self.species_to_class_indices[species]
+            species_frame[:, s_idx] = p_frame[:, class_indices].sum(dim=1)
+        species_diff = torch.abs(species_frame[1:] - species_frame[:-1]).sum(dim=1)    
+        # Only apply when BOTH frames are valid (non-silent, non-buzz)
+        pair_mask = frame_mask[1:] * frame_mask[:-1]
+        # Final consistency loss
+        num_pairs = pair_mask.sum().clamp(min=1)
+        consistency_loss = CONSISTENCY_LOSS_WEIGHT * (species_diff * pair_mask).sum() / num_pairs
+        consistency_loss = torch.clamp(consistency_loss, max=0.003)
+        #consistency_loss = CONSISTENCY_LOSS_WEIGHT * (species_diff * pair_mask).mean()
+        return detectionLoss, boundingBoxSizeLoss, per_class_loss, consistency_loss
+       
     def train(self, epoch, data_loader):
+        self.epoch = epoch
         self.model.train()
-        det_loss_sum = size_loss_sum = 0; 
+        det_loss_sum = size_loss_sum = 0; consistency_sum = 0
         weighted_per_class_loss_sum = torch.zeros(self.num_classes).to(self.device)
         unweighted_per_class_loss_total = torch.zeros(self.num_classes).to(self.device) 
         count = 0
         epsilon = 1e-8 # prevents divide by zero problems
-        for batch_idx, inputs in enumerate(data_loader):
+        all_consistency_losses = []
+        for self.batch_idx, inputs in enumerate(data_loader):
             try:
                 data = inputs["spec"].to(self.device)
                 target_det = inputs["y_2d_det"].to(self.device)
@@ -606,23 +639,26 @@ class Trainer():
                 target_class = inputs["y_2d_classes"].to(self.device)
                 self.optimizer.zero_grad()
                 outputs = self.model(data)
-                det_loss, size_loss, per_class_loss = loss_fun(outputs, target_det, target_size, target_class)
+                target_class_minus1 = target_class[:, :-1, :, :]   # (batch, 42, H, W)
+                det_loss, size_loss, per_class_loss, consistency_loss = self.loss_fun(outputs, target_det, target_size, target_class_minus1)
+                all_consistency_losses.append(consistency_loss.item())
                 weighted_per_class_loss = per_class_loss * self.class_weight_vector
-                det_loss_sum += det_loss.item() * data.shape[0]; size_loss_sum += size_loss.item() * data.shape[0]
+                det_loss_sum += det_loss.item() * data.shape[0]; size_loss_sum += size_loss.item() * data.shape[0]; consistency_sum += consistency_loss.item() * data.shape[0]
                 weighted_per_class_loss_sum += weighted_per_class_loss * data.shape[0]
                 unweighted_per_class_loss_total += per_class_loss * data.shape[0]
                 count += data.shape[0]
-                loss = det_loss + size_loss + weighted_per_class_loss.sum() 
+                loss = det_loss + size_loss + weighted_per_class_loss.sum() + consistency_loss
                 loss.backward()
                 self.optimizer.step()
                 self.scheduler.step()
             except Exception as e:
-                print(colorama.Back.BLUE + f"[WARNING] Skipping batch {batch_idx}: {e}" + colorama.Back.RESET)
+                print(colorama.Back.BLUE + f"[WARNING] Skipping batch {self.batch_idx}: {e}" + colorama.Back.RESET)
                 traceback.print_exc()
                 continue
-        det_loss_avg = det_loss_sum / count; size_loss_avg = size_loss_sum / count; class_loss_avg = weighted_per_class_loss_sum.sum() / count
-        #return float(train_loss)
-        return float(det_loss_avg), float(size_loss_avg), float(class_loss_avg), self.scheduler.get_last_lr()[0]
+        c = torch.tensor(all_consistency_losses)
+        print(f"{epoch=} consistency_loss mean={c.mean():.6f}, std={c.std():.6f}, min={c.min():.6f}, max={c.max():.6f}")
+        det_loss_avg = det_loss_sum / count; size_loss_avg = size_loss_sum / count; class_loss_avg = weighted_per_class_loss_sum.sum() / count; consistency_loss_avg = consistency_sum / count
+        return float(det_loss_avg), float(size_loss_avg), float(class_loss_avg), float(consistency_loss_avg), self.scheduler.get_last_lr()[0]
 
 def main():
     if torch.cuda.is_available(): device = "cuda"
@@ -639,7 +675,7 @@ def main():
     model_num = next_model_number(args.model_dir)
     f1_history = []
     min_loss = 1.79e308
-        
+    max_validate_f1_score = 0    
     with wakepy.keep.running():
         (data_train, class_names, class_inv_freq) = load_set_of_anns(args.training_data_dir)
         model_params = dict()
@@ -655,34 +691,34 @@ def main():
         trainer = Trainer(device, class_names, class_weight_vector, ip_height, len(train_loader))
         # main train loop
         for epoch in range(0, MAX_EPOCHS + 1):
-            #train_loss = trainer.train(epoch, train_loader)
-            
-            det_loss_avg, size_loss_avg, class_loss_avg, learning_rate = trainer.train(epoch, train_loader)
-            train_loss = det_loss_avg + size_loss_avg + class_loss_avg
+            det_loss_avg, size_loss_avg, class_loss_avg, consistency_loss_avg, learning_rate = trainer.train(epoch, train_loader)
+            train_loss = det_loss_avg + size_loss_avg + class_loss_avg + consistency_loss_avg
+            timestamp = datetime.datetime.now().strftime("%d %H:%M")
             if train_loss < min_loss:
-                best_epoch = epoch
+                best_loss_epoch = epoch
                 min_loss = train_loss
                 if epoch >= MIN_EPOCHS: 
-                    print(colorama.Style.BRIGHT + f"epoch= {epoch:>3}, Total_Loss={train_loss:>9,.3f}, detection={det_loss_avg:>9,.3f}, box_size={size_loss_avg:>5,.3f}, class={class_loss_avg:>6,.3f}, learning_rate= {learning_rate:.6f}" + colorama.Style.RESET_ALL)
+                    print(colorama.Style.BRIGHT + f"epoch= {epoch:>3}, {timestamp}, Total_Loss={train_loss:>9.3f}, detection={det_loss_avg:>9.3f}, box_size={size_loss_avg:>5.3f}, class={class_loss_avg:>6.3f}, consistency={consistency_loss_avg:>6.4f} learning_rate= {learning_rate:.6f}" + colorama.Style.RESET_ALL)
                     # save trained model
-                    op_state = {"epoch": best_epoch + 1, "state_dict": trainer.model.state_dict(), "params": model_params}
-                    model_file_name = f"model_{model_num}_E{best_epoch}.pth.tar"
+                    op_state = {"epoch": best_loss_epoch + 1, "state_dict": trainer.model.state_dict(), "params": model_params}
+                    model_file_name = f"model_{model_num}_E{best_loss_epoch}.pth.tar"
                     model_path = os.path.join(args.model_dir, model_file_name)
                     torch.save(op_state, model_path)
                     if len(f1_history) >= 1:
                         f1_score = validate_model.validate_model(model_path, args.validation_data_dir , last=f1_history[-1], writeFile=False)
                     else:
                         f1_score = validate_model.validate_model(model_path, args.validation_data_dir , writeFile=False)
-                    if len(f1_history) >= 1 and f1_score < f1_history[-1]:
-                        os.remove(model_path)
-                        if len(f1_history) >= 2 and f1_history[-1] < f1_history[-2]:
-                            print(colorama.Back.RED + f"OVER FITTING" + colorama.Back.RESET)
-                            break
+                    if f1_score > max_validate_f1_score:
+                        max_validate_f1_score = f1_score
+                        max_validate_f1_epoch = epoch
                     f1_history.append(f1_score)
                 else:
-                    print(f"epoch= {epoch:>3}, Total_Loss={train_loss:>9,.3f}, detection={det_loss_avg:>9,.3f}, box_size={size_loss_avg:>5,.3f}, class={class_loss_avg:>6,.3f}, learning_rate= {learning_rate:.6f}")                    
+                    print(f"epoch= {epoch:>3}, {timestamp}, Total_Loss={train_loss:>9.3f}, detection={det_loss_avg:>9.3f}, box_size={size_loss_avg:>5.3f}, class={class_loss_avg:>6.3f}, consistency={consistency_loss_avg:>6.4f}, learning_rate= {learning_rate:.6f}")                    
             else:
-                print(colorama.Style.DIM + f"epoch= {epoch:>3}, Total_Loss={train_loss:>9,.3f}, detection={det_loss_avg:>9,.3f}, box_size={size_loss_avg:>5,.3f}, class={class_loss_avg:>6,.3f}, learning_rate= {learning_rate:.6f}" + colorama.Style.RESET_ALL)
-                    
+                print(colorama.Style.DIM + f"epoch= {epoch:>3}, {timestamp}, Total_Loss={train_loss:>9.3f}, detection={det_loss_avg:>9.3f}, box_size={size_loss_avg:>5.3f}, class={class_loss_avg:>6.3f}, consistency={consistency_loss_avg:>6.4f}, learning_rate= {learning_rate:.6f}" + colorama.Style.RESET_ALL)
+        
+        model_file_name = f"model_{model_num}_E{max_validate_f1_epoch}.pth.tar"
+        model_path = os.path.join(args.model_dir, model_file_name)
+        validate_model.validate_model(model_path, args.validation_data_dir , writeFile=True)
 if __name__ == "__main__":
     main()
