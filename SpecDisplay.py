@@ -317,8 +317,8 @@ class SpecDisplay():
             nfft = int(NFFT * self.sample_rate / STD_SAMPLING) # allow for extra frequencies
             print(f"LoadFileSegment {self.sample_rate=} > {STD_SAMPLING} reducing {NFFT=} to {nfft=}")        
         
-        if self.Range <= 0.25:
-            specTransform = torchaudio.transforms.Spectrogram(n_fft=ZOOM_NFFT, hop_length=ZOOM_HOP_LENGTH, win_length=ZOOM_WIN_LENGTH, power=1, window_fn=torch.blackman_window)#power: 1=magnitude, 2=power            
+        if self.Range <= 0.5:
+            specTransform = torchaudio.transforms.Spectrogram(n_fft=ZOOM_NFFT, hop_length=ZOOM_HOP_LENGTH, win_length=ZOOM_WIN_LENGTH, power=1, window_fn=torch.blackman_window)
         else:
             specTransform = torchaudio.transforms.Spectrogram(n_fft=nfft, hop_length=int(nfft*RELATIVE_HOP_LENGTH), power=1, window_fn=torch.blackman_window)#power: 1=magnitude, 2=power
         print(f"LoadFileSegment specTransform {waveformTensor.shape=}")  
@@ -517,9 +517,9 @@ class SpecDisplay():
     def saveSound_click(self):
         """Saves sound being displayed in spectrogram, expanding it to the user selected rate"""
         file,_ = os.path.splitext(self.file)
+        species = self.species.replace("?","Q")
         if dpg.get_value(self.PlaySpeedCombo) == "1/10":
-            if self.species.endswith("?"): filepath = os.path.join(self.dir, file + f"_{round(self.minT*1000)}ms_unknown_TE.wav")
-            else: filepath = os.path.join(self.dir, file + f"_{round(self.minT*1000)}ms_{self.species}_TE.wav")
+            filepath = os.path.join(self.dir, file + f"_{round(self.minT*1000)}ms_{species}_TE.wav")
             loud = self.Recording * 10
             soundfile.write(filepath, loud, round(self.sample_rate / 10)) 
             self.Status(f"Time expanded audio saved as '{filepath}'") 
@@ -527,8 +527,7 @@ class SpecDisplay():
             wholeFile,_ = os.path.splitext(self.file)
             undashed = wholeFile.split('-')
             if len(undashed) > 2: wholeFile = undashed[0] + "-" + undashed[1] # remove location and author
-            if self.species.endswith("?"): partFile = wholeFile + f"_{round(self.minT*1000)}ms_unknown.wav"
-            else: partFile = wholeFile + f"_{round(self.minT*1000)}ms_{self.species}.wav"
+            partFile = wholeFile + f"_{round(self.minT*1000)}ms_{species}.wav"
             filepath = os.path.join(self.dir, partFile)
             soundfile.write(filepath, self.Recording, self.sample_rate)
             callsCsvPath = os.path.join(self.dir, "ann", f"{partFile}.csv")
