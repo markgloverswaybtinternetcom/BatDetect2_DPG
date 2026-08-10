@@ -1,4 +1,4 @@
-import pandas, os, sys, torch, colorama, json, utils, time, soundfile, Net2dFast, librosa, librosa.core.spectrum, numpy
+import pandas, os, sys, torch, torchaudio, colorama, json, utils, time, soundfile, Net2dFast, numpy
 from typing import Any, Union, Protocol, TypedDict
 
 #### Constants ###
@@ -93,29 +93,58 @@ def pad_audio(audio: numpy.ndarray, samplerate: int = TARGET_SAMPLERATE_HZ, wind
     diff = target_samples - audio.shape[0]
     return numpy.hstack((audio, numpy.zeros(diff, dtype=audio.dtype)))
 
-def generate_spectrogram(audio, sampling_rate):
-    # Computes magnitude spectrogram by specifying time.
+def torch_pcen_batdetect2(spec, sr, hop_length, alpha=0.98, delta=2.0, r=0.5, eps=1e-6):
+    # librosa's PCEN time constant:
+    # smoother = exp(-hop_length / (sr * time_constant))
+    # default time_constant = 0.04
+    time_constant = 0.04
+    smooth_coef = torch.exp(torch.tensor(-hop_length / (sr * time_constant)))
+    # Exponential moving average (EMA)
+    E = torch.zeros_like(spec)
+    E[:, 0] = spec[:, 0]
+    for t in range(1, spec.shape[1]):
+        E[:, t] = smooth_coef * E[:, t-1] + (1 - smooth_coef) * spec[:, t]
+    # PCEN formula
+    pcen = (spec / (eps + E)**alpha + delta)**r - delta**r
+    return pcen
+    
+def generate_torch_spectrogram(audio, sampling_rate, device):
     audio = audio.astype(numpy.float32)
-    nfft = int(FFT_WIN_LENGTH_S * sampling_rate)
-    noverlap = int(FFT_OVERLAP * nfft)
-    # window data
-    step = nfft - noverlap
-    # compute spec
-    spec, _ = librosa.core.spectrum._spectrogram(y=audio, power=1, n_fft=nfft, hop_length=step, center=False)
-    # remove DC component and flip vertical orientation
-    spec = numpy.flipud(spec[1:, :]).astype(numpy.float32)
-    # crop to min/max freq
+    # FFT parameters
+    n_fft = int(FFT_WIN_LENGTH_S * sampling_rate)
+    noverlap = int(FFT_OVERLAP * n_fft)
+    step = n_fft - noverlap
+    # --- STFT (torch) ---
+    audio_t = torch.from_numpy(audio).float().to(device)
+    window = torch.hann_window(n_fft).to(device)
+    stft = torch.stft(audio_t, n_fft=n_fft, hop_length=step, win_length=n_fft, window=window, return_complex=True, center=False, normalized=False)
+    spec = stft.abs() ** 1.0   # power=1
+    # --- Flip vertically & remove DC ---
+    spec = spec[1:, :]         # remove DC
+    spec = torch.flip(spec, dims=[0])  # flipud
+    # --- Crop to min/max frequency ---
     max_freq = round(MAX_FREQ_HZ * FFT_WIN_LENGTH_S)
     min_freq = round(MIN_FREQ_HZ * FFT_WIN_LENGTH_S)
+    # Pad if needed
     if spec.shape[0] < max_freq:
-        freq_pad = max_freq - spec.shape[0]
-        spec = numpy.vstack((numpy.zeros((freq_pad, spec.shape[1]), dtype=spec.dtype), spec))
+        pad_rows = max_freq - spec.shape[0]
+        pad_tensor = torch.zeros((pad_rows, spec.shape[1]), device=device)
+        spec = torch.cat((pad_tensor, spec), dim=0)
+    # Crop
     spec_cropped = spec[-max_freq : spec.shape[0] - min_freq, :]
-    spec = librosa.pcen(spec_cropped * (2**31), sr=sampling_rate / 10).astype(numpy.float32) #Per-channel energy normalization
-    spec = spec - numpy.mean(spec, 1)[:, numpy.newaxis]
-    spec.clip(min=0, out=spec) # no values below mean where mean now equals zero
-    return spec
-
+    # --- PCEN (torch) ---
+    spec_pcen = torch_pcen_batdetect2(spec_cropped, sr=sampling_rate / 10, hop_length=step)
+    # --- Mean subtraction (torch) ---
+    mean_per_freq = spec_pcen.mean(dim=1, keepdim=True)
+    spec_pcen = spec_pcen - mean_per_freq
+    # --- Clip negative values to zero ---
+    spec_pcen = torch.clamp(spec_pcen, min=0.0)
+    return spec_pcen
+    
+def generate_spectrogram(audio, sampling_rate, device=DEVICE):
+    spec_t = generate_torch_spectrogram(audio, sampling_rate, device)
+    return spec_t.cpu().detach().numpy()
+    
 def compute_spectrogram_width(length: int) -> int:
     n_fft = int(FFT_WIN_LENGTH_S * TARGET_SAMPLERATE_HZ)
     n_overlap = int(FFT_OVERLAP * n_fft)
@@ -123,23 +152,17 @@ def compute_spectrogram_width(length: int) -> int:
     width = (length - n_overlap) // n_step
     return int(width * RESIZE_FACTOR)
 
-def compute_spectrogram(audio: numpy.ndarray, sampling_rate: int, device: torch.device, return_np: bool = False) -> Tuple[float, torch.Tensor, Optional[numpy.ndarray]]:
+def compute_spectrogram(audio: numpy.ndarray, sampling_rate: int, device: torch.device):
     # pad audio so it is evenly divisible by downsampling factors
-    duration = audio.shape[0] / float(sampling_rate)
     audio = pad_audio(audio, sampling_rate, FFT_WIN_LENGTH_S, FFT_OVERLAP, RESIZE_FACTOR, SPEC_DIVIDE_FACTOR)
-    # generate spectrogram
-    spec = generate_spectrogram(audio, sampling_rate)
-    # convert to pytorch
-    spec = torch.from_numpy(spec).to(device)
-    # add batch and channel dimensions
-    spec = spec.unsqueeze(0).unsqueeze(0)
-    # resize the spec
-    resize_factor = RESIZE_FACTOR
-    spec_op_shape = (int(SPEC_HEIGHT * resize_factor), int(spec.shape[-1] * resize_factor))
-    spec = torch.nn.functional.interpolate(spec, size=spec_op_shape,  mode="bilinear", align_corners=False)
-    if return_np: spec_np = spec[0, 0, :].cpu().data.numpy()
-    else:  spec_np = None
-    return duration, spec, spec_np
+    spec_pcen = generate_torch_spectrogram(audio, sampling_rate, device)
+    
+    # --- Add batch + channel dims ---
+    spec_pcen = spec_pcen.unsqueeze(0).unsqueeze(0)
+    # --- Resize ---
+    spec_op_shape = (int(SPEC_HEIGHT * RESIZE_FACTOR), int(spec_pcen.shape[-1] * RESIZE_FACTOR))
+    spec_pcen = torch.nn.functional.interpolate(spec_pcen, size=spec_op_shape, mode="bilinear", align_corners=False)
+    return spec_pcen
 
 ############################ detector.post_process###########################
 
@@ -228,7 +251,11 @@ def iterate_over_chunks(audio: numpy.ndarray, samplerate: int, chunk_size: float
         yield chunk_start, audio[start_sample:end_sample]
         
 def _process_spectrogram(spec: torch.Tensor, samplerate: int, model: DetectionModel, modelParams) -> Tuple[PredictionResults, numpy.ndarray]:
-    # evaluate model
+    # evaluate model, ensure width divisible by 64 for BatDetect2 model
+    width = spec.shape[-1]
+    pad_needed = (64 - (width % 64)) % 64
+    if pad_needed > 0:
+        spec = torch.nn.functional.pad(spec, (0, pad_needed), mode='constant', value=0)
     with torch.no_grad():
         outputs = model(spec)
 
@@ -242,12 +269,6 @@ def _process_spectrogram(spec: torch.Tensor, samplerate: int, model: DetectionMo
         pred_nms["class_probs"] = class_probs[:-1, :]
 
     return pred_nms, numpy.concatenate(features, axis=0)
-    
-def _process_audio_array(audio: numpy.ndarray, sampling_rate: int, model: DetectionModel,  modelParams, device: torch.device) -> Tuple[PredictionResults, numpy.ndarray, torch.Tensor]:
-    # load audio file and compute spectrogram
-    _, spec, _ = compute_spectrogram(audio, sampling_rate, device, return_np=False)
-    pred_nms, features = _process_spectrogram(spec, sampling_rate, model, modelParams)
-    return pred_nms, features, spec 
     
 def _merge_results(predictions):
     predictions_m = {
@@ -318,8 +339,10 @@ def load_audio(path: AudioPath, time_exp_fact: float, target_samp_rate: int) -> 
     # resample - need to do this after correcting for time expansion
     sampling_rate_old = sampling_rate
     sampling_rate = target_samp_rate
-    if sampling_rate_old != sampling_rate:
-        audio_raw = librosa.resample(audio_raw, orig_sr=sampling_rate_old, target_sr=sampling_rate, res_type="polyphase")
+    if sampling_rate_old != sampling_rate:   
+        resampler = torchaudio.transforms.Resample(sampling_rate_old, sampling_rate)
+        audio_t = torch.from_numpy(audio_raw).float()
+        audio_raw = resampler(audio_t).numpy()
     return sampling_rate, audio_raw
 
 class Classifier():
@@ -418,10 +441,19 @@ class Classifier():
         if filename.endswith("TE"): timeExpFact = 10
         else: timeExpFact = 1
         orig_samp_rate = file_samp_rate * timeExpFact
-        sampling_rate, audio_full = load_audio(audio_file, time_exp_fact=timeExpFact,  target_samp_rate=TARGET_SAMPLERATE_HZ)
         
+        audio_full, file_sampling_rate = soundfile.read(audio_file, dtype=numpy.float32)
+        if len(audio_full.shape) > 1: audio_full = audio_full.mean(axis=1) # stereo to mono
+        sampling_rate = file_sampling_rate * timeExpFact
+        # resample - need to do this after correcting for time expansion
+        if sampling_rate != TARGET_SAMPLERATE_HZ:   
+            resampler = torchaudio.transforms.Resample(sampling_rate, TARGET_SAMPLERATE_HZ)
+            audio_t = torch.from_numpy(audio_full).float()
+            audio = resampler(audio_t).numpy()
+            
         for chunk_time, audio in iterate_over_chunks(audio_full, sampling_rate, CHUNK_SIZE):
-            pred_nms, features, spec = _process_audio_array( audio, sampling_rate, model, self.modelParams, device)
+            spec = compute_spectrogram(audio, sampling_rate, device)
+            pred_nms, features = _process_spectrogram(spec, sampling_rate, model, self.modelParams)
             pred_nms["start_times"] += chunk_time
             pred_nms["end_times"] += chunk_time
             predictions.append(pred_nms)

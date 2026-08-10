@@ -11,7 +11,6 @@ uv add sounddevice
 uv add torch
 uv add torchaudio
 uv add torchaudio_filters
-uv add librosa
 uv add folium
 uv add screeninfo
 uv add chime

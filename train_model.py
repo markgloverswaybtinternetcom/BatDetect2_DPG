@@ -1,5 +1,5 @@
 import argparse, json, warnings, numpy, torch, datetime, os, glob, copy, polars, collections
-import torchaudio, librosa, traceback, colorama, inspect, wakepy, random, math, scipy
+import torchaudio, traceback, colorama, inspect, wakepy, random, math, scipy
 import Net2dFast, Classifier, validate_model
 
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -352,7 +352,7 @@ def target_heatmaps(spec_op_shape: Tuple[int, int], sampling_rate: int, ann: Ann
     y_2d_classes[numpy.isnan(y_2d_classes)] = 0.0
     return y_2d_det, y_2d_size, y_2d_classes, ann_aug
 
-def resample_audio(num_samples, sampling_rate, audio2, sampling_rate2):
+"""def resample_audio(num_samples, sampling_rate, audio2, sampling_rate2):
     if sampling_rate != sampling_rate2:
         audio2 = librosa.resample(audio2,  orig_sr=sampling_rate2, target_sr=sampling_rate, res_type="polyphase")
         sampling_rate2 = sampling_rate
@@ -360,8 +360,27 @@ def resample_audio(num_samples, sampling_rate, audio2, sampling_rate2):
         audio2 = numpy.hstack((audio2,  numpy.zeros((num_samples - audio2.shape[0]), dtype=audio2.dtype)))
     elif audio2.shape[0] > num_samples:
         audio2 = audio2[:num_samples]
+    return audio2, sampling_rate2"""
+
+def resample_audio(num_samples, sampling_rate, audio2, sampling_rate2):
+    if sampling_rate != sampling_rate2:
+        audio_t = torch.from_numpy(audio2).float()
+        # Ensure 1D shape
+        if audio_t.ndim > 1:
+            audio_t = audio_t.squeeze()
+        resampler = torchaudio.transforms.Resample(sampling_rate2, sampling_rate)
+        audio_t = resampler(audio_t)
+        # Convert back to numpy
+        audio2 = audio_t.cpu().numpy().astype(audio2.dtype)
+        # Update sampling rate
+        sampling_rate2 = sampling_rate
+    #Pad or truncate to num_samples (same as BatDetect2)
+    if audio2.shape[0] < num_samples:
+        audio2 = np.hstack((audio2, np.zeros((num_samples - audio2.shape[0]), dtype=audio2.dtype)))
+    elif audio2.shape[0] > num_samples:
+        audio2 = audio2[:num_samples]
     return audio2, sampling_rate2
-    
+   
 def combine_audio_aug(audio, sampling_rate, ann, audio2, sampling_rate2, ann2):
     # resample so they are the same
     audio2, sampling_rate2 = resample_audio(audio.shape[0], sampling_rate, audio2, sampling_rate2)

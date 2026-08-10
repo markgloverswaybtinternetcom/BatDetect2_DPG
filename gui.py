@@ -188,11 +188,11 @@ class MainWindow():
                 self.LoadBtoPipelineResults(self.SpecDisplay1.dir)
             if len(config["file"]) > 0 and self.FilesDF is not None:
                 matching_rows = (self.FilesDF.with_row_count("row_nr").filter(polars.col("Filename") == config["file"]).select("row_nr").to_series().to_list())
-                print(f"MainWindow {config["file"]=}, {matching_rows=}")
+                print(f"MainWindow {config['file']=}, {matching_rows=}")
                 if len(matching_rows) > 0:
                     row = matching_rows[0]
                     try:
-                        print(f"MainWindow {config["file"]=}, {row=}")
+                        print(f"MainWindow {config['file']=}, {row=}")
                         dpg.highlight_table_row(self.FileTable, row, color=[0,100,0]) 
                         self.ScrollToRow(row)
                         self.lastRow = row
@@ -691,7 +691,7 @@ class MainWindow():
         if species == "DELETE": self.AssignSpeciesID = -1
         else: self.AssignSpeciesID = self.SpeciesNames[self.SpeciesNames[self.FullSpeciesLanguage] == species].index.values[0]
         #used in numpy array 
-        print(f"AssignSpeciesCombo_changed {self.AssignSpeciesID=} {self.FileTableRow=} {len(config["echoMeterDir"])=}")
+        print(f"AssignSpeciesCombo_changed {self.AssignSpeciesID=} {self.FileTableRow=} {len(config['echoMeterDir'])=}")
         
         if self.FileTableRow is not None and len(config["echoMeterDir"]) > 0:
             row = self.FileTableRow
@@ -865,7 +865,7 @@ class MainWindow():
         with dpg.table_row(parent=self.FileTable, height=ROW_PXL * config["scale"]) as tRow:
             dpg.bind_item_theme(tRow, self.no_hover_theme)  # Apply theme to row
             dt = utils.FileDate(file)
-            if isinstance(dt, datetime.datetime): file = f"{file} ({dt.strftime("%d/%m/%Y %H:%M:%S")})"
+            if isinstance(dt, datetime.datetime): file = f"{file} ({dt.strftime('%d/%m/%Y %H:%M:%S')})"
             dpg.add_selectable(label=file, callback=self.TableRow_selected, span_columns=True, user_data=[self.FileTable, self.FilesDF, r, r])
             dpg.add_selectable(label=result, callback=self.TableRow_selected, span_columns=True, user_data=[self.FileTable,  self.FilesDF, r, r])
             ysm = dpg.get_y_scroll_max(self.FileTable)
@@ -901,7 +901,7 @@ class MainWindow():
                     dpg.bind_item_theme(tRow, self.no_hover_theme)  # Apply theme to row
                     dt = utils.FileDate(a)
                     if isinstance(dt, datetime.datetime):
-                        a = f"{a} ({dt.strftime("%d/%m/%Y %H:%M:%S")})"
+                        a = f"{a} ({dt.strftime('%d/%m/%Y %H:%M:%S')})"
                         dpg.add_selectable(label=a, parent=tRow, callback=self.TableRow_selected, span_columns=True, user_data=[table, df, nFile, nRow])
                     else:
                         dpg.add_selectable(label=a, parent=tRow, callback=self.TableRow_selected, span_columns=True, user_data=[table, df, nFile, nRow])

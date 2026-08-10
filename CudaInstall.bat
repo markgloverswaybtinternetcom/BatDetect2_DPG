@@ -12,7 +12,6 @@ uv add soundfile
 uv pip install torch --index-url https://download.pytorch.org/whl/cu132
 uv add torchaudio
 uv add torchaudio_filters
-uv add librosa
 uv add folium
 uv add screeninfo
 uv add DearPyGui_DragAndDrop
