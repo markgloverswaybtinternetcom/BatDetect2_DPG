@@ -146,7 +146,9 @@ def latest_model_file(models_dir):
     files.sort(key=extract_nums)
     return files[-1]
 
-def validate_model(model_file_path, validation_data_directory, last=None, writeFile=True):
+def validate_model(model_file_path, validation_data_directory, last=None, writeFile=True, fileDetail = False):
+    file_results = []
+    
     # Load classifier
     classifier = Classifier(modelPath=model_file_path)
     class_names = classifier.modelParams["class_names"]
@@ -230,9 +232,26 @@ def validate_model(model_file_path, validation_data_directory, last=None, writeF
             (polars.col("iou") >= MIN_IOU))
         # Greedy best match per model call
         best_matches = (matches.sort("iou", descending=True).group_by(["model_start", "model_end", "model_low", "model_high"]).head(1))
+        
+        if fileDetail:
+            # True positives = best matches
+            tp = best_matches.shape[0]
+            # False positives = model calls that did NOT appear in best_matches
+            fp = model_df["model_start"].n_unique() - best_matches["model_start"].n_unique()
+            # False negatives = reference calls that did NOT appear in best_matches
+            fn = reference_df["reference_start"].n_unique() - best_matches["reference_start"].n_unique()
+            
+            # F1 score
+            if tp + fp + fn > 0:
+                f1_file = (2 * tp) / (2 * tp + fp + fn)
+            else:
+                f1_file = 0.0           
+                
+            # Store results
+            file_results.append({"file": audio_file, "tp": int(tp), "fp": int(fp), "fn": int(fn), "f1": float(f1_file)})
+        
         all_best_matches.append(best_matches)
-        all_model_annotations.append(model_df)
-        all_reference_annotations.append(reference_df)   
+        all_model_annotations.append(model_df)  
     # Concatenate all results
     reference_all = safe_concat(all_reference_annotations)  
     model_all = safe_concat(all_model_annotations)
@@ -243,6 +262,16 @@ def validate_model(model_file_path, validation_data_directory, last=None, writeF
         print(colorama.Back.RED + "WARNING: No reference annotations found in validation set." + colorama.Back.RESET)
     if best_matches_all.is_empty():
         print(colorama.Back.RED + "WARNING: No matches found (IoU threshold too high or no overlapping calls)." + colorama.Back.RESET)
+        
+    if fileDetail:
+        out_csv = model_file_path + "_per_file_scores.csv"
+        with open(out_csv, "w") as f:
+            f.write("file, right, wrong, missed, F1\n")
+            for row in file_results:
+                df = row['file'].replace(validation_data_directory, "")
+                f.write(f"{df},{row['tp']},{row['fp']},{row['fn']},{row['f1']}\n")
+        print(f"Wrote per-file validation breakdown to: {out_csv}")
+    
     # Compute per-class CSV
     f1_score = write_per_model_class_csv(best_matches_all, model_all, reference_all, class_names, model_file_path, last, writeFile)
     return f1_score
@@ -257,4 +286,4 @@ if __name__ == "__main__":
         model_file_path = latest_model_file(arguments.model_dir)
     elif arguments.model_dir.endswith(".pth.tar"): model_file_path = arguments.model_dir
     else: sys.exit(colorama.Back.RED +  f"Invalid model path {arguments.model_dir}" + colorama.Back.RESET) 
-    validate_model(model_file_path, validation_data_directory=arguments.validation_data_dir)
+    validate_model(model_file_path, validation_data_directory=arguments.validation_data_dir, fileDetail=True)
