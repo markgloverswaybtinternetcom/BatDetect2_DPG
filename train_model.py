@@ -5,6 +5,7 @@ import Net2dFast, Classifier, validate_model
 warnings.filterwarnings("ignore", category=UserWarning)
 torch.set_printoptions(threshold=torch.inf, linewidth=200, precision=3)
 numpy.set_printoptions(threshold=numpy.inf)
+numpy.set_printoptions(precision=4, suppress=True)
 
 DEBUG = False
 DETECTION_OVERLAP = 0.01  # has to be within this number of ms to count as detection
@@ -604,22 +605,32 @@ class Trainer():
         frame_mask = (1 - silent_mask) * (1 - ignored_frame_mask)                   
         p_class = outputs.pred_class[:, :-1, :]
         per_class_loss = focal_loss(p_class, target_class_minus1, valid_mask=valid_mask, IsClass=True)
-        # === Consistency loss ===
-        # Collapse spatial grid → per-frame species probabilities
-        p_frame = p_class.mean(dim=(2,3)) # (batch, num_classes)
+        
+        # === Species-level consistency loss with dynamic width weighting ===
+        # collapse class → species
+        p_frame = p_class.mean(dim=(2,3))
         batch_size = p_frame.shape[0]
         species_frame = torch.zeros(batch_size, self.num_species, device=self.device)
         for s_idx, species in enumerate(self.species_list):
             class_indices = self.species_to_class_indices[species]
             species_frame[:, s_idx] = p_frame[:, class_indices].sum(dim=1)
-        species_diff = torch.abs(species_frame[1:] - species_frame[:-1]).sum(dim=1)    
-        # Only apply when BOTH frames are valid (non-silent, non-buzz)
+        species_diff = torch.abs(species_frame[1:] - species_frame[:-1]).sum(dim=1)
+        # compute per-frame width
+        frame_width = (target_det.sum(dim=2) > 0).sum(dim=2).float()  # (batch,)
+        width_norm = frame_width / frame_width.max().clamp(min=1)
+        # dynamic weighting
+        narrow_weight = 0.25
+        wide_weight   = 1.2
+        frame_consistency_weight = torch.where(width_norm < 0.45, narrow_weight, wide_weight)
+        pair_weight = frame_consistency_weight[1:] * frame_consistency_weight[:-1]
         pair_mask = frame_mask[1:] * frame_mask[:-1]
-        # Final consistency loss
         num_pairs = pair_mask.sum().clamp(min=1)
-        consistency_loss = CONSISTENCY_LOSS_WEIGHT * (species_diff * pair_mask).sum() / num_pairs
-        consistency_loss = torch.clamp(consistency_loss, max=0.003)
-        #consistency_loss = CONSISTENCY_LOSS_WEIGHT * (species_diff * pair_mask).mean()
+        consistency_loss = CONSISTENCY_LOSS_WEIGHT * (species_diff * pair_weight * pair_mask).sum() / num_pairs
+        consistency_loss = consistency_loss.clamp(max=0.007)
+        if self.epoch % 50 == 0 and self.batch_idx == 0:
+            print(f"species_diff: {species_diff[:10].detach().cpu().numpy()}, pair_weight: {pair_weight[:10].detach().cpu().numpy().flatten()}, pair_mask: {pair_mask[:10].detach().cpu().numpy()}, consistency_raw: {(species_diff * pair_weight * pair_mask).sum().item() / num_pairs.item():.4f} consistency_clamped: {consistency_loss.item():.4f}")
+            w = width_norm.detach().cpu().numpy()
+            print(f"width_norm stats: mean={w.mean():.3f}, median={numpy.median(w):.3f} min={w.min():.3f} max={w.max():.3f}, narrow fraction: {(w < 0.45).mean()} ")         
         return detectionLoss, boundingBoxSizeLoss, per_class_loss, consistency_loss
        
     def train(self, epoch, data_loader):
@@ -658,6 +669,7 @@ class Trainer():
         c = torch.tensor(all_consistency_losses)
         print(f"{epoch=} consistency_loss mean={c.mean():.6f}, std={c.std():.6f}, min={c.min():.6f}, max={c.max():.6f}")
         det_loss_avg = det_loss_sum / count; size_loss_avg = size_loss_sum / count; class_loss_avg = weighted_per_class_loss_sum.sum() / count; consistency_loss_avg = consistency_sum / count
+        
         return float(det_loss_avg), float(size_loss_avg), float(class_loss_avg), float(consistency_loss_avg), self.scheduler.get_last_lr()[0]
 
 def main():
