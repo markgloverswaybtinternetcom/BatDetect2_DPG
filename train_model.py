@@ -619,14 +619,14 @@ class Trainer():
         frame_width = (target_det.sum(dim=2) > 0).sum(dim=2).float()  # (batch,)
         width_norm = frame_width / frame_width.max().clamp(min=1)
         # dynamic weighting
-        narrow_weight = 0.25
+        narrow_weight = 0.3
         wide_weight   = 1.2
         frame_consistency_weight = torch.where(width_norm < 0.45, narrow_weight, wide_weight)
         pair_weight = frame_consistency_weight[1:] * frame_consistency_weight[:-1]
         pair_mask = frame_mask[1:] * frame_mask[:-1]
         num_pairs = pair_mask.sum().clamp(min=1)
         consistency_loss = CONSISTENCY_LOSS_WEIGHT * (species_diff * pair_weight * pair_mask).sum() / num_pairs
-        consistency_loss = consistency_loss.clamp(max=0.007)
+        consistency_loss = consistency_loss.clamp(max=0.006)
         if self.epoch % 50 == 0 and self.batch_idx == 0:
             print(f"species_diff: {species_diff[:10].detach().cpu().numpy()}, pair_weight: {pair_weight[:10].detach().cpu().numpy().flatten()}, pair_mask: {pair_mask[:10].detach().cpu().numpy()}, consistency_raw: {(species_diff * pair_weight * pair_mask).sum().item() / num_pairs.item():.4f} consistency_clamped: {consistency_loss.item():.4f}")
             w = width_norm.detach().cpu().numpy()
