@@ -1,10 +1,11 @@
 import argparse, json, warnings, numpy, torch, datetime, os, glob, copy, polars, collections
-import torchaudio, traceback, colorama, inspect, wakepy, random, math, scipy
+import torchaudio, librosa, traceback, colorama, inspect, wakepy, random, math, scipy
 import Net2dFast, Classifier, validate_model
 
 warnings.filterwarnings("ignore", category=UserWarning)
 torch.set_printoptions(threshold=torch.inf, linewidth=200, precision=3)
 numpy.set_printoptions(threshold=numpy.inf)
+numpy.set_printoptions(precision=4, suppress=True)
 
 DEBUG = False
 DETECTION_OVERLAP = 0.01  # has to be within this number of ms to count as detection
@@ -14,6 +15,7 @@ NUM_WORKERS = 4
 MIN_EPOCHS = 300
 MAX_EPOCHS = 900
 TRAIN_FILE_USED_SEC = 1   # standarised length in seconds
+SPEC_TRAIN_WIDTH = 2560   # equivalent to 1 seoond,  units are number of time steps (before resizing is performed)
 
 DET_LOSS_WEIGHT = 1.0     # weight for the detection part of the loss
 SIZE_LOSS_WEIGHT = 0.1    # weight for the bbox size loss
@@ -185,7 +187,7 @@ def warp_spec_aug(spec, ann):
     # Pad or crop along time axis
     if resize_amt >= spec.shape[2]:
         pad = resize_amt - spec.shape[2]
-        spec_r = torch.cat((spec, torch.zeros((1, spec.shape[1], pad), dtype=spec.dtype, device=spec.device)), dim=2)
+        spec_r = torch.cat((spec, torch.zeros((1, spec.shape[1], pad), dtype=spec.dtype)), dim=2)
     else:
         spec_r = spec[:, :, :resize_amt]
     # Resize back to original time dimension
@@ -228,8 +230,7 @@ def inject_vertical_noise_streak(spec, strength=0.02):
     # Choose a random frequency bin (second axis)
     freq_bin = numpy.random.randint(0, spec.shape[1])
     # Add noise across all time bins (first axis)
-    noise = strength * torch.rand(spec.shape[0], device=spec.device)
-    spec[:, freq_bin] += noise
+    spec[:, freq_bin] += strength * numpy.random.rand(spec.shape[0])
     return spec
 
 def reinforce_cf_band(spec, cf_freq, boost_db=1.5):
@@ -354,23 +355,14 @@ def target_heatmaps(spec_op_shape: Tuple[int, int], sampling_rate: int, ann: Ann
 
 def resample_audio(num_samples, sampling_rate, audio2, sampling_rate2):
     if sampling_rate != sampling_rate2:
-        audio_t = torch.from_numpy(audio2).float()
-        # Ensure 1D shape
-        if audio_t.ndim > 1:
-            audio_t = audio_t.squeeze()
-        resampler = torchaudio.transforms.Resample(sampling_rate2, sampling_rate)
-        audio_t = resampler(audio_t)
-        # Convert back to numpy
-        audio2 = audio_t.cpu().numpy().astype(audio2.dtype)
-        # Update sampling rate
+        audio2 = librosa.resample(audio2,  orig_sr=sampling_rate2, target_sr=sampling_rate, res_type="polyphase")
         sampling_rate2 = sampling_rate
-    #Pad or truncate to num_samples (same as BatDetect2)
     if audio2.shape[0] < num_samples:
-        audio2 = numpy.hstack((audio2, numpy.zeros((num_samples - audio2.shape[0]), dtype=audio2.dtype)))
+        audio2 = numpy.hstack((audio2,  numpy.zeros((num_samples - audio2.shape[0]), dtype=audio2.dtype)))
     elif audio2.shape[0] > num_samples:
         audio2 = audio2[:num_samples]
     return audio2, sampling_rate2
-   
+    
 def combine_audio_aug(audio, sampling_rate, ann, audio2, sampling_rate2, ann2):
     # resample so they are the same
     audio2, sampling_rate2 = resample_audio(audio.shape[0], sampling_rate, audio2, sampling_rate2)
@@ -397,11 +389,7 @@ class AudioLoader(torch.utils.data.Dataset):
         self.data_anns = []
         self.audio_file = []
         self.is_train = is_train
-        self.class_names = class_names        
-        nfft = Classifier.FFT_WIN_LENGTH_S * Classifier.TARGET_SAMPLERATE_HZ
-        noverlap = Classifier.FFT_OVERLAP * nfft
-        self.target_samples = int(Classifier.TARGET_SAMPLERATE_HZ * TRAIN_FILE_USED_SEC)
-        self.spec_train_width = int(self.target_samples / (nfft - noverlap) - noverlap)        
+        self.class_names = class_names
         for ii in range(len(data_anns_ip)):
             dd = copy.deepcopy(data_anns_ip[ii])
             # filter out unused annotation here
@@ -439,42 +427,19 @@ class AudioLoader(torch.utils.data.Dataset):
             self.audio_file.append(dd["file_path"])
         ann_cnt = [len(aa["annotation"]) for aa in self.data_anns]
         self.max_num_anns = 2 * numpy.max(ann_cnt)  # x2 because we may be combining files during training
+        
         self.Horseshoe_CF = {}
         for key, value in HORSESHOE_CF.items():
             id = class_names.index(key)
             self.Horseshoe_CF[id] = value
         print(f"       Num files: {len(self.data_anns)},                  Num calls: {numpy.sum(ann_cnt)}")
 
-    def pad_audio(self, audio: numpy.ndarray, samplerate: int, window_duration: float, window_overlap: float, resize_factor: float, divide_factor: int, fixed_width: Optional[int] = None):
-        spec_width = Classifier.compute_spectrogram_width(audio.shape[0])
-        def pad_to(target_samples):
-            diff = target_samples - audio.shape[0]
-            if diff <= 0:
-                return audio[:target_samples]
-            return numpy.hstack((audio, numpy.zeros(diff, dtype=audio.dtype)))
-        if fixed_width:
-            target_samples = Classifier.x_coord_to_sample(fixed_width)
-            return pad_to(target_samples)
-        min_width = int(divide_factor / resize_factor)
-        if spec_width < min_width:
-            target_samples = Classifier.x_coord_to_sample(min_width)
-            return pad_to(target_samples)
-        if (spec_width % divide_factor) == 0:
-            return audio
-        target_width = int(numpy.ceil(spec_width / divide_factor)) * divide_factor
-        target_samples = Classifier.x_coord_to_sample(target_width)
-        return pad_to(target_samples)
-
-    def load_audio(self, path, time_exp_fact: float, target_samp_rate: int, device="cpu") -> Tuple[int, numpy.ndarray ]:
-        sampling_rate, audio_raw_t = Classifier.load_torch_audio(path, time_exp_fact, target_samp_rate, device)
-        return sampling_rate, audio_raw_t.detach().numpy()
-        
     def get_file_and_anns(self, index=None):
         # if no file specified, choose random one
         if index == None:
             index = numpy.random.randint(0, len(self.data_anns))
         audio_file = self.audio_file[index]
-        sampling_rate, audio_raw = self.load_audio(audio_file, self.data_anns[index]["time_exp"], Classifier.TARGET_SAMPLERATE_HZ)
+        sampling_rate, audio_raw = Classifier.load_audio(audio_file, self.data_anns[index]["time_exp"], Classifier.TARGET_SAMPLERATE_HZ)
         # copy annotation
         ann = {}
         ann["annotated"] = self.data_anns[index]["annotated"]
@@ -482,15 +447,20 @@ class AudioLoader(torch.utils.data.Dataset):
         keys = ["start_times", "end_times", "high_freqs", "low_freqs", "class_ids", "individual_ids"]
         for kk in keys:
             ann[kk] = self.data_anns[index][kk].copy()
-        if audio_raw.shape[0] > self.target_samples:
-            if DEBUG: print(colorama.Fore.YELLOW + f"get_file_and_anns cropping {os.path.basename(audio_file)} as {audio_raw.shape[0]=} > {self.target_samples=}" + colorama.Fore.RESET)
-            sample_crop = numpy.random.randint(audio_raw.shape[0] - self.target_samples)
-            audio_raw = audio_raw[sample_crop : sample_crop + self.target_samples]
+        # if train then grab a random crop
+        nfft = Classifier.FFT_WIN_LENGTH_S * sampling_rate
+        noverlap = Classifier.FFT_OVERLAP * nfft
+        target_samples = int(Classifier.TARGET_SAMPLERATE_HZ * TRAIN_FILE_USED_SEC)
+        spec_train_width = int(target_samples / (nfft - noverlap) - noverlap)
+        if audio_raw.shape[0] > target_samples:
+            if DEBUG: print(colorama.Fore.YELLOW + f"get_file_and_anns cropping {os.path.basename(audio_file)} as {audio_raw.shape[0]=} > {target_samples=}" + colorama.Fore.RESET)
+            sample_crop = numpy.random.randint(audio_raw.shape[0] - target_samples)
+            audio_raw = audio_raw[sample_crop : sample_crop + target_samples]
             ann["start_times"] = ann["start_times"] - sample_crop / float(sampling_rate)
             ann["end_times"] = ann["end_times"] - sample_crop / float(sampling_rate)
         # pad audio
-        op_spec_target_size = self.spec_train_width
-        audio_raw = self.pad_audio(audio_raw, sampling_rate, Classifier. FFT_WIN_LENGTH_S, Classifier.FFT_OVERLAP, Classifier.RESIZE_FACTOR, Classifier.SPEC_DIVIDE_FACTOR, op_spec_target_size)
+        op_spec_target_size = spec_train_width
+        audio_raw = Classifier.pad_audio(audio_raw, sampling_rate, Classifier. FFT_WIN_LENGTH_S, Classifier.FFT_OVERLAP, Classifier.RESIZE_FACTOR, Classifier.SPEC_DIVIDE_FACTOR, op_spec_target_size)
         duration = audio_raw.shape[0] / float(sampling_rate)
         # sort based on time
         inds = numpy.argsort(ann["start_times"])
@@ -512,24 +482,12 @@ class AudioLoader(torch.utils.data.Dataset):
                 if numpy.random.random() < AUG_PROB:
                     audio = echo_aug(audio, sampling_rate)
             # create spectrogram
-            audio_t = torch.from_numpy(audio).float()
-            spec_gs = Classifier.generate_spectrogram(audio_t, sampling_rate)
-            spec = spec_gs.unsqueeze(0).unsqueeze(0)
-            # spec is [1, 128, W]
-            current_width = spec_gs.shape[-1]
-            if current_width < self.spec_train_width:
-                pad_needed = self.spec_train_width - current_width
-                spec = torch.nn.functional.pad(spec, (0, pad_needed), mode='constant', value=0)
-                #print(f"Padding {current_width=} {pad_needed=} result {spec.shape=}")
-            elif current_width > self.spec_train_width:
-                spec = spec[:, :, :, :self.spec_train_width]
-                #print(f"Cutting {current_width=} result {spec.shape=}")
-            #print(f"__getitem__ {spec_gs.shape=} {spec.shape=} {self.spec_train_width=}")
+            spec = Classifier.generate_spectrogram(audio, sampling_rate)
+            spec_op_shape = (int(Classifier.SPEC_HEIGHT * Classifier.RESIZE_FACTOR), int(spec.shape[1] * Classifier.RESIZE_FACTOR))
+            # resize the spec
+            spec = torch.from_numpy(spec).unsqueeze(0).unsqueeze(0)
+            spec = torch.nn.functional.interpolate(spec, size=spec_op_shape, mode="bilinear", align_corners=False).squeeze(0)
             # augment spectrogram
-            if spec.ndim == 4:
-                spec = spec.squeeze(0)   # remove batch → (1,F,T)
-                spec = spec.squeeze(0)   # remove channel → (F,T)
-                spec = spec.unsqueeze(0) # restore batch → (1,F,T)
             if AUGMENT:
                 if numpy.random.random() < AUG_PROB: spec = scale_vol_aug(spec)
                 if numpy.random.random() < AUG_PROB: spec = warp_spec_aug(spec, ann) 
@@ -544,7 +502,6 @@ class AudioLoader(torch.utils.data.Dataset):
             outputs = {}
             outputs["spec"] = spec
             # create ground truth heatmaps
-            spec_op_shape = (int(Classifier.SPEC_HEIGHT * Classifier.RESIZE_FACTOR), int(spec.shape[1] * Classifier.RESIZE_FACTOR))
             (outputs["y_2d_det"],  outputs["y_2d_size"], outputs["y_2d_classes"], ann_aug) = target_heatmaps(spec_op_shape, sampling_rate, ann, self.class_names, spec)
             # hack to get around requirement that all vectors are the same length in the output batch
             pad_size = self.max_num_anns - len(ann_aug["individual_ids"])
@@ -633,46 +590,67 @@ class Trainer():
         # Buzz classes (weight == 0)
         self.buzz_class_mask = (self.class_weight_vector == 0).float().view(1, self.num_classes, 1, 1)
         self.ignore_class_mask = (self.buzz_class_mask > 0).float()        
-        nfft = Classifier.FFT_WIN_LENGTH_S * Classifier.TARGET_SAMPLERATE_HZ
-        noverlap = Classifier.FFT_OVERLAP * nfft
-        target_samples = int(Classifier.TARGET_SAMPLERATE_HZ * TRAIN_FILE_USED_SEC)
-        spec_train_width = int(target_samples / (nfft - noverlap) - noverlap)        
         model = Net2dFast.Net2dFast(Classifier.NUM_FILTERS, num_classes=self.num_classes, ip_height=ip_height)
-        self.model = model.to(device)
-        with torch.no_grad():
-            dummy = torch.zeros(1, 1, Classifier.NUM_FILTERS, spec_train_width).to(Classifier.DEVICE)
-            out = self.model(dummy)
-            self.model_width = out.pred_det.shape[-1]       
+        self.model = model.to(Classifier.DEVICE)
         self.optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
         self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, MAX_EPOCHS * len_train_loader)
+        # Build species → class mapping matrix (S, C_class)
+        species_map = torch.zeros(self.num_species, self.num_classes)
+        for s_idx, species in enumerate(self.species_list):
+            class_indices = self.species_to_class_indices[species]
+            species_map[s_idx, class_indices] = 1.0
+        self.species_map_matrix = species_map
 
     def loss_fun(self, outputs, target_det, target_size, target_class_minus1):
-        detectionLoss = DET_LOSS_WEIGHT * focal_loss(outputs.pred_det, target_det)  
+        # --- Detection + size loss ---
+        detectionLoss = DET_LOSS_WEIGHT * focal_loss(outputs.pred_det, target_det)
         boundingBoxSizeLoss = SIZE_LOSS_WEIGHT * bbox_size_loss(outputs.pred_size, target_size)
+        # --- Frame masks ---
         valid_mask = (target_class_minus1.sum(1) > 0).float().unsqueeze(1)
         silent_mask = (valid_mask.sum(dim=(1,2,3)) == 0).float()
         ignored_frame_mask = ((target_class_minus1 * self.ignore_class_mask).sum(dim=(1,2,3)) > 0).float()
-        frame_mask = (1 - silent_mask) * (1 - ignored_frame_mask)                   
-        p_class = outputs.pred_class[:, :-1, :]
-        per_class_loss = focal_loss(p_class, target_class_minus1, valid_mask=valid_mask, IsClass=True)
-        # === Consistency loss ===
-        # Collapse spatial grid → per-frame species probabilities
-        p_frame = p_class.mean(dim=(2,3)) # (batch, num_classes)
-        batch_size = p_frame.shape[0]
-        species_frame = torch.zeros(batch_size, self.num_species, device=self.device)
-        for s_idx, species in enumerate(self.species_list):
-            class_indices = self.species_to_class_indices[species]
-            species_frame[:, s_idx] = p_frame[:, class_indices].sum(dim=1)
-        species_diff = torch.abs(species_frame[1:] - species_frame[:-1]).sum(dim=1)    
-        # Only apply when BOTH frames are valid (non-silent, non-buzz)
-        pair_mask = frame_mask[1:] * frame_mask[:-1]
-        # Final consistency loss
-        num_pairs = pair_mask.sum().clamp(min=1)
-        consistency_loss = CONSISTENCY_LOSS_WEIGHT * (species_diff * pair_mask).sum() / num_pairs
-        consistency_loss = torch.clamp(consistency_loss, max=0.003)
-        #consistency_loss = CONSISTENCY_LOSS_WEIGHT * (species_diff * pair_mask).mean()
+        frame_mask = (1 - silent_mask) * (1 - ignored_frame_mask)
+        # --- Classification logits for class loss ---
+        # pred_class: (B, C_class+1, T, F)
+        p_class_logits = outputs.pred_class[:, :-1, :, :]   # (B, C_class, T, F)
+        per_class_loss = focal_loss(p_class_logits, target_class_minus1, valid_mask=valid_mask, IsClass=True)
+        # --- Softmax probabilities for width + consistency ---
+        p_class_prob = torch.softmax(p_class_logits, dim=1)   # (B, C_class, T, F)
+        # Collapse frequency → keep time: (B, T, C_class)
+        p_frame = p_class_prob.mean(dim=3).permute(0, 2, 1)
+        B, T, C = p_frame.shape
+        species_frame = torch.matmul(p_frame, self.species_map_matrix.T.to(self.device))   
+        # --- Species probabilities ---
+        p_species = species_frame / species_frame.sum(dim=2, keepdim=True).clamp(min=1e-6)
+        # --- Width via variance (stable) ---
+        species_var = p_species.var(dim=2)          # (B, T)
+        frame_width = species_var.mean(dim=1)       # (B,)
+        width_norm = frame_width / frame_width.max().clamp(min=1.0)
+        # --- Species difference between batch items ---
+        species_frame_mean = species_frame.mean(dim=1)   # (B, S)
+        species_diff = torch.abs(species_frame_mean[1:] - species_frame_mean[:-1]).sum(dim=1)   # (B-1)
+        # --- Dynamic weighting ---
+        narrow_weight = 0.3
+        wide_weight   = 1.2
+        frame_consistency_weight = torch.where(width_norm < 0.45, narrow_weight, wide_weight)
+        pair_weight = frame_consistency_weight[1:] * frame_consistency_weight[:-1]   # (B-1)
+        pair_mask   = frame_mask[1:] * frame_mask[:-1]                               # (B-1)
+        num_pairs   = pair_mask.sum().clamp(min=1)
+        consistency_loss = CONSISTENCY_LOSS_WEIGHT * (species_diff * pair_weight * pair_mask).sum() / num_pairs
+        consistency_loss = consistency_loss.clamp(max=0.006)
+        # --- Debug ---
+        if self.epoch % 50 == 0 and self.batch_idx == 0:
+            print(
+                f"species_diff: {species_diff[:10].detach().cpu().numpy()}, "
+                f"pair_weight: {pair_weight[:10].detach().cpu().numpy().flatten()}, "
+                f"pair_mask: {pair_mask[:10].detach().cpu().numpy()}, "
+                f"consistency_raw: {(species_diff * pair_weight * pair_mask).sum().item() / num_pairs.item():.4f} "
+                f"consistency_clamped: {consistency_loss.item():.4f}")
+            w = width_norm.detach().cpu().numpy()
+            print(f"width_norm stats: mean={w.mean():.3f}, median={numpy.median(w):.3f} "
+                f"min={w.min():.3f} max={w.max():.3f}, narrow fraction: {(w < 0.45).mean()}")
         return detectionLoss, boundingBoxSizeLoss, per_class_loss, consistency_loss
-       
+    
     def train(self, epoch, data_loader):
         self.epoch = epoch
         self.model.train()
@@ -682,7 +660,6 @@ class Trainer():
         count = 0
         epsilon = 1e-8 # prevents divide by zero problems
         all_consistency_losses = []
-        
         for self.batch_idx, inputs in enumerate(data_loader):
             try:
                 data = inputs["spec"].to(self.device)
@@ -691,14 +668,8 @@ class Trainer():
                 target_class = inputs["y_2d_classes"].to(self.device)
                 self.optimizer.zero_grad()
                 outputs = self.model(data)
-                # Remove the "no call" class (last channel)
-                target_class_minus1 = target_class[:, :-1, :, :]   # (batch, 42, 256, 1616)
-                # Resize targets to model output width
-                target_det = torch.nn.functional.interpolate(target_det, size=(Classifier.NUM_FILTERS, self.model_width), mode="nearest")
-                target_size = torch.nn.functional.interpolate(target_size, size=(Classifier.NUM_FILTERS, self.model_width), mode="nearest")
-                target_class_minus1 = torch.nn.functional.interpolate(target_class_minus1, size=(Classifier.NUM_FILTERS, self.model_width), mode="nearest")
-                det_loss, size_loss, per_class_loss, consistency_loss = self.loss_fun(outputs, target_det, target_size, target_class_minus1 )
-                
+                target_class_minus1 = target_class[:, :-1, :, :]   # (batch, 42, H, W)
+                det_loss, size_loss, per_class_loss, consistency_loss = self.loss_fun(outputs, target_det, target_size, target_class_minus1)
                 all_consistency_losses.append(consistency_loss.item())
                 weighted_per_class_loss = per_class_loss * self.class_weight_vector
                 det_loss_sum += det_loss.item() * data.shape[0]; size_loss_sum += size_loss.item() * data.shape[0]; consistency_sum += consistency_loss.item() * data.shape[0]
@@ -716,6 +687,7 @@ class Trainer():
         c = torch.tensor(all_consistency_losses)
         print(f"{epoch=} consistency_loss mean={c.mean():.6f}, std={c.std():.6f}, min={c.min():.6f}, max={c.max():.6f}")
         det_loss_avg = det_loss_sum / count; size_loss_avg = size_loss_sum / count; class_loss_avg = weighted_per_class_loss_sum.sum() / count; consistency_loss_avg = consistency_sum / count
+        
         return float(det_loss_avg), float(size_loss_avg), float(class_loss_avg), float(consistency_loss_avg), self.scheduler.get_last_lr()[0]
 
 def main():
