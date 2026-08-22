@@ -28,7 +28,6 @@ def safe_concat(dfs):
         print(colorama.Back.RED + "[SAFE_CONCAT] dfs is empty → returning empty DF"+ colorama.Back.RESET)
         return polars.DataFrame()
     if len(dfs) == 1:
-        print(colorama.Back.RED + "[SAFE_CONCAT] dfs has one DF → returning it directly"+ colorama.Back.RESET)
         return dfs[0]
     try:
         return polars.concat(dfs)
@@ -54,7 +53,7 @@ def cast_numeric(df, numeric_cols):
             df = df.with_columns(polars.col(col).cast(polars.Float64, strict=False))
     return df
     
-def write_per_model_class_csv(best_matches_all, model_all, reference_all, class_names, model_file_path, last=None, writeFile=True):
+def write_per_model_class_csv(best_matches_all, model_all, reference_all, class_names, model_file_path, last=None, max=None, writeFile=True):
     # Build full reference grid (all species × all events)
     ref_species = reference_all["species"].unique().sort()
     ref_events  = reference_all["call_type"].unique().sort()
@@ -79,15 +78,9 @@ def write_per_model_class_csv(best_matches_all, model_all, reference_all, class_
         (polars.col("ref_count") - polars.col("true_positives")).alias("false_negatives")
     ])
     # Compute precision, recall, F1
-    per_class = per_class.with_columns([
-        (polars.col("true_positives") / (polars.col("true_positives") + polars.col("false_positives"))).alias("precision"),
+    per_class = per_class.with_columns([(polars.col("true_positives") / (polars.col("true_positives") + polars.col("false_positives"))).alias("precision"),
         (polars.col("true_positives") / (polars.col("true_positives") + polars.col("false_negatives"))).alias("recall"),
-    ])
-    per_class = per_class.with_columns([
-        (polars.col("true_positives") / (polars.col("true_positives") + polars.col("false_positives"))).alias("precision"),
-        (polars.col("true_positives") / (polars.col("true_positives") + polars.col("false_negatives"))).alias("recall"),
-        (2 * polars.col("precision") * polars.col("recall") / (polars.col("precision") + polars.col("recall"))).alias("f1_score")
-    ])
+        (2 * polars.col("true_positives") / (2 * polars.col("true_positives") + polars.col("false_positives") + polars.col("false_negatives"))).alias("f1_score")])
     # Add model name column
     model_name = ""
     if model_file_path is not None:
@@ -129,7 +122,10 @@ def write_per_model_class_csv(best_matches_all, model_all, reference_all, class_
     if last is not None and f1_score < last:       
         print(colorama.Fore.RED + f"TOTAL {true_positives=}, {false_positives=}, {false_negatives=}, {f1_score=:.4f}"+ colorama.Fore.RESET)
     else:
-        print(colorama.Fore.CYAN + f"TOTAL {true_positives=}, {false_positives=}, {false_negatives=}, {f1_score=:.4f}"+ colorama.Fore.RESET)
+        if max is not None and f1_score >= max:
+            print(colorama.Fore.GREEN + f"TOTAL {true_positives=}, {false_positives=}, {false_negatives=}, {f1_score=:.4f}"+ colorama.Fore.RESET)
+        else:
+            print(colorama.Fore.YELLOW + f"TOTAL {true_positives=}, {false_positives=}, {false_negatives=}, {f1_score=:.4f}"+ colorama.Fore.RESET)
     return f1_score
 
 def latest_model_file(models_dir):
@@ -146,7 +142,7 @@ def latest_model_file(models_dir):
     files.sort(key=extract_nums)
     return files[-1]
 
-def validate_model(model_file_path, validation_data_directory, last=None, writeFile=True):
+def validate_model(model_file_path, validation_data_directory, last=None, max=None, writeFile=True):
     # Load classifier
     classifier = Classifier(modelPath=model_file_path)
     class_names = classifier.modelParams["class_names"]
@@ -155,6 +151,7 @@ def validate_model(model_file_path, validation_data_directory, last=None, writeF
     all_best_matches = []
     all_model_annotations = []
     all_reference_annotations = []
+    all_file_summaries = []
     for audio_file in audio_files:
         # Run classifier and write model annotation JSON
         classifier.File(audio_file, printSummary=False)
@@ -232,7 +229,24 @@ def validate_model(model_file_path, validation_data_directory, last=None, writeF
         best_matches = (matches.sort("iou", descending=True).group_by(["model_start", "model_end", "model_low", "model_high"]).head(1))
         all_best_matches.append(best_matches)
         all_model_annotations.append(model_df)
-        all_reference_annotations.append(reference_df)   
+        if writeFile:
+            # --- Per-file CSV row (reconstructed) ---
+            # Count model detections for this file
+            model_count_file = model_df.shape[0]
+            # Count reference annotations for this file
+            ref_count_file = reference_df.shape[0]
+            # Count true positives for this file
+            tp_count_file = best_matches.shape[0]
+            # False positives = model detections not matched
+            fp_count_file = model_count_file - tp_count_file
+            # False negatives = reference annotations not matched
+            fn_count_file = ref_count_file - tp_count_file
+            # Build per-file row
+            file_row = polars.DataFrame({"file": [filename],  "true_positives": [tp_count_file], "false_positives": [fp_count_file], "false_negatives": [fn_count_file], "model_count": [model_count_file], "ref_count": [ref_count_file]})
+            # Append to list
+            all_file_summaries.append(file_row)
+            # Concatenate per-file summaries
+            file_summary_df = safe_concat(all_file_summaries)
     # Concatenate all results
     reference_all = safe_concat(all_reference_annotations)  
     model_all = safe_concat(all_model_annotations)
@@ -243,8 +257,13 @@ def validate_model(model_file_path, validation_data_directory, last=None, writeF
         print(colorama.Back.RED + "WARNING: No reference annotations found in validation set." + colorama.Back.RESET)
     if best_matches_all.is_empty():
         print(colorama.Back.RED + "WARNING: No matches found (IoU threshold too high or no overlapping calls)." + colorama.Back.RESET)
+    if writeFile:
+        # Write per-file CSV
+        out_path = os.path.join(os.path.dirname(model_file_path), f"{os.path.basename(model_file_path)}_per_file_scores.csv")
+        file_summary_df.write_csv(out_path)
+        print("Wrote per-file CSV:", out_path)
     # Compute per-class CSV
-    f1_score = write_per_model_class_csv(best_matches_all, model_all, reference_all, class_names, model_file_path, last, writeFile)
+    f1_score = write_per_model_class_csv(best_matches_all, model_all, reference_all, class_names, model_file_path, last, max, writeFile)
     return f1_score
  
 if __name__ == "__main__":
