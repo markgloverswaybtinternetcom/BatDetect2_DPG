@@ -1,6 +1,6 @@
 import argparse, json, warnings, numpy, torch, datetime, os, glob, copy, polars, collections
 import torchaudio, librosa, traceback, colorama, inspect, wakepy, random, math, scipy
-import Net2dFast, Classifier, validate_model
+import Net2dFast, Classifier, validate_model, training_debug_logger
 
 warnings.filterwarnings("ignore", category=UserWarning)
 torch.set_printoptions(threshold=torch.inf, linewidth=200, precision=3)
@@ -12,7 +12,7 @@ DETECTION_OVERLAP = 0.01  # has to be within this number of ms to count as detec
 LEARNING_RATE = 0.001
 BATCH_SIZE = 8
 NUM_WORKERS = 4
-MIN_EPOCHS = 300
+MIN_EPOCHS = 400
 MAX_EPOCHS = 900
 TRAIN_FILE_USED_SEC = 1   # standarised length in seconds
 SPEC_TRAIN_WIDTH = 2560   # equivalent to 1 seoond,  units are number of time steps (before resizing is performed)
@@ -20,8 +20,7 @@ SPEC_TRAIN_WIDTH = 2560   # equivalent to 1 seoond,  units are number of time st
 DET_LOSS_WEIGHT = 1.0     # weight for the detection part of the loss
 SIZE_LOSS_WEIGHT = 0.1    # weight for the bbox size loss
 #CLASS_LOSS_WEIGHT  = 2.0  # original weight for the classification loss
-CONSISTENCY_LOSS_WEIGHT = 0.3
-#CONSISTENCY_LOSS_WEIGHT = 0.1	
+    
 GAUSSIAN_SIGMA = 12
 #Only used on first run until class difficulty found
 DEFAULT_CLASS_WEIGHTS = { 
@@ -557,6 +556,11 @@ def focal_loss(pred, gt, valid_mask=None, IsClass=False):
         else:
             per_class_loss = -(per_class_pos_sum + per_class_neg_sum) / num_pos
         return per_class_loss
+        
+    if torch.isnan(loss).any():
+        print(f"NaN detected in focal_loss pred min={pred.min().item()}, max={pred.max().item()}, gt.min={gt.min().item()}, max={gt.max().item()}")
+        if valid_mask is not None:
+            print("valid_mask unique:", valid_mask.unique())
     return loss
 
 def bbox_size_loss(pred_size, target_size):
@@ -573,6 +577,11 @@ def build_class_weight_vector(class_names, class_weight_dict, device):
     # Return as a torch tensor with NO grad
     return torch.tensor(weights, dtype=torch.float32).to(device)
 
+def get_consistency_weight(epoch):
+    if epoch < 100: return 0.0      # no consistency early
+    elif epoch < 300: return 0.3      # gentle regulariser
+    else: return 0.7      # full strength once species are learned	
+
 class Trainer():
     def __init__(self, device, class_names, class_weight_vector, ip_height, len_train_loader):
         self.device = device
@@ -586,7 +595,6 @@ class Trainer():
             self.species_to_class_indices[species].append(idx)
         self.species_list = list(self.species_to_class_indices.keys())
         self.num_species = len(self.species_list)
-        print(f"Trainer {self.num_species=}")
         # Buzz classes (weight == 0)
         self.buzz_class_mask = (self.class_weight_vector == 0).float().view(1, self.num_classes, 1, 1)
         self.ignore_class_mask = (self.buzz_class_mask > 0).float()        
@@ -600,8 +608,180 @@ class Trainer():
             class_indices = self.species_to_class_indices[species]
             species_map[s_idx, class_indices] = 1.0
         self.species_map_matrix = species_map
+        self.debug_logger = training_debug_logger.DebugLogger()
 
     def loss_fun(self, outputs, target_det, target_size, target_class_minus1):
+        # --- Detection + size loss ---
+        detectionLoss = DET_LOSS_WEIGHT * focal_loss(outputs.pred_det, target_det)
+        boundingBoxSizeLoss = SIZE_LOSS_WEIGHT * bbox_size_loss(outputs.pred_size, target_size)
+        # --- Frame masks ---
+        valid_mask = (target_class_minus1.sum(1) > 0).float().unsqueeze(1)
+        silent_mask = (valid_mask.sum(dim=(1, 2, 3)) == 0).float()
+        ignored_frame_mask = ((target_class_minus1 * self.ignore_class_mask).sum(dim=(1, 2, 3)) > 0).float()
+        frame_mask = (1 - silent_mask) * (1 - ignored_frame_mask)
+        # --- Classification logits for class loss ---
+        p_class_prob = outputs.pred_class[:, :-1, :, :]
+        per_class_loss = focal_loss(p_class_prob, target_class_minus1, valid_mask=valid_mask, IsClass=True)
+        # --- Probabilities for width + consistency ---
+        p_class_prob = outputs.pred_class[:, :-1, :, :]          # (B, 42, 128, 1616)
+        p_frame = p_class_prob.max(dim=3).values.permute(0, 2, 1)  # (B, 128, 42)
+        B, T, C = p_frame.shape
+        # --- Species collapse in probability space ---
+        species_frame = torch.matmul(p_frame, self.species_map_matrix.T.to(self.device))  # (B, T, S)
+        # convert to probabilities per frame
+        
+        ### added 18_8_2026 not yet tested
+        # --- Species probabilities ---
+        # outputs.pred_class is softmax over 43 classes
+        p_class_prob = outputs.pred_class[:, :-1, :, :]        # (B, 42, Freq, Time)
+        # Collapse frequency → keep time: (B, Time, 42)
+        p_time = p_class_prob.max(dim=2).values.permute(0, 2, 1)   # (B, T, 42)
+        # Species collapse in time
+        species_time = torch.matmul(p_time, self.species_map_matrix.T.to(self.device))   # (B, T, S)
+        # Convert to species probabilities per time frame
+        p_species_time = species_time / species_time.sum(dim=2, keepdim=True).clamp(min=1e-6)
+        # --- Species difference between consecutive time frames ---
+        species_diff_time = torch.abs(p_species_time[:, 1:, :] - p_species_time[:, :-1, :]).mean(dim=2)   # (B, T-1)
+        # --- Width via variance (confidence measure) ---
+        species_var_time = p_species_time.var(dim=2)        # (B, T)
+        frame_confidence = 1.0 - species_var_time           # inverse variance
+        confidence_norm = frame_confidence / frame_confidence.max().clamp(min=1e-6)
+        # --- Dynamic weighting (correct direction) ---
+        # Narrow = confident = strong consistency
+        # Wide   = uncertain = weak consistency
+        narrow_weight = 1.0
+        wide_weight   = 0.5
+        consistency_weight_time = torch.where( confidence_norm > 0.45, narrow_weight, wide_weight)   # (B, T)
+        # Pair weight between consecutive time frames        
+        pair_weight_time = 0.5 * (consistency_weight_time[:, 1:] + consistency_weight_time[:, :-1])  # (B, T-1)
+        pair_weight_time = pair_weight_time.clamp(max=1.0)
+        # Mask silent/ignored frames
+        time_mask = frame_mask.unsqueeze(1).expand(-1, p_species_time.shape[1])   # (B, T)
+        pair_mask_time = time_mask[:, 1:] * time_mask[:, :-1]                     # (B, T-1)
+        # --- Final consistency loss ---
+        raw_consistency_time = (species_diff_time * pair_weight_time * pair_mask_time).sum() / pair_mask_time.sum().clamp(min=1)
+        CONSISTENCY_LOSS_WEIGHT = get_consistency_weight(self.epoch)
+        if self.epoch > 100 and float(per_class_loss.mean().item()) < 0.01:
+            # reduce consistency weight dynamically
+            CONSISTENCY_LOSS_WEIGHT = 0.3
+        consistency_loss = CONSISTENCY_LOSS_WEIGHT * raw_consistency_time
+        
+        """p_species = species_frame / species_frame.sum(dim=2, keepdim=True).clamp(min=1e-6)  # (B, T, S)
+        # --- Width via variance ---
+        species_var = p_species.var(dim=2)      # (B, T)
+        frame_width = species_var.mean(dim=1)   # (B,)
+        width_norm = frame_width / frame_width.max().clamp(min=1e-6)  # (0–1 per batch)
+        # --- Species difference between batch items (probabilities) ---
+        species_frame_mean_prob = p_species.mean(dim=1)  # (B, S)
+        species_diff = torch.abs(species_frame_mean_prob[1:] - species_frame_mean_prob[:-1]).mean(dim=1)  # (B-1), bounded in [0,1]
+        # --- Dynamic weighting (detached) ---
+        narrow_thresh = 0.45
+        narrow_weight = 0.3
+        wide_weight   = 1.2
+        frame_consistency_weight = torch.where(width_norm < narrow_thresh, narrow_weight, wide_weight).detach()  # (B,)
+        pair_weight = frame_consistency_weight[1:] * frame_consistency_weight[:-1]  # (B-1)
+        pair_mask   = frame_mask[1:] * frame_mask[:-1]                              # (B-1)
+        num_pairs   = pair_mask.sum().clamp(min=1)
+        raw_consistency = (species_diff * pair_weight * pair_mask).sum() / num_pairs
+        consistency_loss = CONSISTENCY_LOSS_WEIGHT * raw_consistency
+        # single, slightly looser clamp so it can influence training
+        consistency_loss = consistency_loss.clamp(max=0.02)"""
+        
+        if self.epoch % 50 == 0 and self.batch_idx == 0:
+            self.debug_logger.log({"epoch": int(self.epoch),
+                "batch_idx": int(self.batch_idx),
+                # classifier diagnostics
+                "class_loss_mean": float(per_class_loss.mean().item()),
+                "class_loss_max": float(per_class_loss.max().item()),
+                "class_logits_mean": float(outputs.pred_class_un_norm.mean().item()),
+                "class_logits_std": float(outputs.pred_class_un_norm.std().item()),
+                # time-based consistency diagnostics
+                "consistency_raw_time": float(raw_consistency_time.item()),
+                "consistency_loss": float(consistency_loss.item()),
+                "species_diff_time_mean": float(species_diff_time.mean().item()),
+                "species_diff_time_max": float(species_diff_time.max().item()),
+                # confidence / spread over time
+                "confidence_norm_mean": float(confidence_norm.mean().item()),
+                "confidence_norm_min": float(confidence_norm.min().item()),
+                "confidence_norm_max": float(confidence_norm.max().item()),
+                # NEW: consistency schedule + guardrail
+                "consistency_weight_used": float(CONSISTENCY_LOSS_WEIGHT),
+                "guardrail_triggered": bool(self.epoch > 100 and float(per_class_loss.mean().item()) < 0.01)})
+        return detectionLoss, boundingBoxSizeLoss, per_class_loss, consistency_loss
+    
+    """def loss_fun(self, outputs, target_det, target_size, target_class_minus1):
+        # --- Detection + size loss ---
+        detectionLoss = DET_LOSS_WEIGHT * focal_loss(outputs.pred_det, target_det)
+        boundingBoxSizeLoss = SIZE_LOSS_WEIGHT * bbox_size_loss(outputs.pred_size, target_size)
+        # --- Frame masks ---
+        valid_mask = (target_class_minus1.sum(1) > 0).float().unsqueeze(1)
+        silent_mask = (valid_mask.sum(dim=(1, 2, 3)) == 0).float()          # (B,)
+        ignored_frame_mask = ((target_class_minus1 * self.ignore_class_mask).sum(dim=(1, 2, 3)) > 0).float()   # (B,)
+        frame_mask = (1.0 - silent_mask) * (1.0 - ignored_frame_mask)       # (B,)
+        # --- Classification logits for class loss ---
+        p_class_prob = outputs.pred_class[:, :-1, :, :]
+        per_class_loss = focal_loss(p_class_prob, target_class_minus1, valid_mask=valid_mask, IsClass=True)
+        # --- Probabilities for width + consistency ---
+        # outputs.pred_class is already softmax over 43 classes
+        p_class_prob = outputs.pred_class[:, :-1, :, :]                     # (B, 42, 128, 1616)
+        # Collapse frequency → keep time: (B, T, C_class)
+        p_frame = p_class_prob.max(dim=3).values.permute(0, 2, 1)           # (B, 128, 42)
+        B, T, C = p_frame.shape
+        # --- Vectorised species collapse ---
+        species_frame = torch.matmul(p_frame, self.species_map_matrix.T.to(self.device))                                                                    # (B, T, S)
+        # --- Species probabilities ---
+        p_species = species_frame / species_frame.sum(dim=2, keepdim=True).clamp(min=1e-6)  # (B, T, S)
+        # --- Width via variance ---
+        species_var = p_species.var(dim=2)                                   # (B, T)
+        frame_width = species_var.mean(dim=1)                                # (B,)
+        # Normalise width in [0, 1], avoid exact zeros
+        width_norm = frame_width / frame_width.max().clamp(min=1e-6)         # (B,)
+        width_norm = width_norm.clamp(min=0.05)
+        # --- Species difference between batch items ---
+        species_frame_mean = species_frame.mean(dim=1)                       # (B, S)
+        species_diff = torch.abs(species_frame_mean[1:] - species_frame_mean[:-1]).sum(dim=1)  # (B-1)
+        # --- Smooth dynamic weighting (no extra clamps) ---
+        narrow_weight = 0.3
+        wide_weight   = 1.2
+        # Linear interpolation: width_norm=0 → narrow_weight, width_norm=1 → wide_weight
+        frame_consistency_weight = narrow_weight + (wide_weight - narrow_weight) * width_norm  # (B,)
+        # Pair weight: average, not product (keeps scale moderate)
+        pair_weight = 0.5 * (frame_consistency_weight[1:] + frame_consistency_weight[:-1])     # (B-1,)
+        # Pair mask from frame_mask
+        pair_mask = frame_mask[1:] * frame_mask[:-1]                                           # (B-1,)
+        num_pairs = pair_mask.sum().clamp(min=1.0)
+        # Consistency loss (single clamp at the end)
+        raw_consistency = (species_diff * pair_weight * pair_mask).sum() / num_pairs
+        consistency_loss = CONSISTENCY_LOSS_WEIGHT * raw_consistency
+        consistency_loss = consistency_loss.clamp(max=0.006)
+        # --- Debug ---
+        if self.epoch % 50 == 0 and self.batch_idx == 0:
+            self.debug_logger.log({
+                "epoch": int(self.epoch),
+                "batch_idx": int(self.batch_idx),
+                "width_norm_mean": float(width_norm.mean()),
+                "width_norm_min": float(width_norm.min()),
+                "width_norm_max": float(width_norm.max()),
+                "width_norm_median": float(numpy.median(width_norm.detach().cpu().numpy())),
+                "narrow_fraction": float((width_norm < 0.45).float().mean()),
+                "species_diff": species_diff,
+                "pair_weight": pair_weight,
+                "pair_mask": pair_mask,
+                "consistency_raw": float(raw_consistency.item()),
+                "consistency_clamped": float(consistency_loss.item()),
+                "class_loss_vector": per_class_loss.detach().cpu().numpy().tolist(),
+                "class_loss_mean": float(per_class_loss.mean().item()),
+                "class_loss_max": float(per_class_loss.max().item()),
+                "class_logits_mean": float(outputs.pred_class_un_norm.mean().item()),
+                "class_logits_std": float(outputs.pred_class_un_norm.std().item()),
+                "species_frame_mean": species_frame_mean,
+                "species_var_mean": float(species_var.mean().item()),
+                "species_var_min": float(species_var.min().item()),
+                "species_var_max": float(species_var.max().item()),
+            })
+        return detectionLoss, boundingBoxSizeLoss, per_class_loss, consistency_loss"""
+    
+    """def loss_fun(self, outputs, target_det, target_size, target_class_minus1):
         # --- Detection + size loss ---
         detectionLoss = DET_LOSS_WEIGHT * focal_loss(outputs.pred_det, target_det)
         boundingBoxSizeLoss = SIZE_LOSS_WEIGHT * bbox_size_loss(outputs.pred_size, target_size)
@@ -611,24 +791,27 @@ class Trainer():
         ignored_frame_mask = ((target_class_minus1 * self.ignore_class_mask).sum(dim=(1,2,3)) > 0).float()
         frame_mask = (1 - silent_mask) * (1 - ignored_frame_mask)
         # --- Classification logits for class loss ---
-        # pred_class: (B, C_class+1, T, F)
-        p_class_logits = outputs.pred_class[:, :-1, :, :]   # (B, C_class, T, F)
-        per_class_loss = focal_loss(p_class_logits, target_class_minus1, valid_mask=valid_mask, IsClass=True)
-        # --- Softmax probabilities for width + consistency ---
-        p_class_prob = torch.softmax(p_class_logits, dim=1)   # (B, C_class, T, F)
+        # pred_class_un_norm: (B, 43, 128, 1616) → drop background       
+        p_class_prob = outputs.pred_class[:, :-1, :, :]
+        per_class_loss = focal_loss(p_class_prob, target_class_minus1, valid_mask=valid_mask, IsClass=True)
+        # --- Probabilities for width + consistency ---
+        # outputs.pred_class is already softmax over 43 classes
+        p_class_prob = outputs.pred_class[:, :-1, :, :]             # (B, 42, 128, 1616)
         # Collapse frequency → keep time: (B, T, C_class)
-        p_frame = p_class_prob.mean(dim=3).permute(0, 2, 1)
+        p_frame = p_class_prob.max(dim=3).values.permute(0, 2, 1)         # (B, 128, 42)
         B, T, C = p_frame.shape
-        species_frame = torch.matmul(p_frame, self.species_map_matrix.T.to(self.device))   
+        # --- Vectorised species collapse ---
+        # self.species_map_matrix: (S, C_class) built in __init__
+        species_frame = torch.matmul(p_frame, self.species_map_matrix.T.to(self.device))  # (B, T, S)
         # --- Species probabilities ---
-        p_species = species_frame / species_frame.sum(dim=2, keepdim=True).clamp(min=1e-6)
-        # --- Width via variance (stable) ---
+        p_species = species_frame / species_frame.sum(dim=2, keepdim=True).clamp(min=1e-6)  # (B, T, S)
+        # --- Width via variance ---
         species_var = p_species.var(dim=2)          # (B, T)
         frame_width = species_var.mean(dim=1)       # (B,)
-        width_norm = frame_width / frame_width.max().clamp(min=1.0)
+        width_norm = frame_width / frame_width.max().clamp(min=1e-6)
         # --- Species difference between batch items ---
         species_frame_mean = species_frame.mean(dim=1)   # (B, S)
-        species_diff = torch.abs(species_frame_mean[1:] - species_frame_mean[:-1]).sum(dim=1)   # (B-1)
+        species_diff = torch.abs(species_frame_mean[1:] - species_frame_mean[:-1]).sum(dim=1) # (B-1)
         # --- Dynamic weighting ---
         narrow_weight = 0.3
         wide_weight   = 1.2
@@ -639,17 +822,36 @@ class Trainer():
         consistency_loss = CONSISTENCY_LOSS_WEIGHT * (species_diff * pair_weight * pair_mask).sum() / num_pairs
         consistency_loss = consistency_loss.clamp(max=0.006)
         # --- Debug ---
+        
         if self.epoch % 50 == 0 and self.batch_idx == 0:
-            print(
-                f"species_diff: {species_diff[:10].detach().cpu().numpy()}, "
-                f"pair_weight: {pair_weight[:10].detach().cpu().numpy().flatten()}, "
-                f"pair_mask: {pair_mask[:10].detach().cpu().numpy()}, "
-                f"consistency_raw: {(species_diff * pair_weight * pair_mask).sum().item() / num_pairs.item():.4f} "
-                f"consistency_clamped: {consistency_loss.item():.4f}")
-            w = width_norm.detach().cpu().numpy()
-            print(f"width_norm stats: mean={w.mean():.3f}, median={numpy.median(w):.3f} "
-                f"min={w.min():.3f} max={w.max():.3f}, narrow fraction: {(w < 0.45).mean()}")
-        return detectionLoss, boundingBoxSizeLoss, per_class_loss, consistency_loss
+            self.debug_logger.log({
+                "epoch": int(self.epoch),
+                "batch_idx": int(self.batch_idx),
+                # width_norm diagnostics
+                "width_norm_mean": float(width_norm.mean()),
+                "width_norm_min": float(width_norm.min()),
+                "width_norm_max": float(width_norm.max()),
+                "width_norm_median": float(numpy.median(width_norm.detach().cpu().numpy())),
+                "narrow_fraction": float((width_norm < 0.45).float().mean()),
+                # consistency diagnostics
+                "species_diff": species_diff,
+                "pair_weight": pair_weight,
+                "pair_mask": pair_mask,
+                "consistency_raw": float((species_diff * pair_weight * pair_mask).sum().item() / num_pairs.item()),
+                "consistency_clamped": float(consistency_loss.item()),
+                # classifier diagnostics
+                "class_loss_vector": per_class_loss.detach().cpu().numpy().tolist(),
+                "class_loss_mean": float(per_class_loss.mean().item()),
+                "class_loss_max": float(per_class_loss.max().item()),
+                "class_logits_mean": float(outputs.pred_class_un_norm.mean().item()),
+                "class_logits_std": float(outputs.pred_class_un_norm.std().item()),
+                # species distribution diagnostics
+                "species_frame_mean": species_frame_mean,
+                "species_var_mean": float(species_var.mean().item()),
+                "species_var_min": float(species_var.min().item()),
+                "species_var_max": float(species_var.max().item()),
+            })
+        return detectionLoss, boundingBoxSizeLoss, per_class_loss, consistency_loss"""
     
     def train(self, epoch, data_loader):
         self.epoch = epoch
@@ -685,7 +887,7 @@ class Trainer():
                 traceback.print_exc()
                 continue
         c = torch.tensor(all_consistency_losses)
-        print(f"{epoch=} consistency_loss mean={c.mean():.6f}, std={c.std():.6f}, min={c.min():.6f}, max={c.max():.6f}")
+        #print(f"{epoch=} consistency_loss mean={c.mean():.6f}, std={c.std():.6f}, min={c.min():.6f}, max={c.max():.6f}")
         det_loss_avg = det_loss_sum / count; size_loss_avg = size_loss_sum / count; class_loss_avg = weighted_per_class_loss_sum.sum() / count; consistency_loss_avg = consistency_sum / count
         
         return float(det_loss_avg), float(size_loss_avg), float(class_loss_avg), float(consistency_loss_avg), self.scheduler.get_last_lr()[0]
@@ -735,7 +937,7 @@ def main():
                     model_path = os.path.join(args.model_dir, model_file_name)
                     torch.save(op_state, model_path)
                     if len(f1_history) >= 1:
-                        f1_score = validate_model.validate_model(model_path, args.validation_data_dir , last=f1_history[-1], writeFile=False)
+                        f1_score = validate_model.validate_model(model_path, args.validation_data_dir , last=f1_history[-1], max=max_validate_f1_score, writeFile=False)
                     else:
                         f1_score = validate_model.validate_model(model_path, args.validation_data_dir , writeFile=False)
                     if f1_score > max_validate_f1_score:
