@@ -219,16 +219,22 @@ def validate_model(model_file_path, validation_data_directory, last=None, max=No
         ).clip(lower_bound=0)
         freq_union = (polars.max_horizontal("model_high", "reference_high") - polars.min_horizontal("model_low", "reference_low"))
         pairs = pairs.with_columns([ (freq_intersection / freq_union).alias("frequency_iou") ])
-        pairs = pairs.with_columns([ (polars.col("time_iou") * polars.col("frequency_iou")).alias("iou")])        
+        pairs = pairs.with_columns([ (polars.col("time_iou") * polars.col("frequency_iou")).alias("iou")]) 
         # Filter valid matches
         matches = pairs.filter(
             (polars.col("model_class") == polars.col("species")) &
             (polars.col("model_event") == polars.col("call_type")) &
             (polars.col("iou") >= MIN_IOU))
-        # Greedy best match per model call
-        best_matches = (matches.sort("iou", descending=True).group_by(["model_start", "model_end", "model_low", "model_high"]).head(1))
+            
+        matches = matches.with_columns(polars.concat_str(["model_start","model_end","model_low","model_high",
+            "reference_start","reference_end","reference_low","reference_high"]).alias("pair_key"))
+        matches = matches.unique(subset=["pair_key"])
+        best_matches = (matches.sort("iou", descending=True).group_by("pair_key").head(1))  
+        best_matches = best_matches.drop("pair_key")
+
         all_best_matches.append(best_matches)
         all_model_annotations.append(model_df)
+
         if writeFile:
             # --- Per-file CSV row (reconstructed) ---
             # Count model detections for this file
