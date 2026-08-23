@@ -211,19 +211,19 @@ class SpecDisplay():
     def ShowSpeciesCombo_changed(self, sender, app_data, user_data):
         """Allows user to find highest probable of a species in a long file"""
         print(f"ShowSpeciesCombo_changed {app_data=}")
-        sl = self.SpeciesLanguage
-        ids = app_data.split('-')
-        species = ids[0]
-        if sl == "EnglishAbbrev": sl = "English"
-        id = self.SpeciesNames.index[self.SpeciesNames[sl]==species].tolist()
-        if len(ids) > 1: 
-            call_type = ids[1]
+        lang = self.SpeciesLanguage
+        fields = app_data.split('-')
+        species = fields[0]
+        if lang == "EnglishAbbrev": lang = "English"
+        speciesId = self.SpeciesNames.index[self.SpeciesNames[lang]==species].tolist()
+        if len(fields) > 1: 
+            call_type = fields[1]
             ct = self.CallTypes.index(call_type)
         else: 
             ct = 0
             call_type = self.CallTypes[ct]
         print(f"ShowSpeciesCombo_changed {species=} {call_type=}")
-        t1 = self.calls.FindSpeciesMaxProb(id, ct)
+        t1 = self.calls.FindSpeciesMaxProb(speciesId, ct)
         if t1 > self.Range / 2: 
             if t1 + self.Range / 2 < self.duration: 
                 self.minT =  t1 - self.Range / 2; self.maxT =  t1 + self.Range / 2

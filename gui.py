@@ -844,6 +844,7 @@ class MainWindow():
             self.SpecDisplay1.dir = os.path.join(self.echoMeterDir, self.FilesDF[dfRow, "SessionName"])
         try:
             if self.lastRow is not None and gRow != self.lastRow:
+                self.FileMinTs[self.lastRow] = self.ActiveDisplay.minT
                 dpg.unhighlight_table_row(table, self.lastRow)
         except: print(colorama.Fore.RED + "TableRow_selected dpg bug" + colorama.Fore.RESET)
         dpg.highlight_table_row(table, gRow, color=[0,150,0])
