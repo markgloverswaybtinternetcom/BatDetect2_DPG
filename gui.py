@@ -129,15 +129,9 @@ class MainWindow():
                 dpg.add_theme_color(dpg.mvThemeCol_PlotHistogram, (0, 0, 100, 255), category=dpg.mvThemeCat_Core)
         with dpg.theme() as table_theme:
             with dpg.theme_component(dpg.mvTable):
-                dpg.add_theme_color(dpg.mvThemeCol_HeaderActive, (0, 0, 0, 0), category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_HeaderHovered, (0, 150, 0, 50), category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_HeaderActive, (0, 150, 0, 50), category=dpg.mvThemeCat_Core)
                 dpg.add_theme_color(dpg.mvThemeCol_Header, (0, 0, 0, 0), category=dpg.mvThemeCat_Core)
-        with dpg.theme() as self.no_hover_theme:
-            with dpg.theme_component(dpg.mvTableRow):
-                bg_color = (50, 50, 50, 255) 
-                dpg.add_theme_color(dpg.mvThemeCol_HeaderHovered, bg_color) # less distracting Hover colour
-        with dpg.theme() as self.line_theme:
-           with dpg.theme_component(dpg.mvLineSeries):
-                  dpg.add_theme_color(dpg.mvPlotCol_Line, (200, 200, 200, 255), category=dpg.mvThemeCat_Plots)     
         # apply style to individual elements
         dpg.bind_item_theme(SelectFileButton, greenButton_theme)
         dpg.bind_item_theme(self.FileTable, table_theme)
@@ -175,7 +169,7 @@ class MainWindow():
             matching_rows = (self.FilesDF.with_row_count("row_nr").filter(polars.col("Filename") == config["file"]).select("row_nr").to_series().to_list())
             if len(matching_rows) > 0:
                 row = matching_rows[0]
-                dpg.highlight_table_row(self.FileTable, row, color=[0,100,0])
+                dpg.highlight_table_row(self.FileTable, row, color=[0,150,0])
                 self.ScrollToRow(row)
                 self.lastRow = row
                 self.MultiFile = True; self.resize_handler(0, None, None)
@@ -193,7 +187,7 @@ class MainWindow():
                     row = matching_rows[0]
                     try:
                         print(f"MainWindow {config['file']=}, {row=}")
-                        dpg.highlight_table_row(self.FileTable, row, color=[0,100,0]) 
+                        dpg.highlight_table_row(self.FileTable, row, color=[0,150,0]) 
                         self.ScrollToRow(row)
                         self.lastRow = row
                         self.MultiFile = True; self.resize_handler(0, None, None)
@@ -849,10 +843,10 @@ class MainWindow():
         if len(config["echoMeterDir"]) > 0 and  not (self.FilesDF[dfRow, "SessionName"] in self.echoMeterDir):
             self.SpecDisplay1.dir = os.path.join(self.echoMeterDir, self.FilesDF[dfRow, "SessionName"])
         try:
-            if self.lastRow is not None:
+            if self.lastRow is not None and gRow != self.lastRow:
                 dpg.unhighlight_table_row(table, self.lastRow)
         except: print(colorama.Fore.RED + "TableRow_selected dpg bug" + colorama.Fore.RESET)
-        dpg.highlight_table_row(table, gRow, color=[0,100,0])
+        dpg.highlight_table_row(table, gRow, color=[0,150,0])
         file = df[dfRow, "Filename"] 
         self.lastRow = gRow
         self.LoadClassifiedFile(os.path.join(self.SpecDisplay1.dir,file), self.SpecDisplay1, minT=self.FileMinTs[dfRow])
@@ -863,7 +857,6 @@ class MainWindow():
         new_row = polars.DataFrame({ "Filename": [file], "Bat Call": [result]})
         self.FilesDF.extend(new_row)
         with dpg.table_row(parent=self.FileTable, height=ROW_PXL * config["scale"]) as tRow:
-            dpg.bind_item_theme(tRow, self.no_hover_theme)  # Apply theme to row
             dt = utils.FileDate(file)
             if isinstance(dt, datetime.datetime): file = f"{file} ({dt.strftime('%d/%m/%Y %H:%M:%S')})"
             dpg.add_selectable(label=file, callback=self.TableRow_selected, span_columns=True, user_data=[self.FileTable, self.FilesDF, r, r])
@@ -898,7 +891,6 @@ class MainWindow():
                         nRow -= 1
                         break # ignore file that does not exist
                     tRow = dpg.add_table_row(parent=table, height=ROW_PXL * config["scale"])
-                    dpg.bind_item_theme(tRow, self.no_hover_theme)  # Apply theme to row
                     dt = utils.FileDate(a)
                     if isinstance(dt, datetime.datetime):
                         a = f"{a} ({dt.strftime('%d/%m/%Y %H:%M:%S')})"
@@ -932,7 +924,6 @@ class MainWindow():
         nRow = 0
         for r in range(nRows):
             with dpg.table_row(parent=table, height=ROW_PXL * config["scale"]) as tRow:
-                dpg.bind_item_theme(tRow, self.no_hover_theme)  # Apply theme to row
                 for c in range(nCols):  
                     col_name = self.FilesDF.columns[c]
                     a = self.FilesDF[r, col_name] 
