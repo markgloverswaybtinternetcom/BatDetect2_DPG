@@ -74,9 +74,8 @@ def write_per_model_class_csv(best_matches_all, model_all, reference_all, class_
     per_class = per_class.fill_null(0)
     # Compute FP and FN
     per_class = per_class.with_columns([
-        (polars.col("model_count") - polars.col("true_positives")).alias("false_positives"),
-        (polars.col("ref_count") - polars.col("true_positives")).alias("false_negatives")
-    ])
+        (polars.col("model_count").cast(polars.Int64) - polars.col("true_positives")).alias("false_positives"),
+        (polars.col("ref_count").cast(polars.Int64) - polars.col("true_positives")).alias("false_negatives")])    
     # Compute precision, recall, F1
     per_class = per_class.with_columns([(polars.col("true_positives") / (polars.col("true_positives") + polars.col("false_positives"))).alias("precision"),
         (polars.col("true_positives") / (polars.col("true_positives") + polars.col("false_negatives"))).alias("recall"),
