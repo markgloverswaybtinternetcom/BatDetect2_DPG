@@ -626,11 +626,7 @@ class Trainer():
         p_class_prob = outputs.pred_class[:, :-1, :, :]          # (B, 42, 128, 1616)
         p_frame = p_class_prob.max(dim=3).values.permute(0, 2, 1)  # (B, 128, 42)
         B, T, C = p_frame.shape
-        # --- Species collapse in probability space ---
-        species_frame = torch.matmul(p_frame, self.species_map_matrix.T.to(self.device))  # (B, T, S)
-        # convert to probabilities per frame
-        
-        ### added 18_8_2026 not yet tested
+
         # --- Species probabilities ---
         # outputs.pred_class is softmax over 43 classes
         p_class_prob = outputs.pred_class[:, :-1, :, :]        # (B, 42, Freq, Time)
@@ -662,8 +658,8 @@ class Trainer():
         raw_consistency_time = (species_diff_time * pair_weight_time * pair_mask_time).sum() / pair_mask_time.sum().clamp(min=1)
         CONSISTENCY_LOSS_WEIGHT = get_consistency_weight(self.epoch)
         if self.epoch > 100 and float(per_class_loss.mean().item()) < 0.01:
-            # reduce consistency weight dynamically
-            CONSISTENCY_LOSS_WEIGHT = 0.3
+            # increase consistency weight dynamically when classifier becomes over-confident
+            CONSISTENCY_LOSS_WEIGHT = 0.7
         consistency_loss = CONSISTENCY_LOSS_WEIGHT * raw_consistency_time
         
         """p_species = species_frame / species_frame.sum(dim=2, keepdim=True).clamp(min=1e-6)  # (B, T, S)
