@@ -2,7 +2,7 @@ import os, json, polars, glob, argparse, colorama, sys, warnings
 from Classifier import Classifier
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-MIN_IOU = 0.2 
+MIN_IOU = 0.15
 REFERENCE_COLS = [ "reference_start", "reference_end", "reference_low", "reference_high", "species", "call_type"]
 MODEL_COLS = [ "model_start", "model_end", "model_low", "model_high", "model_class", "model_event"]
 MATCH_COLS = ["model_start", "model_end", "model_low", "model_high", "model_class", "model_event", 
@@ -154,10 +154,10 @@ def validate_model(model_file_path, validation_data_directory, last=None, max=No
     for audio_file in audio_files:
         # Run classifier and write model annotation JSON
         classifier.File(audio_file, printSummary=False)
-        audio_dir = os.path.dirname(audio_file)
+        audio_dir = os.path.basename(os.path.dirname(audio_file))
         filename = os.path.basename(audio_file)
-        model_json_path = os.path.join(audio_dir, "ann", filename + ".json")
-        reference_json_path = os.path.join(audio_dir, "valid_ann", filename + ".json")
+        model_json_path = os.path.join(validation_data_directory, audio_dir, "ann", filename + ".json")
+        reference_json_path = os.path.join(validation_data_directory, audio_dir, "valid_ann", filename + ".json")
         # Load JSON
         if not os.path.exists(model_json_path):
             print("Missing model JSON in:", model_json_path)
@@ -212,19 +212,14 @@ def validate_model(model_file_path, validation_data_directory, last=None, max=No
         )
         pairs = pairs.with_columns([(time_intersection / time_union).alias("time_iou")])         
         freq_intersection = (
-            polars.min_horizontal("model_high", "reference_high")
-            -
-            polars.max_horizontal("model_low", "reference_low")
-        ).clip(lower_bound=0)
+            polars.min_horizontal("model_high", "reference_high") - polars.max_horizontal("model_low", "reference_low")).clip(lower_bound=0)
         freq_union = (polars.max_horizontal("model_high", "reference_high") - polars.min_horizontal("model_low", "reference_low"))
         pairs = pairs.with_columns([ (freq_intersection / freq_union).alias("frequency_iou") ])
         pairs = pairs.with_columns([ (polars.col("time_iou") * polars.col("frequency_iou")).alias("iou")]) 
         # Filter valid matches
-        matches = pairs.filter(
-            (polars.col("model_class") == polars.col("species")) &
+        matches = pairs.filter((polars.col("model_class") == polars.col("species")) &
             (polars.col("model_event") == polars.col("call_type")) &
-            (polars.col("iou") >= MIN_IOU))
-            
+            (polars.col("iou") >= MIN_IOU))           
         matches = matches.with_columns(polars.concat_str(["model_start","model_end","model_low","model_high",
             "reference_start","reference_end","reference_low","reference_high"]).alias("pair_key"))
         matches = matches.unique(subset=["pair_key"])
@@ -247,7 +242,7 @@ def validate_model(model_file_path, validation_data_directory, last=None, max=No
             # False negatives = reference annotations not matched
             fn_count_file = ref_count_file - tp_count_file
             # Build per-file row
-            file_row = polars.DataFrame({"file": [filename],  "true_positives": [tp_count_file], "false_positives": [fp_count_file], "false_negatives": [fn_count_file], "model_count": [model_count_file], "ref_count": [ref_count_file]})
+            file_row = polars.DataFrame({"dir": [audio_dir], "file": [filename],  "true_positives": [tp_count_file], "false_positives": [fp_count_file], "false_negatives": [fn_count_file], "model_count": [model_count_file], "ref_count": [ref_count_file]})
             # Append to list
             all_file_summaries.append(file_row)
             # Concatenate per-file summaries
