@@ -17,7 +17,7 @@ NFFT = 512; RELATIVE_HOP_LENGTH = 0.5 # spectogram settings
 ZOOM_NFFT = 2048; ZOOM_WIN_LENGTH = 256; ZOOM_HOP_LENGTH = 128
 PSD_WIDTH = 80;  SLIDER_W = 17; AMP_HT=80; SCROLL_HT=19; BUTTON_HT=19; STATUS_HT=24; SPACING=7; HEADER=30; COLOR_SCALE_W=55
 ROW_PXL = 17 # table scrolling
-
+    
 class SpecDisplay(): 
     """Specrogram display with attached power and amplitude graphs"""
     def __new__(cls, *args, **kwargs):
@@ -42,7 +42,7 @@ class SpecDisplay():
         self.EditMode = config["EditMode"]
         self.timeStep = self.Range = float(config["Range"]) 
         self.soundProgressBar = self.heatSeries = self.ampSeries = self.psdSeries = self.ZoomStart = self.LabelStartPlot = None
-        self.maxPercent = 100; self.minPercent = 0
+        self.maxPercent = 80; self.minPercent = 0; self.autoColourLevels = True
         self.calls = BatCalls(self)
         
         specHeight = config["height"] * 0.8 - (AMP_HT + SCROLL_HT + 2*BUTTON_HT + STATUS_HT / 2+ HEADER ) * config["scale"] - SPACING *7
@@ -201,11 +201,13 @@ class SpecDisplay():
     def MinSlider_callback(self, sender, app_data, user_data):
         """Slider sets the black to coloured boundary"""
         self.minPercent = app_data
+        self.autoColourLevels = False
         self.DisplaySpectogram(UpdateMin= False, sound=False)
 
     def MaxSlider_callback(self, sender, app_data, user_data):
         """Slider sets the max coloured boundary, all above will be that colour"""
         self.maxPercent = app_data
+        self.autoColourLevels = False
         self.DisplaySpectogram(UpdateMin= False, sound=False)
         
     def ShowSpeciesCombo_changed(self, sender, app_data, user_data):
@@ -303,7 +305,7 @@ class SpecDisplay():
         self.SoundFile.close()
         f = os.path.join(self.dir, self.file)
         if os.path.exists(f): os.remove(f)
-        
+    
     def LoadFileSegment(self):
         """Loads just the data needed for the current spectrogram"""
         print(f"LoadFileSegment {self.minT=} {self.maxT=} {self.minF=} {self.maxF=} ")
@@ -319,14 +321,14 @@ class SpecDisplay():
         
         if self.Range <= 0.5:
             specTransform = torchaudio.transforms.Spectrogram(n_fft=ZOOM_NFFT, hop_length=ZOOM_HOP_LENGTH, win_length=ZOOM_WIN_LENGTH, power=1, window_fn=torch.blackman_window)
+            nfft = ZOOM_NFFT
         else:
             specTransform = torchaudio.transforms.Spectrogram(n_fft=nfft, hop_length=int(nfft*RELATIVE_HOP_LENGTH), power=1, window_fn=torch.blackman_window)#power: 1=magnitude, 2=power
-        print(f"LoadFileSegment specTransform {waveformTensor.shape=}")  
+        print(f"LoadFileSegment specTransform {waveformTensor.shape=}")
         spectrogram = specTransform(waveformTensor) # [Channels, Frequency Bins ,Time Steps]
-        
         print(f"LoadFileSegment specTransform {waveformTensor.shape=} = {spectrogram.shape=}")    
         if self.sample_rate > STD_SAMPLING: 
-            n =  NFFT // 2 +1
+            n =  nfft // 2 +1
             print(f"LoadFileSegment top {spectrogram.shape[1] - n} frequencies cut off")
             spectrogram = spectrogram[:, :n, :]# cut off higher frequencies
         elif self.sample_rate < STD_SAMPLING:
@@ -367,6 +369,7 @@ class SpecDisplay():
         if spectrogram.shape[0] > 1:
             spectrogram = torch.mean(spectrogram, dim=0).unsqueeze(0) # stereo to mono
             print(f"LoadFileSegment {spectrogram.shape[0]} channels to mono")
+        print(f"LoadFileSegment2 {spectrogram.shape=}")
         return spectrogram, waveformTensor[0].numpy()
     
     def RectOnSpec(self, startPoint, endPoint):
@@ -400,7 +403,7 @@ class SpecDisplay():
         spectrogram, self.Recording = self.LoadFileSegment()
         self.ZoomRecording = None
         self.npSpec = spectrogram[0].numpy()
-        if UpdateMin:
+        if UpdateMin and self.autoColourLevels:
             hist, bin_edges = numpy.histogram(self.npSpec, 100)
             self.minPercent = int(hist.argmax()+1)
             dpg.set_value(self.MinSlider, self.minPercent)
@@ -414,7 +417,7 @@ class SpecDisplay():
         self.specRows = self.npSpec.shape[0]; self.specCols = self.npSpec.shape[1] 
         if self.heatSeries is not None: dpg.delete_item(self.heatSeries); self.heatSeries = None
         self.heatSeries = dpg.add_heat_series(values, rows=self.specRows, cols=self.specCols, parent=self.specYaxis, 
-            format="", scale_min=self.minA, scale_max=self.maxA, bounds_min=[self.minT,self.minF], bounds_max=[self.maxT,self.maxF]) 
+            format="", scale_min=self.minA, scale_max=self.maxA, bounds_min=[self.minT, self.minF], bounds_max=[self.maxT, self.maxF]) 
         dpg.configure_item(self.colormap_scale, min_scale=self.minA)
         dpg.configure_item(self.colormap_scale, max_scale=self.maxA)
         dpg.fit_axis_data(self.specXaxis) # cancel any zoom
