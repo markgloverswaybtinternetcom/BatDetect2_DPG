@@ -61,11 +61,12 @@ class EchoMeter():
             self.GpsFilesDF.write_csv(os.path.join(self.echoMeterPath, 'GpsBatCallFiles.csv'))      
         avgLat = self.GpsFilesDF.select(polars.col("Lat").mean()).item()
         avgLong = self.GpsFilesDF.select(polars.col("Long").mean()).item()
-        map = folium.Map(location= [avgLat, avgLong] , zoom_start=17, width='100%', height='100%',
-            tiles='https://tile.openstreetmap.org/{z}/{x}/{y}.png', attr='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors')
+        map = folium.Map(location= [avgLat, avgLong] , zoom_start=17, width='100%', height='100%', tiles='https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', attr='© OpenStreetMap contributors')
+        """map = folium.Map(location= [avgLat, avgLong] , zoom_start=17, width='100%', height='100%',
+            tiles='https://tile.openstreetmap.org/{z}/{x}/{y}.png', attr='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors')"""
         if Satellite:
             tile = folium.TileLayer( tiles = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-                attr = 'Esri', name = 'Esri Satellite', overlay = False, control = True).add_to(map)
+                attr = 'Esri', name = 'Esri Satellite', overlay = False, referrer_policy="strict-origin", control = True).add_to(map)
         if separateRubbish:
             rubbishDirPath = self.echoMeterPath + "/rubbish"
             os.rename(self.TE_DirPath, rubbishDirPath)
