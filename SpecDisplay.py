@@ -245,8 +245,7 @@ class SpecDisplay():
             with dpg.theme_component(dpg.mvSliderFloat):
                 dpg.add_theme_style(dpg.mvStyleVar_GrabMinSize, grabSize, category=dpg.mvThemeCat_Core)
         dpg.bind_item_theme(self.ScrollBar, slider_theme)        
-        dpg.set_value(self.ScrollBar, self.minT) 
-        
+        dpg.set_value(self.ScrollBar, self.minT)      
  
     def LoadFile(self, filepath, titleExtra="", minT=None, timeExpand=False):
         """Loads the summary data for the whole sound file"""
@@ -270,15 +269,11 @@ class SpecDisplay():
             dpg.set_item_label(self.specPlot, f"Spectrogram of {filepath[len(userPath)+1:]} {utils.FileDate(filename)} {titleExtra}")
         else: dpg.set_item_label(self.specPlot, f"Spectrogram of {filepath} {utils.FileDate(filename)} {titleExtra}")
         self.UpdateScrollBar()
-        grabSize = self.sliderWidth * self.Range / self.duration
-        with dpg.theme() as slider_theme:
-            with dpg.theme_component(dpg.mvSliderFloat):
-                dpg.add_theme_style(dpg.mvStyleVar_GrabMinSize, grabSize, category=dpg.mvThemeCat_Core)
-        dpg.bind_item_theme(self.ScrollBar, slider_theme)
         self.dir = os.path.dirname(filepath)
         self.file = os.path.basename(filepath)
         if minT is not None and minT > 0: self.minT = minT
         else: self.minT = self.calls.FindFirstConsecutive()
+        
         dpg.set_value(self.ScrollBar, self.minT) 
         if self.minT + self.Range > self.duration: 
             self.maxT = self.duration
@@ -286,6 +281,7 @@ class SpecDisplay():
             else: self.minT  = 0
         else: self.maxT = self.minT + self.Range
         dpg.set_value(self.ScrollBar, self.minT)
+        
         self.DisplaySpectogram()
         if self.sample_rate < 50000:
             self.Status(f"Sample rate = {self.sample_rate / 1000:.1f}kHz FILE NOT ULTRASONIC")
@@ -310,6 +306,7 @@ class SpecDisplay():
         """Loads just the data needed for the current spectrogram"""
         print(f"LoadFileSegment {self.minT=} {self.maxT=} {self.minF=} {self.maxF=} ")
         nSamples = int(self.sample_rate * (self.maxT - self.minT))
+        print(f"LoadFileSegment {nSamples=} {self.sample_rate=} seek {int(self.sample_rate * self.minT)}")
         self.SoundFile.seek(int(self.sample_rate * self.minT))
         waveform_arr = numpy.swapaxes(self.SoundFile.read(nSamples, always_2d=True), 0, 1) #stereo wrong axis for Torch
         waveformTensor = torch.from_numpy(waveform_arr).float()
@@ -326,7 +323,6 @@ class SpecDisplay():
             specTransform = torchaudio.transforms.Spectrogram(n_fft=nfft, hop_length=ZOOM_HOP_LENGTH, win_length=ZOOM_WIN_LENGTH, power=1, window_fn=torch.blackman_window)
         else:
             specTransform = torchaudio.transforms.Spectrogram(n_fft=nfft, hop_length=int(nfft*RELATIVE_HOP_LENGTH), power=1, window_fn=torch.blackman_window)#power: 1=magnitude, 2=power
-        print(f"LoadFileSegment specTransform {waveformTensor.shape=}")
         spectrogram = specTransform(waveformTensor) # [Channels, Frequency Bins ,Time Steps]
         print(f"LoadFileSegment specTransform {waveformTensor.shape=} = {spectrogram.shape=}")    
         if self.sample_rate > STD_SAMPLING: 
@@ -340,14 +336,11 @@ class SpecDisplay():
             #print(f"LoadFileSegment pad higher frequencies {n=} {before=} -> {spectrogram.shape[1]=}")
             
         recordingLength = waveformTensor.shape[1]/self.sample_rate
-        #print(f"LoadFileSegment before  {spectrogram.shape=} / {self.sample_rate=} = {recordingLength=}, {self.Range=}")
         if recordingLength < self.Range:
             n = int(spectrogram.shape[2] * self.Range / recordingLength - spectrogram.shape[2])
             spectrogram = torch.nn.functional.pad(input=spectrogram, pad=(0,n,0,0,0,0), mode='constant', value=0) # add padding of time
             self.maxT = self.minT + self.Range
-        #print(f"torchaudio {waveformTensor.shape=}, {self.sample_rate=}")
         self.freqBins = spectrogram.shape[1]; self.timeSteps= spectrogram.shape[2]
-        #print(f"LoadFileSegment {waveformTensor.nbytes=}, {spectrogram.nbytes=}, channels={spectrogram.shape[0]}, {self.freqBins=}, {self.timeSteps=}")
         
         if self.maxF < MAX_FREQ_KHZ:
             removeHighBins = int(self.freqBins / MAX_FREQ_KHZ * (MAX_FREQ_KHZ - self.maxF))
@@ -372,7 +365,6 @@ class SpecDisplay():
         if spectrogram.shape[0] > 1:
             spectrogram = torch.mean(spectrogram, dim=0).unsqueeze(0) # stereo to mono
             print(f"LoadFileSegment {spectrogram.shape[0]} channels to mono")
-        print(f"LoadFileSegment2 {spectrogram.shape=}")
         return spectrogram, waveformTensor[0].numpy()
     
     def RectOnSpec(self, startPoint, endPoint):
@@ -456,11 +448,7 @@ class SpecDisplay():
         if  self.duration is not None:
             print(f"SpecDisplay Range_changed {self.Range=}")
             self.maxT += diff
-            grabSize = self.sliderWidth * self.Range / self.duration
-            with dpg.theme() as slider_theme:
-                with dpg.theme_component(dpg.mvSliderFloat):
-                    dpg.add_theme_style(dpg.mvStyleVar_GrabMinSize, grabSize, category=dpg.mvThemeCat_Core)
-            dpg.bind_item_theme(self.ScrollBar, slider_theme)        
+            self.UpdateScrollBar()       
             self.DisplaySpectogram(UpdateMin= False, sound = False)    
     
     def SetClassifyLabel(self, result):
