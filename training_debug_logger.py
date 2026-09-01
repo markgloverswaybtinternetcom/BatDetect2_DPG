@@ -2,10 +2,10 @@ import os, json, numpy
 from datetime import datetime
 
 class DebugLogger:
-    def __init__(self, log_dir="debug_logs"):
+    def __init__(self, log_name=None, log_dir="debug_logs"):
         os.makedirs(log_dir, exist_ok=True)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.log_path = os.path.join(log_dir, f"debug_{timestamp}.jsonl")
+        if log_name is None: log_name = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.log_path = os.path.join(log_dir, f"debug_{log_name}.jsonl")
 
     def log(self, data: dict):
         # Convert tensors → lists
