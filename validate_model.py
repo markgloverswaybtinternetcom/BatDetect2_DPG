@@ -2,7 +2,8 @@ import os, json, polars, glob, argparse, colorama, sys, warnings
 from Classifier import Classifier
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-MIN_IOU = 0.15
+MIN_IOU_HORSESHOE = 0.05
+MIN_IOU_OTHER = 0.15
 REFERENCE_COLS = [ "reference_start", "reference_end", "reference_low", "reference_high", "species", "call_type"]
 MODEL_COLS = [ "model_start", "model_end", "model_low", "model_high", "model_class", "model_event"]
 MATCH_COLS = ["model_start", "model_end", "model_low", "model_high", "model_class", "model_event", 
@@ -119,12 +120,12 @@ def write_per_model_class_csv(best_matches_all, model_all, reference_all, class_
     f1_score = summary.get_column("f1_score").sum(); 
     true_positives = summary.get_column("true_positives").sum(); false_positives = summary.get_column("false_positives").sum(); false_negatives = summary.get_column("false_negatives").sum()
     if last is not None and f1_score < last:       
-        print(colorama.Fore.RED + f"TOTAL {true_positives=}, {false_positives=}, {false_negatives=}, {f1_score=:.4f}"+ colorama.Fore.RESET)
+        print(colorama.Fore.RED + f"{model_name} TOTAL {true_positives=}, {false_positives=}, {false_negatives=}, {f1_score=:.4f}"+ colorama.Fore.RESET)
     else:
         if max is not None and f1_score >= max:
-            print(colorama.Fore.GREEN + f"TOTAL {true_positives=}, {false_positives=}, {false_negatives=}, {f1_score=:.4f}"+ colorama.Fore.RESET)
+            print(colorama.Fore.GREEN + f"{model_name} TOTAL {true_positives=}, {false_positives=}, {false_negatives=}, {f1_score=:.4f}"+ colorama.Fore.RESET)
         else:
-            print(colorama.Fore.YELLOW + f"TOTAL {true_positives=}, {false_positives=}, {false_negatives=}, {f1_score=:.4f}"+ colorama.Fore.RESET)
+            print(colorama.Fore.YELLOW + f"{model_name} TOTAL {true_positives=}, {false_positives=}, {false_negatives=}, {f1_score=:.4f}"+ colorama.Fore.RESET)
     return f1_score
 
 def latest_model_file(models_dir):
@@ -143,7 +144,7 @@ def latest_model_file(models_dir):
 
 def validate_model(model_file_path, validation_data_directory, last=None, max=None, writeFile=True):
     # Load classifier
-    classifier = Classifier(modelPath=model_file_path)
+    classifier = Classifier(modelPath=model_file_path, debug=False)
     class_names = classifier.modelParams["class_names"]
     # Collect all WAV files in validation directory
     audio_files = glob.glob(os.path.join(validation_data_directory, "**", "*.wav"), recursive=True)
@@ -217,15 +218,19 @@ def validate_model(model_file_path, validation_data_directory, last=None, max=No
         pairs = pairs.with_columns([ (freq_intersection / freq_union).alias("frequency_iou") ])
         pairs = pairs.with_columns([ (polars.col("time_iou") * polars.col("frequency_iou")).alias("iou")]) 
         # Filter valid matches
-        matches = pairs.filter((polars.col("model_class") == polars.col("species")) &
-            (polars.col("model_event") == polars.col("call_type")) &
-            (polars.col("iou") >= MIN_IOU))           
+        
+        matches = pairs.filter ( (polars.col("model_class") == polars.col("species")) & (polars.col("model_event") == polars.col("call_type")) &
+            (polars.when(polars.col("species") == "Rhinolophus ferrumequinum").then(polars.col("iou") >= MIN_IOU_HORSESHOE).otherwise(polars.col("iou") >= MIN_IOU_OTHER)) )
+
+        #matches = pairs.filter((polars.col("model_class") == polars.col("species")) & (polars.col("model_event") == polars.col("call_type")) & (polars.col("iou") >= MIN_IOU))           
         matches = matches.with_columns(polars.concat_str(["model_start","model_end","model_low","model_high",
             "reference_start","reference_end","reference_low","reference_high"]).alias("pair_key"))
         matches = matches.unique(subset=["pair_key"])
-        best_matches = (matches.sort("iou", descending=True).group_by("pair_key").head(1))  
+        
+        best_matches = (matches.sort("iou", descending=True).group_by(["model_start", "model_end", "model_low", "model_high"]).head(1))
+        
+        #best_matches = (matches.sort("iou", descending=True).group_by("pair_key").head(1))  
         best_matches = best_matches.drop("pair_key")
-
         all_best_matches.append(best_matches)
         all_model_annotations.append(model_df)
 
