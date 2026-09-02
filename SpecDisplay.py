@@ -114,7 +114,7 @@ class SpecDisplay():
     def LoadClassifiedFile(self, filepath, nRow=None, dirList=None, rememberDir=True, minT=None, timeExpand=False, refreshAnn=False):
         if refreshAnn:
             self.classify = Classifier()
-            results = self.classify.File(filepath, speciesLanguage=self.SpeciesLanguage, timeExpand=timeExpand)
+            results = self.classify.File(filepath, speciesLanguage=self.SpeciesLanguage, timeExpFact=10)
         titleExtra = ""
         dir = os.path.dirname(filepath); file = os.path.basename(filepath)
         if rememberDir: 
