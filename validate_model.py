@@ -89,22 +89,27 @@ def write_per_model_class_csv(best_matches_all, model_all, reference_all, class_
     # Reorder columns
     per_class = per_class.select([ "model_name", "species", "call_type", "true_positives", "false_positives", "false_negatives",
         "precision", "recall", "f1_score", "model_count", "ref_count"])
-    summary = per_class.select([
-        polars.lit(model_name).alias("model_name"),
-        polars.lit("ALL").alias("species"),
-        polars.lit("ALL").alias("call_type"),
-        polars.sum("true_positives").alias("true_positives"),
-        polars.sum("false_positives").alias("false_positives"),
-        polars.sum("false_negatives").alias("false_negatives"),
+    summary = per_class.select([ polars.lit(model_name).alias("model_name"), polars.lit("ALL").alias("species"), polars.lit("ALL").alias("call_type"),
+        polars.sum("true_positives").alias("true_positives"), polars.sum("false_positives").alias("false_positives"), polars.sum("false_negatives").alias("false_negatives"),
         (polars.sum("true_positives") / (polars.sum("true_positives") + polars.sum("false_positives"))).alias("precision"),
         (polars.sum("true_positives") / (polars.sum("true_positives") + polars.sum("false_negatives"))).alias("recall"),
         (2 * polars.sum("true_positives") / (2 * polars.sum("true_positives") +
           polars.sum("false_positives") + polars.sum("false_negatives"))).alias("f1_score"),
-        polars.sum("model_count").alias("model_count"),
-        polars.sum("ref_count").alias("ref_count"),
-    ])
+        polars.sum("model_count").alias("model_count"), polars.sum("ref_count").alias("ref_count")])
+    social_summary = (per_class.filter(polars.col("call_type") == "Social").select([polars.lit(model_name).alias("model_name"), polars.lit("ALL").alias("species"), polars.lit("SOCIAL").alias("call_type"),
+        polars.sum("true_positives").alias("true_positives"), polars.sum("false_positives").alias("false_positives"), polars.sum("false_negatives").alias("false_negatives"),
+        (polars.sum("true_positives") / (polars.sum("true_positives") + polars.sum("false_positives")) ).alias("precision"),
+        (polars.sum("true_positives") / (polars.sum("true_positives") + polars.sum("false_negatives")) ).alias("recall"),
+        (2 * polars.sum("true_positives") / (2 * polars.sum("true_positives") + polars.sum("false_positives") + polars.sum("false_negatives")) ).alias("f1_score"),
+        polars.sum("model_count").alias("model_count"), polars.sum("ref_count").alias("ref_count"),]))
+    echolocation_summary = (per_class.filter(polars.col("call_type") == "Echolocation").select([polars.lit(model_name).alias("model_name"), polars.lit("ALL").alias("species"), polars.lit("ECHOLOCATION").alias("call_type"),
+        polars.sum("true_positives").alias("true_positives"), polars.sum("false_positives").alias("false_positives"), polars.sum("false_negatives").alias("false_negatives"),
+        (polars.sum("true_positives") / (polars.sum("true_positives") + polars.sum("false_positives")) ).alias("precision"),
+        (polars.sum("true_positives") / (polars.sum("true_positives") + polars.sum("false_negatives")) ).alias("recall"),
+        (2 * polars.sum("true_positives") / (2 * polars.sum("true_positives") + polars.sum("false_positives") + polars.sum("false_negatives")) ).alias("f1_score"),
+        polars.sum("model_count").alias("model_count"), polars.sum("ref_count").alias("ref_count"),]))
     per_class = per_class.sort(["species", "call_type"])
-    per_class = polars.concat([per_class, summary])
+    per_class = polars.concat([per_class, echolocation_summary, social_summary, summary])
     # Round all float columns to the desired precision
     DECIMALS = 3
     per_class = per_class.select([
@@ -118,14 +123,16 @@ def write_per_model_class_csv(best_matches_all, model_all, reference_all, class_
         per_class.write_csv(out_path)
         print("Wrote:", out_path)
     f1_score = summary.get_column("f1_score").sum(); 
+    echolocation = echolocation_summary.get_column("f1_score").sum();
+    social = social_summary.get_column("f1_score").sum(); 
     true_positives = summary.get_column("true_positives").sum(); false_positives = summary.get_column("false_positives").sum(); false_negatives = summary.get_column("false_negatives").sum()
     if last is not None and f1_score < last:       
-        print(colorama.Fore.RED + f"{model_name} TOTAL {true_positives=}, {false_positives=}, {false_negatives=}, {f1_score=:.4f}"+ colorama.Fore.RESET)
+        print(colorama.Fore.RED + f"{model_name} TOTAL {true_positives=}, {false_positives=}, {false_negatives=}, {f1_score=:.4f}, {echolocation=:.4f}, {social=:.4f}"+ colorama.Fore.RESET)
     else:
         if max is not None and f1_score >= max:
-            print(colorama.Fore.GREEN + f"{model_name} TOTAL {true_positives=}, {false_positives=}, {false_negatives=}, {f1_score=:.4f}"+ colorama.Fore.RESET)
+            print(colorama.Fore.GREEN + f"{model_name} TOTAL {true_positives=}, {false_positives=}, {false_negatives=}, {f1_score=:.4f}, {echolocation=:.4f}, {social=:.4f}"+ colorama.Fore.RESET)
         else:
-            print(colorama.Fore.YELLOW + f"{model_name} TOTAL {true_positives=}, {false_positives=}, {false_negatives=}, {f1_score=:.4f}"+ colorama.Fore.RESET)
+            print(colorama.Fore.YELLOW + f"{model_name} TOTAL {true_positives=}, {false_positives=}, {false_negatives=}, {f1_score=:.4f}, {echolocation=:.4f}, {social=:.4f}"+ colorama.Fore.RESET)
     return f1_score
 
 def latest_model_file(models_dir):
