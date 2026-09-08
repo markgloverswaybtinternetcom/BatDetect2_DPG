@@ -290,6 +290,8 @@ def format_single_result(file_id: str, time_exp: float, duration: float, predict
         # Get a single class prediction for the file
         class_overall = overall_class_pred(predictions["det_probs"], predictions["class_probs"])
         class_name = class_names[numpy.argmax(class_overall)]
+        if "-" in class_name:
+            class_name = class_name.split('-')[0] # species only ignore call type
         annotations = get_annotations_from_preds(predictions, class_names)
     except (numpy.exceptions.AxisError, ValueError):
         # No detections

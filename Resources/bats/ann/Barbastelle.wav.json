@@ -1,0 +1,187 @@
+{
+  "id": "Barbastelle.wav",
+  "annotated": false,
+  "issues": false,
+  "notes": "Automatically generated.",
+  "time_exp": 1,
+  "duration": 1.0,
+  "annotation": [
+    {
+      "start_time": 0.0105,
+      "end_time": 0.0148,
+      "low_freq": 34921,
+      "high_freq": 47705,
+      "class": "Barbastella barbastellus",
+      "class_prob": 0.994,
+      "det_prob": 0.994,
+      "individual": "-1",
+      "event": "Echolocation"
+    },
+    {
+      "start_time": 0.0685,
+      "end_time": 0.0731,
+      "low_freq": 30625,
+      "high_freq": 40799,
+      "class": "Barbastella barbastellus",
+      "class_prob": 0.993,
+      "det_prob": 0.994,
+      "individual": "-1",
+      "event": "Echolocation"
+    },
+    {
+      "start_time": 0.1795,
+      "end_time": 0.1844,
+      "low_freq": 30625,
+      "high_freq": 41881,
+      "class": "Barbastella barbastellus",
+      "class_prob": 0.993,
+      "det_prob": 0.994,
+      "individual": "-1",
+      "event": "Echolocation"
+    },
+    {
+      "start_time": 0.2275,
+      "end_time": 0.2324,
+      "low_freq": 36640,
+      "high_freq": 46901,
+      "class": "Barbastella barbastellus",
+      "class_prob": 0.962,
+      "det_prob": 0.965,
+      "individual": "-1",
+      "event": "Echolocation"
+    },
+    {
+      "start_time": 0.2855,
+      "end_time": 0.2902,
+      "low_freq": 30625,
+      "high_freq": 40136,
+      "class": "Barbastella barbastellus",
+      "class_prob": 0.997,
+      "det_prob": 0.997,
+      "individual": "-1",
+      "event": "Echolocation"
+    },
+    {
+      "start_time": 0.3375,
+      "end_time": 0.3418,
+      "low_freq": 37500,
+      "high_freq": 46098,
+      "class": "Barbastella barbastellus",
+      "class_prob": 0.977,
+      "det_prob": 0.98,
+      "individual": "-1",
+      "event": "Echolocation"
+    },
+    {
+      "start_time": 0.3935,
+      "end_time": 0.3981,
+      "low_freq": 29765,
+      "high_freq": 40439,
+      "class": "Barbastella barbastellus",
+      "class_prob": 0.995,
+      "det_prob": 0.996,
+      "individual": "-1",
+      "event": "Echolocation"
+    },
+    {
+      "start_time": 0.4445,
+      "end_time": 0.4495,
+      "low_freq": 34921,
+      "high_freq": 45846,
+      "class": "Barbastella barbastellus",
+      "class_prob": 0.996,
+      "det_prob": 0.996,
+      "individual": "-1",
+      "event": "Echolocation"
+    },
+    {
+      "start_time": 0.5045,
+      "end_time": 0.5093,
+      "low_freq": 29765,
+      "high_freq": 39387,
+      "class": "Barbastella barbastellus",
+      "class_prob": 0.996,
+      "det_prob": 0.997,
+      "individual": "-1",
+      "event": "Echolocation"
+    },
+    {
+      "start_time": 0.6125,
+      "end_time": 0.6176,
+      "low_freq": 28906,
+      "high_freq": 40100,
+      "class": "Barbastella barbastellus",
+      "class_prob": 0.997,
+      "det_prob": 0.997,
+      "individual": "-1",
+      "event": "Echolocation"
+    },
+    {
+      "start_time": 0.6665,
+      "end_time": 0.6716,
+      "low_freq": 34921,
+      "high_freq": 46555,
+      "class": "Barbastella barbastellus",
+      "class_prob": 0.997,
+      "det_prob": 0.998,
+      "individual": "-1",
+      "event": "Echolocation"
+    },
+    {
+      "start_time": 0.7225,
+      "end_time": 0.7275,
+      "low_freq": 28906,
+      "high_freq": 40601,
+      "class": "Barbastella barbastellus",
+      "class_prob": 0.997,
+      "det_prob": 0.997,
+      "individual": "-1",
+      "event": "Echolocation"
+    },
+    {
+      "start_time": 0.7725,
+      "end_time": 0.7773,
+      "low_freq": 38359,
+      "high_freq": 46444,
+      "class": "Barbastella barbastellus",
+      "class_prob": 0.995,
+      "det_prob": 0.996,
+      "individual": "-1",
+      "event": "Echolocation"
+    },
+    {
+      "start_time": 0.8235,
+      "end_time": 0.8288,
+      "low_freq": 28906,
+      "high_freq": 40561,
+      "class": "Barbastella barbastellus",
+      "class_prob": 0.998,
+      "det_prob": 0.998,
+      "individual": "-1",
+      "event": "Echolocation"
+    },
+    {
+      "start_time": 0.8745,
+      "end_time": 0.8796,
+      "low_freq": 34921,
+      "high_freq": 47806,
+      "class": "Barbastella barbastellus",
+      "class_prob": 0.997,
+      "det_prob": 0.997,
+      "individual": "-1",
+      "event": "Echolocation"
+    },
+    {
+      "start_time": 0.9315,
+      "end_time": 0.9364,
+      "low_freq": 29765,
+      "high_freq": 39731,
+      "class": "Barbastella barbastellus",
+      "class_prob": 0.997,
+      "det_prob": 0.997,
+      "individual": "-1",
+      "event": "Echolocation"
+    }
+  ],
+  "class_name": "Barbastella barbastellus-Echolocation"
+}

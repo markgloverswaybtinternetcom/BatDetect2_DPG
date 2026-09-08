@@ -127,12 +127,12 @@ def write_per_model_class_csv(best_matches_all, model_all, reference_all, class_
     social = social_summary.get_column("f1_score").sum(); 
     true_positives = summary.get_column("true_positives").sum(); false_positives = summary.get_column("false_positives").sum(); false_negatives = summary.get_column("false_negatives").sum()
     if last is not None and f1_score < last:       
-        print(colorama.Fore.RED + f"{model_name} TOTAL {true_positives=}, {false_positives=}, {false_negatives=}, {f1_score=:.4f}, {echolocation=:.4f}, {social=:.4f}"+ colorama.Fore.RESET)
+        print(colorama.Fore.RED + f"{model_name} {true_positives=}, {false_positives=}, {false_negatives=}, {f1_score=:.4f}, {echolocation=:.4f}, {social=:.4f}"+ colorama.Fore.RESET)
     else:
         if max is not None and f1_score >= max:
-            print(colorama.Fore.GREEN + f"{model_name} TOTAL {true_positives=}, {false_positives=}, {false_negatives=}, {f1_score=:.4f}, {echolocation=:.4f}, {social=:.4f}"+ colorama.Fore.RESET)
+            print(colorama.Fore.GREEN + f"{model_name} {true_positives=}, {false_positives=}, {false_negatives=}, {f1_score=:.4f}, {echolocation=:.4f}, {social=:.4f}"+ colorama.Fore.RESET)
         else:
-            print(colorama.Fore.YELLOW + f"{model_name} TOTAL {true_positives=}, {false_positives=}, {false_negatives=}, {f1_score=:.4f}, {echolocation=:.4f}, {social=:.4f}"+ colorama.Fore.RESET)
+            print(colorama.Fore.YELLOW + f"{model_name} {true_positives=}, {false_positives=}, {false_negatives=}, {f1_score=:.4f}, {echolocation=:.4f}, {social=:.4f}"+ colorama.Fore.RESET)
     return f1_score
 
 def latest_model_file(models_dir):
