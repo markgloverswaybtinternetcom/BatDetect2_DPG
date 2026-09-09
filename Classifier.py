@@ -441,7 +441,7 @@ class Classifier():
 
     def File(self, filepath, debug=False, annForEmpty=True, annDir="ann", speciesLanguage=None, timeExpFact=1, printSummary=True):
         """Classifies one file using BatDetect2"""
-        if speciesLanguage is not None and speciesLanguage != self.speciesLanguage:
+        if speciesLanguage != "None" and speciesLanguage != self.speciesLanguage:
             self.latinToLangDict = self.speciesNames.set_index('Latin')[speciesLanguage].to_dict()
         dir = os.path.dirname(filepath)
         file = os.path.basename(filepath)
