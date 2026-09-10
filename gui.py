@@ -782,7 +782,9 @@ class MainWindow():
         """Alters language of species call annotation and combo boxes"""
         print(f"SpeciesLanguageCombo_changed {sender=} {app_data=} {user_data=}")
         wasNone = False
-        if self.SpeciesLanguage == "None": wasNone = True           
+        if self.SpeciesLanguage is None: wasNone = True
+        if app_data == "None":
+            app_data = None
         self.SpeciesLanguage = self.SpecDisplay1.SpeciesLanguage = self.SpecDisplay1.calls.SpeciesLanguage = app_data
         self.SpecDisplay2.calls.SpeciesLanguage = self.SpecDisplay2.SpeciesLanguage = app_data
         self.SpecDisplay3.SpeciesLanguage = self.SpecDisplay3.calls.SpeciesLanguage = app_data
@@ -791,7 +793,7 @@ class MainWindow():
         elif self.SpeciesLanguage == "EnglishAbbrev": self.FullSpeciesLanguage = "English"
         elif self.SpeciesLanguage == "Latin": self.AbbrevSpeciesLanguage = "LatinAbbrev"
         elif self.SpeciesLanguage == "English": self.AbbrevSpeciesLanguage = "EnglishAbbrev"
-        if self.SpeciesLanguage != "None":
+        if self.SpeciesLanguage is not None:
             sortedSpecies = list(self.SpeciesNames.sort_values(by=["bat",self.FullSpeciesLanguage], ascending=[False,True])[self.FullSpeciesLanguage])
             sortedSpecies.insert(0, "DELETE")
             if wasNone:

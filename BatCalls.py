@@ -73,7 +73,7 @@ class BatCalls():
                     if t2 - t1 < 0.01: t = t2 # end of FM calls
                     else: t = (t1 + t2) / 2 # mid way long or constant frequency calls 
                         
-                    if self.SpeciesLanguage != "None":
+                    if self.SpeciesLanguage is not None:
                         species =  self.SpeciesNames.loc[id][self.SpeciesLanguage]
                         if p1 * p2 < 0.3: species += '?'
                         if p1 * p2 > bestProb:
@@ -211,7 +211,7 @@ class BatCalls():
             cols = self.CallsNP[:, [0, 7]]
             idList = numpy.unique(cols, axis=0)
             #idList = numpy.unique(self.CallsNP[:, 0])
-            if self.SpeciesLanguage != "None":
+            if self.SpeciesLanguage is not None:
                 sl = self.SpeciesLanguage;
                 if sl == "EnglishAbbrev": sl = "English" # otherwise not unique 
                 for ids in idList:

@@ -60,6 +60,7 @@ class FileDialog():
                     self.loadCompareButton = dpg.add_button(label="Load comparison WAV", show=False, callback=self.LoadFileComparison_callback)
                     self.load2ndCompareButton = dpg.add_button(label="Load 2nd comparison WAV", show=False, callback=self.LoadFile2ndComparison_callback)
                     self.SplitLongWavs = dpg.add_button(label="Split Long WAVs", show=False, callback=self.SplitLongWavs_callback)
+                    self.TimeCompressWavs = dpg.add_button(label="Time Compress WAVs", show=False, callback=self.TimeCompressWavs_callback)
                     self.WavMetadataButton = dpg.add_button(label="WAV Metadata in Console", show=False, callback=self.WavMetadata_callback)                               
         with dpg.item_handler_registry(tag="file dialog resize handler"):
             dpg.add_item_resize_handler(callback=self.resize_handler)
@@ -172,6 +173,7 @@ class FileDialog():
         if self.displayDirActionButtons != display:
             dpg.configure_item(self.loadDirButton, show=display)                 
             dpg.configure_item(self.SplitLongWavs, show=display)
+            #dpg.configure_item(self.TimeCompressWavs, show=display)
             self.displayDirActionButtons = display
             
     def FileActionButtons(self, selected = True):
@@ -351,8 +353,16 @@ class FileDialog():
                     for block in soundfile.blocks(f, blocksize=nSamples):
                         soundfile.write(f"{f.split('.', 1)[0]}_{n}.wav", block, samplerate=sample_rate)
                         n += 1
-                    os.remove(f)                  
-        
+                    os.remove(f)
+                    
+    def TimeCompressWavs_callback(self):
+        for f in os.listdir(self.history[-1]):
+            f = os.path.join(self.history[-1], f)
+            if os.path.isfile(f) and (f.lower().endswith(".wav") or f.lower().endswith(".mp3")):
+                data, sample_rate = soundfile.read(f)
+                soundfile.write(f, data, sample_rate * 10)
+        self.DisplayDir(self.history[-1])
+    
     def resize_handler(self, sender, app_data, user_data):
         """Handle user resizing the display"""
         windowHeight = dpg.get_item_height(self.window)
