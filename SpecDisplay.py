@@ -519,8 +519,8 @@ class SpecDisplay():
             self.Status(f"Time expanded audio saved as '{filepath}'") 
         else:
             wholeFile,_ = os.path.splitext(self.file)
-            undashed = wholeFile.split('-')
-            if len(undashed) > 2: wholeFile = undashed[0] + "-" + undashed[1] # remove location and author
+            #undashed = wholeFile.split('-')
+            #if len(undashed) > 2: wholeFile = undashed[0] + "-" + undashed[1] # remove location and author
             partFile = wholeFile + f"_{round(self.minT*1000)}ms_{species}.wav"
             filepath = os.path.join(self.dir, partFile)
             soundfile.write(filepath, self.Recording, self.sample_rate)
