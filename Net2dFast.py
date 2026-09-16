@@ -5,12 +5,12 @@ class ModelOutput(NamedTuple):
     """Output of the detection model.
     Each of the tensors has a shape of `(batch_size, num_channels, spec_height, spec_width)`.
     Where `spec_height` and `spec_width` are the height and width of the input spectrograms."""
-
     pred_det: torch.Tensor #Tensor with predict detection probabilities.
     pred_size: torch.Tensor #Tensor with predicted bounding box sizes
     pred_class: torch.Tensor #Tensor with predicted class probabilities.
     pred_class_un_norm: torch.Tensor # Tensor with predicted class probabilities before softmax.
     features: torch.Tensor # Tensor with intermediate features.
+    att_consistency: torch.Tensor
 
 class SelfAttention(torch.nn.Module):
     def __init__(self, ip_dim, att_dim):
@@ -73,26 +73,20 @@ class Net2dFast(torch.nn.Module):
         self.num_filts = num_filts
         self.ip_height_rs = ip_height
         self.bneck_height = self.ip_height_rs // 32
-
         # encoder
         self.conv_dn_0 = ConvBlockDownCoordF(1, num_filts // 4, self.ip_height_rs, k_size=3, pad_size=1, stride=1)
         self.conv_dn_1 = ConvBlockDownCoordF(num_filts // 4, num_filts // 2, self.ip_height_rs // 2, k_size=3, pad_size=1, stride=1)
-        self.conv_dn_2 = ConvBlockDownCoordF(num_filts // 2, num_filts, self.ip_height_rs // 4,  k_size=3,pad_size=1,stride=1)
-        
+        self.conv_dn_2 = ConvBlockDownCoordF(num_filts // 2, num_filts, self.ip_height_rs // 4,  k_size=3,pad_size=1,stride=1)        
         self.conv_dn_3 = torch.nn.Conv2d(num_filts, num_filts * 2, 3, padding=1)
         self.conv_dn_3_bn = torch.nn.BatchNorm2d(num_filts * 2)
-
         # bottleneck
         self.conv_1d = torch.nn.Conv2d(num_filts * 2, num_filts * 2, (self.ip_height_rs // 8, 1), padding=0)
-        self.conv_1d_bn = torch.nn.BatchNorm2d(num_filts * 2)
-        
+        self.conv_1d_bn = torch.nn.BatchNorm2d(num_filts * 2)      
         self.att = SelfAttention(num_filts * 2, num_filts * 2)
-
         # decoder
         self.conv_up_2 = ConvBlockUpF(num_filts * 2, num_filts // 2, self.ip_height_rs // 8)
         self.conv_up_3 = ConvBlockUpF(num_filts // 2, num_filts // 4, self.ip_height_rs // 4)
         self.conv_up_4 = ConvBlockUpF(num_filts // 4, num_filts // 4, self.ip_height_rs // 2)
-
         # output +1 to include background class for class output
         self.conv_op = torch.nn.Conv2d(num_filts // 4, num_filts // 4, kernel_size=3, padding=1)
         self.conv_op_bn = torch.nn.BatchNorm2d(num_filts // 4)
@@ -107,7 +101,10 @@ class Net2dFast(torch.nn.Module):
         x3 = torch.nn.functional.relu(self.conv_dn_3_bn(self.conv_dn_3(x3)), inplace=True)
         # bottleneck
         x = torch.nn.functional.relu(self.conv_1d_bn(self.conv_1d(x3)), inplace=True)
-        x = self.att(x)
+        x = self.att(x)       
+        # === Consistency loss on attention output ===
+        att_out = torch.sigmoid(x)
+        att_consistency = (att_out[:, :, :, 1:] - att_out[:, :, :, :-1]).abs().mean()     
         x = x.repeat([1, 1, self.bneck_height * 4, 1])
         # decoder
         x = self.conv_up_2(x + x3)
@@ -116,6 +113,7 @@ class Net2dFast(torch.nn.Module):
         # output
         x = torch.nn.functional.relu(self.conv_op_bn(self.conv_op(x)), inplace=True)
         cls = self.conv_classes_op(x)
+        cls = torch.clamp(cls, -10, 10) ### added 
         comb = torch.softmax(cls, 1)
         return ModelOutput(pred_det=comb[:, :-1, :, :].sum(1).unsqueeze(1), pred_size=torch.nn.functional.relu(self.conv_size_op(x), inplace=True),
-            pred_class=comb, pred_class_un_norm=cls, features=x)
+            pred_class=comb, pred_class_un_norm=cls, features=x, att_consistency=att_consistency)
