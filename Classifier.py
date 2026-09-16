@@ -19,7 +19,8 @@ SPEC_SCALE = "pcen"
 DENOISE_SPEC_AVG = True
 MAX_SCALE_SPEC = False
 CHUNK_SIZE = 2.0
-DEFAULT_MODEL_PATH = "Net2DFast_UK_same.pth.tar"
+#DEFAULT_MODEL_PATH = "Net2DFast_UK_same.pth.tar"
+DEFAULT_MODEL_PATH = "model_103_refine_E240.pth.tar"
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 ########## types ############
