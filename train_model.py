@@ -13,10 +13,9 @@ LEARNING_RATE = 0.001
 REFINE_LEARNING_RATE = 0.0003
 BATCH_SIZE = 8
 NUM_WORKERS = 4
-#MIN_EPOCHS = 300
-MIN_EPOCHS = 50
+MIN_EPOCHS = 300
+REFINE_MIN_EPOCHS = 50
 MAX_EPOCHS = 900
-REFINE_MAX_EPOCHS = 1000
 PATIENCE = 120
 REFINE_PATIENCE = 200
 TRAIN_FILE_USED_SEC = 1   # standarised length in seconds
@@ -30,21 +29,21 @@ GAUSSIAN_SIGMA = 12
 #Only used on first run until class difficulty found
 DEFAULT_CLASS_WEIGHTS = { 
     "Barbastella barbastellus-Echolocation": 4.5, 
-    "Barbastella barbastellus-Feeding Buzz": 0.0,
+    "Barbastella barbastellus-Feeding Buzz": 2.0,
     "Barbastella barbastellus-Social": 3.0,
     "Eptesicus serotinus-Echolocation": 4.5, 
-    "Eptesicus serotinus-Feeding Buzz": 0.0,
+    "Eptesicus serotinus-Feeding Buzz": 2.0,
     "Eptesicus serotinus-Social": 3.5,
     "Myotis alcathoe-Echolocation": 2.0,
-    "Myotis alcathoe-Feeding Buzz": 0.0,
+    "Myotis alcathoe-Feeding Buzz": 2.0,
     "Myotis alcathoe-Social": 2.0,
     "Myotis bechsteinii-Echolocation": 4.0,
     "Myotis bechsteinii-Social": 2.0,
     "Myotis brandtii-Echolocation": 3.0,
-    "Myotis brandtii-Feeding Buzz": 0.0,
+    "Myotis brandtii-Feeding Buzz": 2.0,
     "Myotis brandtii-Social": 2.0,
     "Myotis daubentonii-Echolocation": 2.5,
-    "Myotis daubentonii-Feeding Buzz": 0.0,
+    "Myotis daubentonii-Feeding Buzz": 2.0,
     "Myotis daubentonii-Social": 3.0,
     "Myotis mystacinus-Echolocation": 4.0,
     "Myotis mystacinus-Social": 2.0,
@@ -53,16 +52,16 @@ DEFAULT_CLASS_WEIGHTS = {
     "Nyctalus leisleri-Echolocation": 4.0,
     "Nyctalus leisleri-Social": 4.0,
     "Nyctalus noctula-Echolocation": 2.8,
-    "Nyctalus noctula-Feeding Buzz": 0.0,
+    "Nyctalus noctula-Feeding Buzz": 2.0,
     "Nyctalus noctula-Social": 3.5,
     "Pipistrellus nathusii-Echolocation": 2.0,
-    "Pipistrellus nathusii-Feeding Buzz": 0.0,
+    "Pipistrellus nathusii-Feeding Buzz": 2.0,
     "Pipistrellus nathusii-Social": 2.0,
     "Pipistrellus pipistrellus-Echolocation": 1.0,
-    "Pipistrellus pipistrellus-Feeding Buzz": 0.0,
+    "Pipistrellus pipistrellus-Feeding Buzz": 2.0,
     "Pipistrellus pipistrellus-Social": 3.5,  
     "Pipistrellus pygmaeus-Echolocation": 1.0,
-    "Pipistrellus pygmaeus-Feeding Buzz": 0.0,
+    "Pipistrellus pygmaeus-Feeding Buzz": 2.0,
     "Pipistrellus pygmaeus-Social": 3.5, 
     "Plecotus auritus-Echolocation": 3.5,
     "Plecotus auritus-Social": 3.5, 
@@ -629,7 +628,7 @@ class Trainer():
                 global CONSISTENCY_LOSS_WEIGHT
                 CONSISTENCY_LOSS_WEIGHT = checkpoint["consistency_weight"]
             self.optimizer = torch.optim.Adam(self.model.parameters(), lr=REFINE_LEARNING_RATE)
-            self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, REFINE_MAX_EPOCHS * len_train_loader)
+            self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, MAX_EPOCHS * len_train_loader)
             print(f"Trainer __init__ {model_num=} {refine_checkpoint=}")
         else:
             self.optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
@@ -640,7 +639,8 @@ class Trainer():
             class_indices = self.species_to_class_indices[species]
             species_map[s_idx, class_indices] = 1.0
         self.species_map_matrix = species_map
-        self.debug_logger = training_debug_logger.DebugLogger(f"model_{model_num}_R{refine_run}")
+        if refine_run is None: self.debug_logger = training_debug_logger.DebugLogger(f"model_{model_num}")
+        else: self.debug_logger = training_debug_logger.DebugLogger(f"model_{model_num}_R{refine_run}")
         self.species_diff_scale = 1.05
         self.att_weight = 0.025
 
@@ -768,7 +768,7 @@ class Trainer():
 
 def main():
     print(f"main")
-    global CONSISTENCY_LOSS_WEIGHT, MAX_EPOCHS
+    global CONSISTENCY_LOSS_WEIGHT, MIN_EPOCHS
     if torch.cuda.is_available(): device = "cuda"
     else: device = "cpu"
     #boosted_learning_rate = False
@@ -793,7 +793,7 @@ def main():
             # model_<n>_E<epoch>.pth.tar
             model_num = int(base.split("_")[1])
             refine_checkpoint = args.model
-            MAX_EPOCHS = REFINE_MAX_EPOCHS
+            MIN_EPOCHS = REFINE_MIN_EPOCHS
             refine_run = next_refine_number(model_dir, model_num)
         else:
             print(colorama.Back.RED + "Unsupported Model file" + colorama.Back.RESET) 
