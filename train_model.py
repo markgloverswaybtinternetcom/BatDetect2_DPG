@@ -14,7 +14,7 @@ REFINE_LEARNING_RATE = 0.0003
 BATCH_SIZE = 8
 NUM_WORKERS = 4
 MIN_EPOCHS = 300
-REFINE_MIN_EPOCHS = 50
+REFINE_MIN_EPOCHS = 25
 MAX_EPOCHS = 900
 PATIENCE = 120
 REFINE_PATIENCE = 200
@@ -29,21 +29,21 @@ GAUSSIAN_SIGMA = 12
 #Only used on first run until class difficulty found
 DEFAULT_CLASS_WEIGHTS = { 
     "Barbastella barbastellus-Echolocation": 4.5, 
-    "Barbastella barbastellus-Feeding Buzz": 2.0,
+    "Barbastella barbastellus-Feeding Buzz": 7.0,
     "Barbastella barbastellus-Social": 3.0,
     "Eptesicus serotinus-Echolocation": 4.5, 
-    "Eptesicus serotinus-Feeding Buzz": 2.0,
+    "Eptesicus serotinus-Feeding Buzz": 7.0,
     "Eptesicus serotinus-Social": 3.5,
     "Myotis alcathoe-Echolocation": 2.0,
-    "Myotis alcathoe-Feeding Buzz": 2.0,
+    "Myotis alcathoe-Feeding Buzz": 7.0,
     "Myotis alcathoe-Social": 2.0,
     "Myotis bechsteinii-Echolocation": 4.0,
     "Myotis bechsteinii-Social": 2.0,
     "Myotis brandtii-Echolocation": 3.0,
-    "Myotis brandtii-Feeding Buzz": 2.0,
+    "Myotis brandtii-Feeding Buzz": 7.0,
     "Myotis brandtii-Social": 2.0,
     "Myotis daubentonii-Echolocation": 2.5,
-    "Myotis daubentonii-Feeding Buzz": 2.0,
+    "Myotis daubentonii-Feeding Buzz": 7.0,
     "Myotis daubentonii-Social": 3.0,
     "Myotis mystacinus-Echolocation": 4.0,
     "Myotis mystacinus-Social": 2.0,
@@ -52,16 +52,16 @@ DEFAULT_CLASS_WEIGHTS = {
     "Nyctalus leisleri-Echolocation": 4.0,
     "Nyctalus leisleri-Social": 4.0,
     "Nyctalus noctula-Echolocation": 2.8,
-    "Nyctalus noctula-Feeding Buzz": 2.0,
+    "Nyctalus noctula-Feeding Buzz": 7.0,
     "Nyctalus noctula-Social": 3.5,
     "Pipistrellus nathusii-Echolocation": 2.0,
-    "Pipistrellus nathusii-Feeding Buzz": 2.0,
+    "Pipistrellus nathusii-Feeding Buzz": 7.0,
     "Pipistrellus nathusii-Social": 2.0,
     "Pipistrellus pipistrellus-Echolocation": 1.0,
-    "Pipistrellus pipistrellus-Feeding Buzz": 2.0,
+    "Pipistrellus pipistrellus-Feeding Buzz": 7.0,
     "Pipistrellus pipistrellus-Social": 3.5,  
     "Pipistrellus pygmaeus-Echolocation": 1.0,
-    "Pipistrellus pygmaeus-Feeding Buzz": 2.0,
+    "Pipistrellus pygmaeus-Feeding Buzz": 7.0,
     "Pipistrellus pygmaeus-Social": 3.5, 
     "Plecotus auritus-Echolocation": 3.5,
     "Plecotus auritus-Social": 3.5, 
