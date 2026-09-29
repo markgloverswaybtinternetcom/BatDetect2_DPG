@@ -173,7 +173,7 @@ class FileDialog():
         if self.displayDirActionButtons != display:
             dpg.configure_item(self.loadDirButton, show=display)                 
             dpg.configure_item(self.SplitLongWavs, show=display)
-            #dpg.configure_item(self.TimeCompressWavs, show=display)
+            dpg.configure_item(self.TimeCompressWavs, show=display)
             self.displayDirActionButtons = display
             
     def FileActionButtons(self, selected = True):
@@ -217,16 +217,20 @@ class FileDialog():
                     dpg.add_selectable(label=creation_time.strftime("%d/%m/%Y %H:%M"), parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
                 nRow += 1
             elif os.path.isfile(entry) and (entry.lower().endswith(".wav") or entry.lower().endswith(".mp3")):
-                tRow = dpg.add_table_row(parent=self.table)
-                dpg.add_selectable(label="", parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
-                file_selectable = dpg.add_selectable(label=name, parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
                 if entry.lower().endswith(".wav"):
-                    duration, sample_rate = WavUtil.WavDetails(entry)
+                    try:
+                        duration, sample_rate = WavUtil.WavDetails(entry)
+                    except Exception as e: 
+                        print(colorama.Fore.RED + f"Error reading {entry} {e}" + colorama.Fore.RESET)
+                        continue
                     self.DirActionButtons(True)
                 else:
                     audio = MP3(entry)
                     duration = audio.info.length
                     sample_rate = audio.info.bitrate
+                tRow = dpg.add_table_row(parent=self.table)
+                dpg.add_selectable(label="", parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
+                file_selectable = dpg.add_selectable(label=name, parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])                                       
                 if sample_rate > 0:
                     cell_length = dpg.add_selectable(label=f"{duration:.1f} sec", parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
                     cell_sr = dpg.add_selectable(label=f"{sample_rate / 1000} kHz", parent=tRow, callback=self.TableRow_selected, user_data=[self.table, nRow, entry])
