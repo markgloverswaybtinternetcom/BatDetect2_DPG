@@ -10,14 +10,15 @@ numpy.set_printoptions(precision=4, suppress=True)
 DEBUG = False
 DETECTION_OVERLAP = 0.01  # has to be within this number of ms to count as detection
 LEARNING_RATE = 0.001
-REFINE_LEARNING_RATE = 0.0003
+REFINE_LEARNING_RATE = 0.0001
 BATCH_SIZE = 8
 NUM_WORKERS = 4
 MIN_EPOCHS = 300
 REFINE_MIN_EPOCHS = 25
 MAX_EPOCHS = 900
+REFINE_MAX_EPOCHS = 200
 PATIENCE = 120
-REFINE_PATIENCE = 200
+REFINE_PATIENCE = 75
 TRAIN_FILE_USED_SEC = 1   # standarised length in seconds
 SPEC_TRAIN_WIDTH = 2560   # equivalent to 1 seoond,  units are number of time steps (before resizing is performed)
 
@@ -628,7 +629,7 @@ class Trainer():
                 global CONSISTENCY_LOSS_WEIGHT
                 CONSISTENCY_LOSS_WEIGHT = checkpoint["consistency_weight"]
             self.optimizer = torch.optim.Adam(self.model.parameters(), lr=REFINE_LEARNING_RATE)
-            self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, MAX_EPOCHS * len_train_loader)
+            self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, REFINE_MAX_EPOCHS * len_train_loader)
             print(f"Trainer __init__ {model_num=} {refine_checkpoint=}")
         else:
             self.optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
@@ -768,7 +769,7 @@ class Trainer():
 
 def main():
     print(f"main")
-    global CONSISTENCY_LOSS_WEIGHT, MIN_EPOCHS
+    global CONSISTENCY_LOSS_WEIGHT, MIN_EPOCHS, MAX_EPOCHS
     if torch.cuda.is_available(): device = "cuda"
     else: device = "cpu"
     #boosted_learning_rate = False
@@ -794,6 +795,7 @@ def main():
             model_num = int(base.split("_")[1])
             refine_checkpoint = args.model
             MIN_EPOCHS = REFINE_MIN_EPOCHS
+            MAX_EPOCHS = REFINE_MAX_EPOCHS
             refine_run = next_refine_number(model_dir, model_num)
         else:
             print(colorama.Back.RED + "Unsupported Model file" + colorama.Back.RESET) 
