@@ -231,20 +231,29 @@ The min is automatically adjusted when the spectrogram moves.</p>
 
 
 <h2>Model Training</h2>
-<p>The BatDetect2 training has difficulty with wide calls like Noctules and Horseshoes, social calls are just possible, whole feeding buzzes not possible. 
-<br/>The Gaussian heatmap has been altered to better fit wide calls, and extra pure noise and false call training data added. 
-<br/>Augmentations randomly corrupt the training data to avoid over fitting of the model, some have been remove and more added to better fit Horseshoes. 
-<br/>The model stops training when the loss value plateaus. 
-<br/>The end of run loss values are recorded to set the class difficulty weight for the next training run.</p>
+<p>The BatDetect2 training has difficulty with wide calls like Noctules and Horseshoes, social calls, feeding buzzes are only just possible. 
+<br/>However this is not possible for the original default model.
+<ul>
+    <li>The Gaussian heatmap has been altered to better fit wide calls, and extra pure noise and false call training data added.</li>
+    <li>Augmentations randomly corrupt the training data to avoid over fitting of the model, some have been remove and more added to better fit Horseshoes.</li>
+    <ul>
+        <li>Detection loss - to measure if a bat call is detected</li>
+        <li>Bounding Box loss  -  to measure if the bat call is correctly outlined</li>
+        <li>Class loss - when a class is identified correctly, this is done per class to allow weighting of under represented classes. Class is a composite of species and call type</li>
+        <li>Consistency loss - added to encourage clustering of species. Compensates for the disadvatage of individual call analysis as opposed to file analysis</li>
+    </ul>
+    <li>The model stops training when the loss value plateaus.</li>
+    <li>The model is saved with an incrementing number.</li>
+</ul>
 
 <h3>Training Data</h3>
 <p>PyTorch needs all data involved in operations to be the same size. 
 <br/>To do this I have used audio files of the same size (choosen to be default length the GUI uses to save sound file clips)</p>
 
 <h3>Model Validation</h3>
-<p>Each training run has a large random element, so each run does a validation run, to pick the best. 
+<p>Each training run has a large random element, all models as the epoch increases will tend to over fit thus being generally useless. So each loss minmum run over MIN_EPOCHs does a validation run, to pick the best. 
 <br/>The validation data should remain constant with no overlap with training data.</p>
-<h4>Validation Output is per class and total sum</h4>
+<h4>Validation Output is per class, per file and total sums, call type sums</h4>
 <p>The models predictions are compared for Validation using the following values</p>
 <ul>
     <li>true positives: model calls that match validation annotation</li>
@@ -253,5 +262,11 @@ The min is automatically adjusted when the spectrogram moves.</p>
     <li>precision: is the fraction of model predictions that were correct</li>
     <li>recall: is the fraction of correct model predations against validation annotations</li>
     <li>f1 score: 2 * precision * recall / (precision + recall).</li>
+</ul>
+
+<h3>Refining a Model</h3>
+<p>If an individual model is specified rather than a directory, this model will be refined. While this will tend to be even more over fitted, it will occasionally produce an even better model.</p>
+<ul>
+    <li>The refined model is saved with an incrementing 'refine' number.</li>
 </ul>
 </body></html>
