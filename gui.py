@@ -20,7 +20,7 @@ class MainWindow():
     """Graphical user interface using DearPyGui"""    
     def __init__(self):
         parser = argparse.ArgumentParser(description='Display and classify bat calls')
-        parser.add_argument('-model', '--model', type=str, help='Model to be used for classifying', default="Net2DFast_UK_same.pth.tar")
+        parser.add_argument('-model', '--model', type=str, help='Model to be used for classifying', default="model_103_refine_E240.pth.tar")
         args = parser.parse_args()
         self.model=args.model
         self.SpeciesNames = pandas.read_csv(os.path.join("Resources", "SpeciesNames.csv"))

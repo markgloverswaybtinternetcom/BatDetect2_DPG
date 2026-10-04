@@ -19,7 +19,6 @@ SPEC_SCALE = "pcen"
 DENOISE_SPEC_AVG = True
 MAX_SCALE_SPEC = False
 CHUNK_SIZE = 2.0
-#DEFAULT_MODEL_PATH = "Net2DFast_UK_same.pth.tar"
 DEFAULT_MODEL_PATH = "model_103_refine_E240.pth.tar"
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -45,6 +44,7 @@ def load_model(model_path: str = DEFAULT_MODEL_PATH, load_weights: bool = True, 
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if not os.path.isfile(model_path):
+        print(colorama.Back.RED + f"load_model {model_path=} file not found" + colorama.Back.RESET)
         raise FileNotFoundError("Model file not found.")
     net_params = torch.load(model_path, map_location=device, weights_only=weights_only)
     params = net_params["params"]
@@ -291,13 +291,11 @@ def format_single_result(file_id: str, time_exp: float, duration: float, predict
         # Get a single class prediction for the file
         class_overall = overall_class_pred(predictions["det_probs"], predictions["class_probs"])
         class_name = class_names[numpy.argmax(class_overall)]
-        if "-" in class_name:
-            class_name = class_name.split('-')[0] # species only ignore call type
         annotations = get_annotations_from_preds(predictions, class_names)
     except (numpy.exceptions.AxisError, ValueError):
         # No detections
         class_overall = numpy.zeros(len(class_names))
-        class_name = ""
+        class_name = "None"
         annotations = []
     return {"id": file_id, "annotated": False, "issues": False, "notes": "Automatically generated.", "time_exp": time_exp, "duration": round(float(duration), 4),
         "annotation": annotations, "class_name": class_name}
@@ -339,7 +337,7 @@ class Classifier():
                 config = json.load(jsonfile)
                 self.speciesLanguage = config["SpeciesLanguage"] 
         else: self.speciesLanguage = "EnglishAbbrev"
-        if self.speciesLanguage != 'Latin' and  self.speciesLanguage is not None: 
+        if self.speciesLanguage != 'Latin' and  self.speciesLanguage != 'None': 
             self.latinToLangDict = self.speciesNames.set_index('Latin')[self.speciesLanguage].to_dict()
         else: self.latinToLangDict = None
 
@@ -408,7 +406,7 @@ class Classifier():
                     json.dump(results["pred_dict"], jsonfile, indent=2)
         return summary
  
-    def process_file(self, audio_file: str, model: DetectionModel, device: torch.device=DEVICE, timeExpFact=1) -> Union[RunResults, Any]:
+    def process_file(self, audio_file: str, model: DetectionModel, device: torch.device=DEVICE) -> Union[RunResults, Any]:
         """Replaces function of same name in BatDetect2"""
         predictions = []; spec_feats = []
         try:
@@ -419,6 +417,7 @@ class Classifier():
         file_samp_rate = info.samplerate
         filename = os.path.basename(os.path.splitext(audio_file)[0])
         if filename.endswith("TE"): timeExpFact = 10
+        else: timeExpFact = 1
         orig_samp_rate = file_samp_rate * timeExpFact
         sampling_rate, audio_full = load_audio(audio_file, time_exp_fact=timeExpFact,  target_samp_rate=TARGET_SAMPLERATE_HZ)
         
@@ -440,13 +439,13 @@ class Classifier():
             duration=audio_full.shape[0] / float(sampling_rate), params=self.modelParams, predictions=predictions, nyquist_freq=orig_samp_rate / 2)
         return calls
 
-    def File(self, filepath, debug=False, annForEmpty=True, annDir="ann", speciesLanguage=None, timeExpFact=1, printSummary=True):
+    def File(self, filepath, debug=False, annForEmpty=True, annDir="ann", speciesLanguage=None, printSummary=True):
         """Classifies one file using BatDetect2"""
         if speciesLanguage is not None and speciesLanguage != self.speciesLanguage:
             self.latinToLangDict = self.speciesNames.set_index('Latin')[speciesLanguage].to_dict()
         dir = os.path.dirname(filepath)
         file = os.path.basename(filepath)
-        calls = self.process_file(filepath, self.model, timeExpFact=timeExpFact)
+        calls = self.process_file(filepath, self.model)
         op_dir = os.path.join(dir, annDir)
         if not os.path.isdir(op_dir): # make directory if it does not exist
             os.makedirs(op_dir)
