@@ -1,6 +1,6 @@
 import argparse, json, warnings, numpy, torch, datetime, os, glob, copy, polars, collections, re
 import torchaudio, librosa, traceback, colorama, inspect, wakepy, random, math, scipy
-import Net2dFast, Classifier, validate_model, training_debug_logger
+import Net2dFast, Classifier, validate_model, training_debug_logger, polars
 
 warnings.filterwarnings("ignore", category=UserWarning)
 torch.set_printoptions(threshold=torch.inf, linewidth=200, precision=3)
@@ -142,8 +142,29 @@ def summarize(functionName, data):
         for key, value in data.items():          
             summarize_array(str(key), value) 
     else: print(colorama.Back.RED + "summarize: Unsupported data type. Please provide a NumPy array or a dictionary of arrays." + colorama.Back.RESET)
-    
+
 def load_set_of_anns(wav_path):
+    audioFiles = glob.glob(os.path.join(wav_path, "**", "*.wav"), recursive=True)
+    anns = []
+    for path in audioFiles:
+        csvFilepath = os.path.join(os.path.dirname(path), "ann", os.path.basename(path) + ".csv")
+        try:
+            ann = polars.read_csv(csvFilepath)
+            anns.append({"file_path": path, "annotation": ann})
+        except Exception as e:
+            print(colorama.Back.YELLOW + colorama.Fore.BLACK + f"[WARNING] {e}" + colorama.Fore.RESET + colorama.Back.RESET)
+    class_names_all = []
+    for ann in anns:
+        for row in ann["annotation"].iter_rows(named=True):
+            class_names_all.append(CompositeClass(row["class"], row["event"]))
+    class_names, class_cnts = numpy.unique(class_names_all, return_counts=True)
+    class_inv_freq = (1.0 / (class_cnts.astype(numpy.float32) + 1e-8))
+    str_len = numpy.max([len(cc) for cc in class_names]) + 5
+    for cc in range(len(class_names)):
+        print(f"{str(cc).ljust(5)}, {class_names[cc].ljust(str_len)}, {str(class_cnts[cc]).rjust(3)}")
+    return anns, class_names.tolist(), class_inv_freq
+ 
+"""def load_set_of_anns(wav_path):
     audioFiles = glob.glob(os.path.join(wav_path, "**", "*.wav"), recursive=True)
     anns = []
     for path in audioFiles:
@@ -162,13 +183,11 @@ def load_set_of_anns(wav_path):
         for aa in ann["annotation"]:
             class_names_all.append(CompositeClass(aa["class"], aa["event"]))
     class_names, class_cnts = numpy.unique(class_names_all, return_counts=True)
-    #class_inv_freq = class_cnts.sum() / (len(class_names) * class_cnts.astype(numpy.float32))
-    #class_inv_freq = (total_calls / num_classes) * (1 / class_cnts)
     class_inv_freq = 1.0 / (class_cnts.astype(numpy.float32) + 1e-8)
     str_len = numpy.max([len(cc) for cc in class_names]) + 5
     for cc in range(len(class_names)):
         print(f"{str(cc).ljust(5)}, {class_names[cc].ljust(str_len)}, {str(class_cnts[cc]).rjust(3)}")
-    return anns, class_names.tolist(), class_inv_freq 
+    return anns, class_names.tolist(), class_inv_freq """
 
 #batdetect2.train.audio_dataloader AudioLoader
 def echo_aug(audio, sampling_rate):
@@ -344,13 +363,10 @@ def target_heatmaps(spec_op_shape: Tuple[int, int], sampling_rate: int, ann: Ann
         "high_freqs": ann["high_freqs"][valid_inds],
         "low_freqs": ann["low_freqs"][valid_inds],
         "class_ids": ann["class_ids"][valid_inds],
-        "individual_ids": ann["individual_ids"][valid_inds],
     }
     ann_aug["x_inds"] = x_pos_start[valid_inds]
     ann_aug["y_inds"] = y_pos_low[valid_inds]
     before = len(ann["start_times"]); after = len(ann_aug["start_times"])
-    if len(ann_aug["individual_ids"]) == 1:
-        ann_aug["individual_ids"][0] = 0
     y_2d_det = numpy.zeros((1, op_height, op_width), dtype=numpy.float32)
     y_2d_size = numpy.zeros((2, op_height, op_width), dtype=numpy.float32)
     # num classes and "background" class
@@ -379,21 +395,17 @@ def resample_audio(num_samples, sampling_rate, audio2, sampling_rate2):
     elif audio2.shape[0] > num_samples:
         audio2 = audio2[:num_samples]
     return audio2, sampling_rate2
-    
-def combine_audio_aug(audio, sampling_rate, ann, audio2, sampling_rate2, ann2):
+ 
+def combine_audio_aug(audio, sampling_rate, ann,audio2, sampling_rate2, ann2):
     # resample so they are the same
     audio2, sampling_rate2 = resample_audio(audio.shape[0], sampling_rate, audio2, sampling_rate2)
-
-    if (ann["annotated"] and (ann2["annotated"]) and (sampling_rate2 == sampling_rate) and (audio.shape[0] == audio2.shape[0])):
+    
+    if (len(ann["start_times"]) > 0 and len(ann2["start_times"]) > 0 and sampling_rate2 == sampling_rate and audio.shape[0] == audio2.shape[0]):
         comb_weight = 0.3 + numpy.random.random() * 0.4
-        audio = comb_weight * audio + (1 - comb_weight) * audio2
+        audio = (comb_weight * audio + (1.0 - comb_weight) * audio2)
         inds = numpy.argsort(numpy.hstack((ann["start_times"], ann2["start_times"])))
         for kk in ann.keys():
-            # when combining calls from different files, assume they come from different individuals
-            if kk == "individual_ids":
-                if (ann[kk] > -1).sum() > 0:
-                    ann2[kk][ann2[kk] > -1] += numpy.max(ann[kk][ann[kk] > -1]) + 1
-            if (kk != "class_id_file") and (kk != "annotated"):
+            if kk not in ("majority_class_id", "annotated"):
                 ann[kk] = numpy.hstack((ann[kk], ann2[kk]))[inds]
     return audio, ann
 
@@ -409,37 +421,28 @@ class AudioLoader(torch.utils.data.Dataset):
         self.class_names = class_names
         for ii in range(len(data_anns_ip)):
             dd = copy.deepcopy(data_anns_ip[ii])
-            # filter out unused annotation here
-            filtered_annotations = []
-            for ii, aa in enumerate(dd["annotation"]):  
-                if "individual" in aa.keys():
-                    aa["individual"] = int(aa["individual"])
-                    # if only one call labeled it has to be from the same individual
-                    if len(dd["annotation"]) == 1:
-                        aa["individual"] = 0
-                # convert class name into class label
+            
+            processed_annotations = []
+            #for aa in dd["annotation"]:
+            for aa in dd["annotation"].iter_rows(named=True):
                 compositeClass = CompositeClass(aa["class"], aa["event"])
                 if compositeClass in class_names:
                     aa["class_id"] = class_names.index(compositeClass)
                 else:
-                    print(colorama.Back.RED + f"AudioLoader __init__ class {compositeClass} NOT FOUND for {dd["file_path"]}" + colorama.Back.RESET)
                     aa["class_id"] = -1
-                filtered_annotations.append(aa)
-            dd["annotation"] = filtered_annotations
+                processed_annotations.append(aa)
+            dd["annotation"] = processed_annotations
+            
             dd["start_times"] = numpy.array([aa["start_time"] for aa in dd["annotation"]]).astype(numpy.float64)
             dd["end_times"] = numpy.array([aa["end_time"] for aa in dd["annotation"]]).astype(numpy.float64)
             dd["high_freqs"] = numpy.array([float(aa["high_freq"]) for aa in dd["annotation"]]).astype(numpy.float64)
             dd["low_freqs"] = numpy.array([float(aa["low_freq"]) for aa in dd["annotation"]]).astype(numpy.float64)
-            dd["class_ids"] = numpy.array([aa["class_id"] for aa in dd["annotation"]]).astype(numpy.int32)
-            dd["individual_ids"] = numpy.array([aa["individual"] for aa in dd["annotation"]]).astype(numpy.int32)
-            # file level class name
-            if "class_name" in dd.keys(): # file level value, call one is 'class'
-                compositeClass = CompositeClass(dd["class_name"])
-                if compositeClass in class_names:
-                    dd["class_id_file"] = class_names.index(compositeClass)
-                else: 
-                    print(colorama.Back.RED + f"AudioLoader __init__ class_name {compositeClass} NOT FOUND for {dd["file_path"]}" + colorama.Back.RESET)
-                    dd["class_id_file"] = -1
+            dd["class_ids"] = numpy.array([aa["class_id"] for aa in dd["annotation"]], dtype=numpy.int32,)
+            if len(dd["class_ids"]):
+                vals, counts = numpy.unique(dd["class_ids"], return_counts=True)
+                dd["majority_class_id"] = vals[numpy.argmax(counts)]
+            else:
+                dd["majority_class_id"] = -1
             self.data_anns.append(dd)
             self.audio_file.append(dd["file_path"])
         ann_cnt = [len(aa["annotation"]) for aa in self.data_anns]
@@ -456,12 +459,11 @@ class AudioLoader(torch.utils.data.Dataset):
         if index == None:
             index = numpy.random.randint(0, len(self.data_anns))
         audio_file = self.audio_file[index]
-        sampling_rate, audio_raw = Classifier.load_audio(audio_file, self.data_anns[index]["time_exp"], Classifier.TARGET_SAMPLERATE_HZ)
+        sampling_rate, audio_raw = Classifier.load_audio(audio_file, 1.0, Classifier.TARGET_SAMPLERATE_HZ)
         # copy annotation
         ann = {}
-        ann["annotated"] = self.data_anns[index]["annotated"]
-        ann["class_id_file"] = self.data_anns[index]["class_id_file"]
-        keys = ["start_times", "end_times", "high_freqs", "low_freqs", "class_ids", "individual_ids"]
+        ann["majority_class_id"] = self.data_anns[index]["majority_class_id"]        
+        keys = ["start_times", "end_times", "high_freqs", "low_freqs", "class_ids"]
         for kk in keys:
             ann[kk] = self.data_anns[index][kk].copy()
         # if train then grab a random crop
@@ -482,7 +484,7 @@ class AudioLoader(torch.utils.data.Dataset):
         # sort based on time
         inds = numpy.argsort(ann["start_times"])
         for kk in ann.keys():
-            if (kk != "class_id_file") and (kk != "annotated"):
+            if kk not in ("majority_class_id", "annotated"):
                 ann[kk] = ann[kk][inds]
         return audio_raw, sampling_rate, duration, ann
     
@@ -511,9 +513,9 @@ class AudioLoader(torch.utils.data.Dataset):
                 if numpy.random.random() < AUG_PROB: spec = mask_time_aug(spec)
                 if numpy.random.random() < AUG_PROB: spec = random_bandpass_filter(spec)
                 if numpy.random.random() < AUG_PROB: spec = random_time_shift(spec)
-                if numpy.random.random() < AUG_PROB: 
-                    if ann["class_id_file"] in self.Horseshoe_CF:
-                        spec = reinforce_cf_band(spec, cf_freq=self.Horseshoe_CF[ann["class_id_file"]]) 
+                if numpy.random.random() < AUG_PROB:                    
+                    if ann["majority_class_id"] in self.Horseshoe_CF:
+                        spec = reinforce_cf_band(spec, cf_freq=self.Horseshoe_CF[ann["majority_class_id"]]) 
                     else:
                         spec = inject_vertical_noise_streak(spec)
             outputs = {}
@@ -521,9 +523,10 @@ class AudioLoader(torch.utils.data.Dataset):
             # create ground truth heatmaps
             (outputs["y_2d_det"],  outputs["y_2d_size"], outputs["y_2d_classes"], ann_aug) = target_heatmaps(spec_op_shape, sampling_rate, ann, self.class_names, spec)
             # hack to get around requirement that all vectors are the same length in the output batch
-            pad_size = self.max_num_anns - len(ann_aug["individual_ids"])
-            outputs["is_valid"] = numpy.hstack((numpy.ones(len(ann_aug["individual_ids"])), numpy.ones(pad_size, dtype=numpy.int32) * -1))
-            keys = ["class_ids", "individual_ids", "x_inds", "y_inds", "start_times",  "end_times", "low_freqs", "high_freqs"]
+            pad_size = self.max_num_anns - len(ann_aug["class_ids"])
+            outputs["is_valid"] = numpy.hstack((numpy.ones(len(ann_aug["class_ids"])), numpy.ones(pad_size, dtype=numpy.int32) * -1))
+            #keys = ["class_ids", "x_inds", "y_inds", "start_times",  "end_times", "low_freqs", "high_freqs"]
+            keys = ["class_ids", "x_inds", "y_inds", "start_times",  "end_times", "low_freqs", "high_freqs"]
             for kk in keys:
                 outputs[kk] = numpy.hstack((ann_aug[kk], numpy.ones(pad_size, dtype=numpy.int32) * -1))
             # convert to pytorch
@@ -531,8 +534,6 @@ class AudioLoader(torch.utils.data.Dataset):
                 if type(outputs[kk]) != torch.Tensor:
                     outputs[kk] = torch.from_numpy(outputs[kk])
             # scalars
-            outputs["class_id_file"] = ann["class_id_file"]
-            outputs["annotated"] = ann["annotated"]
             outputs["duration"] = duration
             outputs["sampling_rate"] = sampling_rate
             outputs["file_id"] = index
@@ -541,6 +542,7 @@ class AudioLoader(torch.utils.data.Dataset):
             print(colorama.Back.RED + f"[ERROR] Failed to load {index=}" + colorama.Back.RESET)
             traceback.print_exc()
             raise
+            
     def __len__(self):
         return len(self.data_anns)
 
@@ -769,7 +771,8 @@ class Trainer():
 
 def main():
     print(f"main")
-    global CONSISTENCY_LOSS_WEIGHT, MIN_EPOCHS, MAX_EPOCHS
+    global CONSISTENCY_LOSS_WEIGHT, MIN_EPOCHS, MAX_EPOCHS, REFINE_LEARNING_RATE
+
     if torch.cuda.is_available(): device = "cuda"
     else: device = "cpu"
     #boosted_learning_rate = False
@@ -778,6 +781,8 @@ def main():
     parser.add_argument("training_data_dir", type=str, help="Path to root of datasets")
     parser.add_argument("validation_data_dir", type=str, help="Path to the root directory of the validation dataset.")
     parser.add_argument("model",type=str,help="Directory for trained model files, or model to be refined")
+    parser.add_argument("--lr", type=float, default=REFINE_LEARNING_RATE)
+    parser.add_argument("--patience", type=int, default=REFINE_PATIENCE)
     args = parser.parse_args()
     if torch.cuda.is_available(): print(colorama.Fore.GREEN + "torch.cuda.is_available" + colorama.Fore.RESET)
     else: print(colorama.Fore.RED + "torch.cuda is not available" + colorama.Fore.RESET)
@@ -796,6 +801,7 @@ def main():
             refine_checkpoint = args.model
             MIN_EPOCHS = REFINE_MIN_EPOCHS
             MAX_EPOCHS = REFINE_MAX_EPOCHS
+            REFINE_LEARNING_RATE = args.lr
             refine_run = next_refine_number(model_dir, model_num)
         else:
             print(colorama.Back.RED + "Unsupported Model file" + colorama.Back.RESET) 
@@ -817,6 +823,9 @@ def main():
         inputs_train = next(iter(train_loader))
         model_params["ip_height"] = ip_height = int(Classifier.SPEC_HEIGHT * Classifier.RESIZE_FACTOR)
         trainer = Trainer(device, class_names, class_weight_vector, ip_height, len(train_loader), model_num, refine_checkpoint, refine_run)
+        patience = PATIENCE
+        if trainer.refine_mode:
+            patience = args.patience
         # main train loop
         for epoch in range(0, MAX_EPOCHS + 1):
             det_loss_avg, size_loss_avg, class_loss_avg, consistency_loss_avg, learning_rate = trainer.train(epoch, train_loader)
@@ -831,7 +840,7 @@ def main():
                     op_state = {"epoch": best_loss_epoch + 1, "state_dict": trainer.model.state_dict(), "params": model_params}
                     
                     if trainer.refine_mode:
-                        model_file_name = f"model_{model_num}_refine{refine_run}_E{best_loss_epoch}.pth.tar"
+                        model_file_name = f"model_{model_num}_refine{refine_run}_LR{REFINE_LEARNING_RATE}_P{patience}_E{best_loss_epoch}.pth.tar"
                     else:
                         model_file_name = f"model_{model_num}_E{best_loss_epoch}.pth.tar"
     
@@ -850,13 +859,10 @@ def main():
             else:
                 print(colorama.Style.DIM + f"epoch= {epoch:>3}, {timestamp}, Total_Loss={train_loss:>9.3f}, detection={det_loss_avg:>9.3f}, box_size={size_loss_avg:>5.3f}, class={class_loss_avg:>6.3f}, consistency={consistency_loss_avg:>6.4f}, learning_rate= {learning_rate:.6f}" + colorama.Style.RESET_ALL)
             if max_validate_f1_epoch is not None and CONSISTENCY_LOSS_WEIGHT != 0.7:
-                patience = PATIENCE
-                if trainer.refine_mode:
-                    patience = REFINE_PATIENCE
                 if epoch - max_validate_f1_epoch >= patience:                    
                     break        
         if trainer.refine_mode:
-            model_file_name = f"model_{model_num}_refine{refine_run}_E{max_validate_f1_epoch}.pth.tar"
+            model_file_name = f"model_{model_num}_refine{refine_run}_LR{REFINE_LEARNING_RATE}_P{patience}_E{best_loss_epoch}.pth.tar"
         else:
             model_file_name = f"model_{model_num}_E{max_validate_f1_epoch}.pth.tar"
         model_path = os.path.join(model_dir, model_file_name)

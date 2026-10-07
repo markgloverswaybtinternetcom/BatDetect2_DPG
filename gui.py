@@ -485,8 +485,8 @@ class MainWindow():
                     else: display.calls.Insert(self.AssignSpeciesID, self.AssignCallTypeID, labelMinT, labelMaxT, labelMinF, labelMaxF)
                     callsCsvPath = os.path.join(display.dir, "ann", f"{display.file}.csv")
                     display.calls.toCSV(callsCsvPath)
-                    callsJsonPath = os.path.join(display.dir, "ann", f"{display.file}.json")
-                    display.calls.toJSON(callsJsonPath)
+                    #callsJsonPath = os.path.join(display.dir, "ann", f"{display.file}.json")
+                    #display.calls.toJSON(callsJsonPath)
                     display.DisplaySpectogram(UpdateMin= False, sound = False)      
                 self.LabelStartPlot = None   
 
@@ -697,8 +697,8 @@ class MainWindow():
         self.SpecDisplay1.TruncateFile(self.SpecDisplay1.maxT)
         callsCsvPath = os.path.join(self.SpecDisplay1.dir, "ann", f"{self.SpecDisplay1.file}.csv")
         self.SpecDisplay1.calls.toCSV(callsCsvPath)
-        callsJsonPath = os.path.join(self.SpecDisplay1.dir, "ann", f"{self.SpecDisplay1.file}.json")
-        self.SpecDisplay1.calls.toJSON(callsJsonPath)
+        #callsJsonPath = os.path.join(self.SpecDisplay1.dir, "ann", f"{self.SpecDisplay1.file}.json")
+        #self.SpecDisplay1.calls.toJSON(callsJsonPath)
         
     def DeleteFile_click(self):
         self.SpecDisplay1.DeleteFile()
