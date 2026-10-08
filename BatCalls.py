@@ -102,7 +102,7 @@ class BatCalls():
             calls[:, 1] -= minT
             calls[:, 2] -= minT
         self.toCSV(csvFilePath, calls=calls)
-        self.toJSON(callsJsonPath, calls=calls, audioFile=audioFilename)
+        #self.toJSON(callsJsonPath, calls=calls, audioFile=audioFilename)
 
     def TruncateCalls(self, maxT):
         """Truncates annotations"""

@@ -1,4 +1,4 @@
-import os, json, polars, glob, argparse, colorama, sys, warnings
+import os, polars, glob, argparse, colorama, sys, warnings
 from Classifier import Classifier
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
@@ -168,27 +168,22 @@ def validate_model(model_file_path, validation_data_directory, last=None, max=No
     all_reference_annotations = []
     all_file_summaries = []
     for audio_file in audio_files:
-        # Run classifier and write model annotation JSON
+        # Run classifier and write model annotation CSV
         classifier.File(audio_file, printSummary=False)
         audio_dir = os.path.basename(os.path.dirname(audio_file))
         filename = os.path.basename(audio_file)
-        model_json_path = os.path.join(validation_data_directory, audio_dir, "ann", filename + ".json")
-        reference_json_path = os.path.join(validation_data_directory, audio_dir, "valid_ann", filename + ".json")
-        # Load JSON
-        if not os.path.exists(model_json_path):
-            print("Missing model JSON in:", model_json_path)
+        model_csv_path = os.path.join(validation_data_directory, audio_dir, "ann", filename + ".csv")
+        reference_csv_path = os.path.join(validation_data_directory, audio_dir, "valid_ann", filename + ".csv")
+        # Load CSV
+        if not os.path.exists(model_csv_path):
+            print("Missing model annotation CSV in:", model_csv_path)
             continue
-        if not os.path.exists(reference_json_path):
-            print(colorama.Back.RED + f"Missing reference JSON in: {reference_json_path}" + colorama.Back.RESET)
+        if not os.path.exists(reference_csv_path):
+            print(colorama.Back.RED + f"Missing reference CSV in: {reference_csv_path}" + colorama.Back.RESET)
             continue
-        with open(model_json_path) as f:
-            model_json = json.load(f)
-        with open(reference_json_path) as f:
-            reference_json = json.load(f)   
-        # Convert to Polars DataFrames
-        model_df = polars.DataFrame(model_json["annotation"])
-        reference_df = polars.DataFrame(reference_json["annotation"])
-        # Handle empty JSON (noise or no detections)
+        model_df = polars.read_csv(model_csv_path)
+        reference_df = polars.read_csv(reference_csv_path) 
+        # Handle empty CSV (noise or no detections)
         if model_df.is_empty():
             model_df = EMPTY_MODEL
         else:
