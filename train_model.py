@@ -163,33 +163,7 @@ def load_set_of_anns(wav_path):
     for cc in range(len(class_names)):
         print(f"{str(cc).ljust(5)}, {class_names[cc].ljust(str_len)}, {str(class_cnts[cc]).rjust(3)}")
     return anns, class_names.tolist(), class_inv_freq
- 
-"""def load_set_of_anns(wav_path):
-    audioFiles = glob.glob(os.path.join(wav_path, "**", "*.wav"), recursive=True)
-    anns = []
-    for path in audioFiles:
-        jsonFilepath = os.path.join(os.path.dirname(path), "ann", os.path.basename(path) + ".json")
-        try:
-            with open(jsonFilepath) as da:
-                ann = json.load(da)
-            dir = jsonFilepath[: jsonFilepath.find(os.sep + "ann" + os.sep)]
-            ann["file_path"] = path
-            anns.append(ann)
-        except Exception as e:
-            print(colorama.Back.YELLOW + colorama.Fore.BLACK + f"[WARNING] {e}" + colorama.Fore.RESET + colorama.Back.RESET)
-     # get unique class names
-    class_names_all = []
-    for ann in anns:
-        for aa in ann["annotation"]:
-            class_names_all.append(CompositeClass(aa["class"], aa["event"]))
-    class_names, class_cnts = numpy.unique(class_names_all, return_counts=True)
-    class_inv_freq = 1.0 / (class_cnts.astype(numpy.float32) + 1e-8)
-    str_len = numpy.max([len(cc) for cc in class_names]) + 5
-    for cc in range(len(class_names)):
-        print(f"{str(cc).ljust(5)}, {class_names[cc].ljust(str_len)}, {str(class_cnts[cc]).rjust(3)}")
-    return anns, class_names.tolist(), class_inv_freq """
 
-#batdetect2.train.audio_dataloader AudioLoader
 def echo_aug(audio, sampling_rate):
     sample_offset = ( int(ECHO_MAX_DELAY * numpy.random.random() * sampling_rate) + 1)
     audio[:-sample_offset] += numpy.random.random() * audio[sample_offset:]

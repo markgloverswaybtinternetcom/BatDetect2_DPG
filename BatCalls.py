@@ -94,7 +94,7 @@ class BatCalls():
                 exception = f"{len(calls)} calls - Too many to label"
         return bestSpecies, exception
         
-    def SaveAnnotations(self, minT, maxT, csvFilePath, callsJsonPath, audioFilename):
+    def SaveAnnotations(self, minT, maxT, csvFilePath, audioFilename):
         """Saves annotation file for displayed calls"""
         if len(self.CallsNP) == 0: calls = self.CallsNP # needed for training on noise files
         else:
@@ -102,7 +102,6 @@ class BatCalls():
             calls[:, 1] -= minT
             calls[:, 2] -= minT
         self.toCSV(csvFilePath, calls=calls)
-        #self.toJSON(callsJsonPath, calls=calls, audioFile=audioFilename)
 
     def TruncateCalls(self, maxT):
         """Truncates annotations"""
