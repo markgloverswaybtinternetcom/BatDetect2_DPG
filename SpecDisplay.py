@@ -525,8 +525,7 @@ class SpecDisplay():
             filepath = os.path.join(self.dir, partFile)
             soundfile.write(filepath, self.Recording, self.sample_rate)
             callsCsvPath = os.path.join(self.dir, "ann", f"{partFile}.csv")
-            callsJsonPath = os.path.join(self.dir, "ann", f"{partFile}.json")
-            self.calls.SaveAnnotations(self.minT, self.maxT, callsCsvPath, callsJsonPath, partFile)
+            self.calls.SaveAnnotations(self.minT, self.maxT, callsCsvPath, partFile)
             self.Status(f"Normal speed audio saved as '{filepath}' with ann file") 
         
     def DownSample(self, arr, downscale_factor):
