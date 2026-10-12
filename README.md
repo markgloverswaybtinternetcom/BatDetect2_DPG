@@ -20,7 +20,9 @@ The UV package manager creates a virtual environment and installs Python, all la
 and  a desktop short cut is created.
  
 ## Use
+The shortcut to the GUI should be created on the desktop by the install
 
+![](Resources/web_Images/shortcut.png)
 ### Load a single wav file
 
 -   Drag the file onto 'Bat Detect GUI' window
