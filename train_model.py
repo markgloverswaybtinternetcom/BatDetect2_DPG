@@ -120,7 +120,7 @@ def next_model_number(models_dir):
 def next_refine_number(model_dir, model_num):
     """Scan model_dir for existing refinement runs for model_<model_num>
     and return the next available refinement run number (R-number)."""
-    refine_pattern = re.compile(rf"model_{model_num}_refine(\d+)_E\d+\.pth\.tar$")
+    refine_pattern = re.compile(rf"model_{model_num}_refine(\d+)_")
     max_r = 0
     for fname in os.listdir(model_dir):
         match = refine_pattern.match(fname)
