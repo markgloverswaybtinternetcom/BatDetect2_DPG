@@ -129,7 +129,7 @@ def next_refine_number(model_dir, model_num):
             if r > max_r:
                 max_r = r
     return max_r + 1
-    
+
 def summarize(functionName, data):
     if not DEBUG: return
     if isinstance(data, numpy.ndarray) or hasattr(data, "__array__"):
@@ -836,7 +836,7 @@ def main():
                 if epoch - max_validate_f1_epoch >= patience:                    
                     break        
         if trainer.refine_mode:
-            model_file_name = f"model_{model_num}_refine{refine_run}_LR{REFINE_LEARNING_RATE}_P{patience}_E{best_loss_epoch}.pth.tar"
+            model_file_name = f"model_{model_num}_refine{refine_run}_LR{REFINE_LEARNING_RATE}_P{patience}_E{max_validate_f1_epoch}.pth.tar"
         else:
             model_file_name = f"model_{model_num}_E{max_validate_f1_epoch}.pth.tar"
         model_path = os.path.join(model_dir, model_file_name)
