@@ -19,7 +19,7 @@ SPEC_SCALE = "pcen"
 DENOISE_SPEC_AVG = True
 MAX_SCALE_SPEC = False
 CHUNK_SIZE = 2.0
-DEFAULT_MODEL_PATH = "model_103_refine_E240.pth.tar"
+DEFAULT_MODEL_PATH = "model_194_refine324_LR5e-05_P30_E5.pth.tar"
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 ########## types ############
@@ -337,7 +337,7 @@ class Classifier():
                 config = json.load(jsonfile)
                 self.speciesLanguage = config["SpeciesLanguage"] 
         else: self.speciesLanguage = "EnglishAbbrev"
-        if self.speciesLanguage != 'Latin' and  self.speciesLanguage != 'None': 
+        if self.speciesLanguage != 'Latin' and  self.speciesLanguage != 'None' and  self.speciesLanguage is not None: 
             self.latinToLangDict = self.speciesNames.set_index('Latin')[self.speciesLanguage].to_dict()
         else: self.latinToLangDict = None
 

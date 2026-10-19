@@ -10,7 +10,7 @@ numpy.set_printoptions(precision=4, suppress=True)
 DEBUG = False
 DETECTION_OVERLAP = 0.01  # has to be within this number of ms to count as detection
 LEARNING_RATE = 0.001
-REFINE_LEARNING_RATE = 0.0005
+REFINE_LEARNING_RATE = 0.0001
 BATCH_SIZE = 8
 NUM_WORKERS = 4
 MIN_EPOCHS = 300
@@ -18,7 +18,7 @@ REFINE_MIN_EPOCHS = 5
 MAX_EPOCHS = 900
 REFINE_MAX_EPOCHS = 150
 PATIENCE = 120
-REFINE_PATIENCE = 40
+REFINE_PATIENCE = 80
 TRAIN_FILE_USED_SEC = 1   # standarised length in seconds
 SPEC_TRAIN_WIDTH = 2560   # equivalent to 1 seoond,  units are number of time steps (before resizing is performed)
 
