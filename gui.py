@@ -494,6 +494,7 @@ class MainWindow():
                             self.LoadBatDetectTable(self.FileTable, dir=self.ActiveDisplay.dir, loadBatDetect2=False)                            
                         else:
                             dpg.configure_item(self.call_cell_ids[self.lastRow], label=summary) 
+                            self.FilesDF[self.FileTableRow, 'Bat Call'] = summary
                         dirResults_file = os.path.join(self.SpecDisplay1.dir, "BatDetect2 Results.csv")
                         self.FilesDF.write_csv(dirResults_file)                    
                 self.LabelStartPlot = None   
