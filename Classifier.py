@@ -1,4 +1,4 @@
-import pandas, os, sys, torch, colorama, json, utils, time, soundfile, Net2dFast, librosa, librosa.core.spectrum, numpy
+import pandas, os, sys, torch, colorama, json, utils, time, soundfile, Net2dFast, librosa, librosa.core.spectrum, numpy, glob
 from typing import Any, Union, Protocol, TypedDict
 
 #### Constants ###
@@ -19,7 +19,6 @@ SPEC_SCALE = "pcen"
 DENOISE_SPEC_AVG = True
 MAX_SCALE_SPEC = False
 CHUNK_SIZE = 2.0
-DEFAULT_MODEL_PATH = "model_194_refine324_LR5e-05_P30_E5.pth.tar"
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 ########## types ############
@@ -38,9 +37,16 @@ class RunResults(TypedDict):
     cnn_feat_names: NotRequired[List[str]]
     spec_slices: NotRequired[List[np.ndarray]]
 
-################ detector_utils #############################
-
-def load_model(model_path: str = DEFAULT_MODEL_PATH, load_weights: bool = True, device: Optional[torch.device] = None, weights_only: bool = True) -> Tuple[DetectionModel, ModelParameters]:
+def load_model(model_path: str = "", load_weights: bool = True, device: Optional[torch.device] = None, weights_only: bool = True) -> Tuple[DetectionModel, ModelParameters]:
+    if model_path == "":
+        code_dir = os.path.dirname(os.path.abspath(__file__))
+        model_files = glob.glob(code_dir + "/*.pth.tar")
+        if len(model_files) == 1:
+            model_path = model_files[0]
+        elif len(model_files) == 0:
+            raise Exception("No model file")
+        else:
+            raise Exception("Too many model files")
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if not os.path.isfile(model_path):
@@ -325,10 +331,10 @@ def load_audio(path: AudioPath, time_exp_fact: float, target_samp_rate: int) -> 
 
 class Classifier():
     """Uses BatDetect2 lower level code without modification any modifications are in this class"""
-    def __init__(self, modelPath=DEFAULT_MODEL_PATH, debug=True):
+    def __init__(self, modelPath='', debug=True):
         code_dir = os.path.dirname(os.path.abspath(__file__))
-        if debug and modelPath != DEFAULT_MODEL_PATH: print(f"Classifier __init__ {modelPath=}")
-        self.model, self.modelParams = load_model(os.path.join(code_dir, modelPath), weights_only=False)
+        if debug and modelPath != '': print(f"Classifier __init__ {modelPath=}")
+        self.model, self.modelParams = load_model(modelPath, weights_only=False)
         self.speciesNames = pandas.read_csv(os.path.join(code_dir, "Resources", "SpeciesNames.csv"))
         config = None
         configFile = os.path.join(code_dir, "gui_Config.json")

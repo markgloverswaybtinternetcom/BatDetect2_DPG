@@ -20,9 +20,9 @@ class MainWindow():
     """Graphical user interface using DearPyGui"""    
     def __init__(self):
         parser = argparse.ArgumentParser(description='Display and classify bat calls')
-        parser.add_argument('-model', '--model', type=str, help='Model to be used for classifying', default="model_194_refine324_LR5e-05_P30_E5.pth.tar")
+        parser.add_argument('-model', '--model', type=str, help='Model to be used for classifying', default='')
         args = parser.parse_args()
-        self.model=args.model
+        self.model = args.model       
         self.SpeciesNames = pandas.read_csv(os.path.join("Resources", "SpeciesNames.csv"))
         self.lastMousePos = self.LabelStartPlot = self.StatusLabel = self.AssignSpeciesID = self.AssignCallTypeID = None
         self.lastRow = self.FileTableRow = self.FilesDF = self.SoundProcess = self.soundLine = self.lastMousePlotPos = self.calls = None
