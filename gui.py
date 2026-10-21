@@ -484,8 +484,18 @@ class MainWindow():
                         display.calls.Delete(labelMinT, labelMaxT, labelMinF, labelMaxF)
                     else: display.calls.Insert(self.AssignSpeciesID, self.AssignCallTypeID, labelMinT, labelMaxT, labelMinF, labelMaxF)
                     callsCsvPath = os.path.join(display.dir, "ann", f"{display.file}.csv")
-                    display.calls.toCSV(callsCsvPath)
-                    display.DisplaySpectogram(UpdateMin= False, sound = False)      
+                    summary = display.calls.toCSV(callsCsvPath)
+                    display.DisplaySpectogram(UpdateMin= False, sound = False)
+                    # alter SpecDisplay species line 
+                    display.SetClassifyLabel(summary) 
+                    if self.MultiFile and self.lastRow is not None and len(config["echoMeterDir"]) == 0:
+                        if summary == "":
+                            self.FilesDF = self.FilesDF.filter(polars.arange(0, self.FilesDF.height) != self.FileTableRow)  
+                            self.LoadBatDetectTable(self.FileTable, dir=self.ActiveDisplay.dir, loadBatDetect2=False)                            
+                        else:
+                            dpg.configure_item(self.call_cell_ids[self.lastRow], label=summary) 
+                        dirResults_file = os.path.join(self.SpecDisplay1.dir, "BatDetect2 Results.csv")
+                        self.FilesDF.write_csv(dirResults_file)                    
                 self.LabelStartPlot = None   
 
     def Status(self, txt, error=False, theme=None):
@@ -880,6 +890,7 @@ class MainWindow():
         for column in df.columns:
             dpg.add_table_column(label=column, parent=table)
         nRow = nFile = 0
+        self.call_cell_ids = []
         for row in df.iter_rows():
             nCol = 0
             for c in range(nCols):
@@ -897,7 +908,8 @@ class MainWindow():
                     else:
                         dpg.add_selectable(label=a, parent=tRow, callback=self.TableRow_selected, span_columns=True, user_data=[table, df, nFile, nRow])
                 else:
-                    dpg.add_selectable(label=a, parent=tRow, callback=self.TableRow_selected, span_columns=True, user_data=[table, df, nFile, nRow])
+                    call_cell_id = dpg.add_selectable(label=a, parent=tRow, callback=self.TableRow_selected, span_columns=True, user_data=[table, df, nFile, nRow])
+                    self.call_cell_ids.append(call_cell_id)
                 nCol += 1
             tRow = None
             nRow += 1

@@ -152,6 +152,7 @@ class BatCalls():
         print(f"toCSV {csvFilePath=}")
         data = [['id','det_prob','start_time','end_time','high_freq','low_freq','class','class_prob','event']]
         n = 0
+        summaryDict = {}
         if calls is None: calls = self.CallsNP
         if calls is not None:
             for call in calls:
@@ -159,10 +160,29 @@ class BatCalls():
                 f2=f"{call[4]*1000:.0f}"; p1 = f"{call[5]:.3f}"; p2 = f"{call[6]:.3f}"; ct = self.CallTypes[int(call[7])]
                 data.append([n, float(p1), float(t1), float(t2), float(f2), float(f1), s, float(p2), ct])
                 n += 1
+                id = int(call[0])
+                idct = id * len(self.CallTypes) + int(call[7])
+                prob = call[5] * call[6]
+                if idct in summaryDict:
+                    min = summaryDict[idct][1]; max = summaryDict[idct][2];
+                    if prob < min: min = prob
+                    if prob > max: max = prob
+                    summaryDict[idct] = [summaryDict[idct][0]+1, min, max]
+                else:
+                    summaryDict[idct] = [1, prob, prob]                 
         with open(csvFilePath, 'w', newline='') as csvfile:
             writer = csv.writer(csvfile)
             writer.writerows(data)
-    
+        summary = ""
+        for idct, val in summaryDict.items(): 
+            id, ct = divmod(idct, len(self.CallTypes))
+            species = self.SpeciesNames.loc[id][self.SpeciesLanguage]
+            callType = ""
+            if ct > 0: callType = '-' + self.CallTypes[ct]
+            if val[0] == 1: summary += f"{species}{callType} 1 call {val[1]:.0%}, "
+            else: summary += f"{species}{callType} {val[0]} calls {val[2]:.0%}-{val[1]:.0%}, "
+        return summary
+        
     def Insert(self, speciesId, callTypeId, callTmin, callTmax, callFmin, callFmax):
         print(f"Insert {speciesId=} {callTypeId=} {callTmin=} {callTmax=} {callFmin=} {callFmax=}")
         callInserted = False
