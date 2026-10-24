@@ -14,7 +14,7 @@ REFINE_LEARNING_RATE = 0.0001
 BATCH_SIZE = 8
 NUM_WORKERS = 4
 MIN_EPOCHS = 300
-REFINE_MIN_EPOCHS = 5
+REFINE_MIN_EPOCHS = 1
 MAX_EPOCHS = 900
 REFINE_MAX_EPOCHS = 150
 PATIENCE = 120
@@ -33,7 +33,7 @@ DEFAULT_CLASS_WEIGHTS = {
     "Barbastella barbastellus-Feeding Buzz": 20.0,
     "Barbastella barbastellus-Social": 3.0,
     "Eptesicus serotinus-Echolocation": 4.5, 
-    "Eptesicus serotinus-Feeding Buzz": 20.0,
+    "Eptesicus serotinus-Feeding Buzz": 10.0,
     "Eptesicus serotinus-Social": 3.5,
     "Myotis alcathoe-Echolocation": 2.0,
     "Myotis alcathoe-Feeding Buzz": 20.0,
@@ -52,8 +52,8 @@ DEFAULT_CLASS_WEIGHTS = {
     "Myotis nattereri-Social": 3.5,
     "Nyctalus leisleri-Echolocation": 4.0,
     "Nyctalus leisleri-Social": 4.0,
-    "Nyctalus noctula-Echolocation": 2.8,
-    "Nyctalus noctula-Feeding Buzz": 20.0,
+    "Nyctalus noctula-Echolocation": 2.0,
+    "Nyctalus noctula-Feeding Buzz": 10.0,
     "Nyctalus noctula-Social": 3.5,
     "Pipistrellus nathusii-Echolocation": 2.0,
     "Pipistrellus nathusii-Feeding Buzz": 20.0,
@@ -87,21 +87,6 @@ HORSESHOE_CF = {
     "Rhinolophus hipposideros-Echolocation": 110000,   # Lesser Horseshoe CF (Hz)
 }
     
-def summarize_array(name, value):
-    if not DEBUG: return
-    if numpy.isscalar(value):
-        print(colorama.Style.BRIGHT + f"{name + colorama.Style.RESET_ALL}: {value}")
-        return
-    try:
-        arr = numpy.asarray(value)  # Convert lists or other sequences to NumPy array
-    except Exception as e:
-        print(colorama.Back.RED + f"{name}: Could not convert to NumPy array ({e})" + colorama.Back.RESET)
-        return
-    flat = arr.flatten()
-    nan_count = numpy.isnan(flat).sum() if numpy.issubdtype(arr.dtype, numpy.floating) else 0
-    vals_greater_mean = (flat > numpy.mean(flat)).sum()
-    print(colorama.Style.BRIGHT + f"{name + colorama.Style.RESET_ALL}: shape={arr.shape}, {arr.dtype}, min={numpy.min(flat):.3f}, max={numpy.max(flat):.3f} mean={numpy.mean(flat):.3f}, N above mean= {vals_greater_mean}, NANs={int(nan_count)}")
-
 def next_model_number(models_dir):
     files = glob.glob(os.path.join(models_dir, "model_*.pth.tar"))
     if not files:
@@ -129,19 +114,6 @@ def next_refine_number(model_dir, model_num):
             if r > max_r:
                 max_r = r
     return max_r + 1
-
-def summarize(functionName, data):
-    if not DEBUG: return
-    if isinstance(data, numpy.ndarray) or hasattr(data, "__array__"):
-        callers_locals = inspect.currentframe().f_back.f_locals
-        # Find all variable names that reference the same object
-        names = [name for name, val in callers_locals.items() if val is var]
-        summarize_array(names[0], data)
-    elif isinstance(data, dict):
-        if DEBUG: print(functionName)
-        for key, value in data.items():          
-            summarize_array(str(key), value) 
-    else: print(colorama.Back.RED + "summarize: Unsupported data type. Please provide a NumPy array or a dictionary of arrays." + colorama.Back.RESET)
 
 def load_set_of_anns(wav_path):
     audioFiles = glob.glob(os.path.join(wav_path, "**", "*.wav"), recursive=True)
@@ -261,7 +233,6 @@ def debug_heatmap_alignment_corners(spec, heatmap, x1, x2, y1, y2, ii, class_nam
     print(f"debug_heatmap_alignment_corners {ii} {class_name=} {spec.shape=} {heatmap.shape=}")
     heatmap_up = heatmap
     heatmap_up = heatmap_up / (heatmap_up.max() + 1e-6)
-    summarize_array("debug_heatmap_alignment_corners", heatmap_up)
     Hh, Wh = heatmap.shape
     Hs, Ws = spec.shape
     # Scale factors
@@ -579,7 +550,7 @@ def get_consistency_weight(epoch):
     else: return 0.35
     
 class Trainer():
-    def __init__(self, device, class_names, class_weight_vector, ip_height, len_train_loader, model_num, refine_checkpoint=None, refine_run=None):
+    def __init__(self, device, class_names, class_weight_vector, ip_height, len_train_loader, model_num, refine_checkpoint=None, refine_run=None, debug=None):
         self.refine_checkpoint = refine_checkpoint
         self.refine_mode = refine_checkpoint is not None
         self.device = device
@@ -616,8 +587,9 @@ class Trainer():
             class_indices = self.species_to_class_indices[species]
             species_map[s_idx, class_indices] = 1.0
         self.species_map_matrix = species_map
-        if refine_run is None: self.debug_logger = training_debug_logger.DebugLogger(f"model_{model_num}")
-        else: self.debug_logger = training_debug_logger.DebugLogger(f"model_{model_num}_R{refine_run}")
+        if debug is not None:
+            if refine_run is None: self.debug_logger = training_debug_logger.DebugLogger(f"model_{model_num}")
+            else: self.debug_logger = training_debug_logger.DebugLogger(f"model_{model_num}_R{refine_run}")
         self.species_diff_scale = 1.05
         self.att_weight = 0.025
 
