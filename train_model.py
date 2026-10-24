@@ -587,6 +587,7 @@ class Trainer():
             class_indices = self.species_to_class_indices[species]
             species_map[s_idx, class_indices] = 1.0
         self.species_map_matrix = species_map
+        self.debug_logger = None
         if debug is not None:
             if refine_run is None: self.debug_logger = training_debug_logger.DebugLogger(f"model_{model_num}")
             else: self.debug_logger = training_debug_logger.DebugLogger(f"model_{model_num}_R{refine_run}")
@@ -649,7 +650,7 @@ class Trainer():
         consistency_loss = CONSISTENCY_LOSS_WEIGHT * raw_consistency_time
         consistency_loss += CONSISTENCY_LOSS_WEIGHT * self.att_weight * att_consistency
         # --- Debug logging ---
-        if self.epoch % 50 == 0 and self.batch_idx == 0:
+        if self.debug_logger is not None and self.epoch % 50 == 0 and self.batch_idx == 0:
             self.debug_logger.log({"epoch": int(self.epoch),
                 "batch_idx": int(self.batch_idx),
                 "attention_consistency": float(att_consistency.item()),
