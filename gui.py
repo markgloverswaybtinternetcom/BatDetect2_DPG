@@ -189,7 +189,7 @@ class MainWindow():
                         print(f"MainWindow {config['file']=}, {row=}")
                         dpg.highlight_table_row(self.FileTable, row, color=[0,150,0]) 
                         self.ScrollToRow(row)
-                        self.lastRow = row
+                        self.FileTableRow = self.lastRow = row
                         self.MultiFile = True; self.resize_handler(0, None, None)
                         self.Status(f"'{self.SpecDisplay1.dir}' files, select file") 
                     except: print(colorama.Fore.RED + f"MainWindow {row=} not in self.FileTable?" + colorama.Fore.RESET)
@@ -491,7 +491,7 @@ class MainWindow():
                     if self.MultiFile and self.lastRow is not None and len(config["echoMeterDir"]) == 0:
                         if summary == "":
                             self.FilesDF = self.FilesDF.filter(polars.arange(0, self.FilesDF.height) != self.FileTableRow)  
-                            self.LoadBatDetectTable(self.FileTable, dir=self.ActiveDisplay.dir, loadBatDetect2=False)                            
+                            self.LoadBatDetectTable(self.FileTable, dir=self.ActiveDisplay.dir, loadBatDetect2=False, reset=False)                            
                         else:
                             dpg.configure_item(self.call_cell_ids[self.lastRow], label=summary) 
                             self.FilesDF[self.FileTableRow, 'Bat Call'] = summary
@@ -714,12 +714,15 @@ class MainWindow():
         callsJsonPath = os.path.join(self.SpecDisplay1.dir, "ann", f"{self.SpecDisplay1.file}.json")
         if os.path.exists(callsJsonPath): os.remove(callsJsonPath)
         if self.MultiFile:
-            print(f"DeleteFile_click before {self.FilesDF.height=}")
             self.FilesDF = self.FilesDF.filter(polars.arange(0, self.FilesDF.height) != self.FileTableRow)
             dirResults_file = os.path.join(self.ActiveDisplay.dir, "BatDetect2 Results.csv")
             self.FilesDF.write_csv(dirResults_file)            
-            print(f"DeleteFile_click after {self.FilesDF.height=}")
-            self.LoadBatDetectTable(self.FileTable, dir=self.ActiveDisplay.dir, loadBatDetect2=False)
+            self.LoadBatDetectTable(self.FileTable, dir=self.ActiveDisplay.dir, loadBatDetect2=False, reset=False)
+            if self.lastRow >= self.FilesDF.height:
+                self.lastRow = self.FilesDF.height -1
+            user_data = [self.FileTable,  self.FilesDF, self.lastRow, self.lastRow]
+            self.TableRow_selected(0, [], user_data)
+            self.ScrollToRow(self.lastRow)
         else:
             del self.ActiveDisplay.dirFiles[self.ActiveDisplay.dirIndex]
             self.DownKey_pressed(self.DeleteFile, 0, 0)
@@ -875,17 +878,20 @@ class MainWindow():
             if ysm > 0: 
                 dpg.set_y_scroll(self.FileTable, ysm)
                 
-    def LoadBatDetectTable(self, table, dir, loadBatDetect2=True):
+    def LoadBatDetectTable(self, table, dir, reset=True, loadBatDetect2=True):
         """Loads file table with classification summary of each file if already classified"""
         print(f"LoadBatDetectTable {table=} {dir=}")
         config["echoMeterDir"] = ""
-        if loadBatDetect2:
-            dirResults_file = os.path.join(self.SpecDisplay1.dir, "BatDetect2 Results.csv")
-            self.FilesDF = df = polars.read_csv(dirResults_file)
-        else: df = self.FilesDF
+        df = self.FilesDF
+        if reset:
+            if loadBatDetect2:
+                dirResults_file = os.path.join(self.SpecDisplay1.dir, "BatDetect2 Results.csv")
+                self.FilesDF = df = polars.read_csv(dirResults_file)
+            self.lastRow = None
+            self.FileMinTs = [0.0] * len(self.FilesDF)
+        
         nRows, nCols = df.shape
         self.NumFiles = nRows
-        self.lastRow = None
         dpg.delete_item(table, children_only=True, slot=0) # remove columns
         dpg.delete_item(table, children_only=True, slot=1) # remove rows
         for column in df.columns:
@@ -915,7 +921,6 @@ class MainWindow():
             tRow = None
             nRow += 1
             nFile += 1
-        self.FileMinTs = [0.0] * len(self.FilesDF)
 
     def LoadGpsTable(self, table, dir_path):
         """Loads file table from EchoMeter GPS based recordings the per file species classification is unreliable"""
