@@ -32,7 +32,8 @@
     <li>Or in Linux terminal type ./classify.sh and drag the folder in to provide the path.</li>
     <p>All the wav files will be classified for bat echolocation calls (this may take some time) and are retained in the ‘ann’ subdirectory.
     <br/>Wakepy should stop the PC sleeping while the files are classified    
-    <br/>The files will be listed in a table at the bottom of the GUI. It will scroll to the first consecutive calls.
+    <br/>The files will be listed in a table at the bottom of the GUI. 
+    <br/>When a file is selected the GUI will scroll to the first consecutive calls, it will retain the last position if the file is selected again.
     <br/>To scroll to the most probable of another species select 'Find Species' combobox.</p>
 </ul>
 <img src="Resources/web_Images/CornerDisplay.png"/>
@@ -53,9 +54,9 @@
 
 <h4>Zoom in on spectrogram area</h4>
 <ul>
-    <li>Normal left click and drag to define area to be zoomed. Double click to unzoom</li>
-    <li>Or use scroll wheel on mouse</li>
-    <li>Or alter the ‘Range’ combo-box, this will be retained</li>
+    <li>Alter the ‘Range’ combo-box, this will be retained</li>
+    <li>Or Normal left click and drag to define area to be zoomed. Double click to unzoom NOT RECOMMENDED</li>
+    <li>Or use scroll wheel on mouse NOT RECOMMENDED</li>
 </ul>
 <p>The amplitude and power graphs will alter to also display the zoomed area.</p>
 
@@ -72,11 +73,11 @@
 <h4>Alter area in spectrogram</h4>
 <ul>
     <li>Left and right arrow keys move spectrogram window one windows worth in time</li>
-    <li>Or click on scroll bar</li>
+    <li>Or click on scroll bar NOT RECOMMENDED</li>
     <li>Up and down arrow keys move spectrogram one file</li>
     <li>Or click on table row</li>
     <li>‘Range’ combo-box alters size of spectrogram window</li>
-    <li>'Filter' combo-boxes reduce displayed graphs and filter played sound.
+    <li>'Filter' combo-boxes reduce displayed graphs and filter the played sound.
     <br/>This can removed audible or other noise, but may hide the fact that a bat call is in fact an audible noise harmonic.</li>
     <img src="file://C:/Users/Mark%20Glover/Desktop/BatDetect2%20DPG/Resources/web_Images/RangeFilter.png"/>
     <p>The new area will have its time expanded sound play automatically, this will stop short if the spectrogram area is changed.</p>
@@ -86,7 +87,8 @@
 <ul>
     <li>Select ‘Speed’ combo-box,</li>
     <li>Press ‘Save Sound’ button</li>
-    <p>Saves only the displayed sound, file-name based on originating file, position in file, species and in the same directory.<br/>Time expanded recordings names end with 'TE.wav'<br/> </p>
+    <p>Saves only the displayed sound, file-name based on originating file, position in file, species and in the same directory.
+    <br/>Time expanded recordings names end with 'TE.wav'</p>
 </ul>
 
 <h4>Save current settings</h4>
@@ -196,12 +198,10 @@ The min is automatically adjusted when the spectrogram moves.</p>
 <h3>Classifier</h3>
 <ul>
 	<li>If the calls associated with a species is not visible, reduce the red and blue colour levels. The classifier is more sensitive than humans</li>
-    <li>The BatDetect2 classifier used only knows UK echolocations calls, so social calls, feeding buzzes and some noise will be misidentified or missed.</li>
-    <li>Reported Noctules are quite often harmonics of audible noise, so you may need to reduce low pass filter to check this. 
-    <br/>However audible noise is often loader than higher frequencies so needs to be low pass filtered to give useful power spectrum.</li>
+    <li>The classifier used knows UK echolocations calls, social calls, and feeding buzzes.</li>
+    <li>The social call classification is less reliable, due to lack of training material</li>
+    <br/>However audible noise is often loader than higher frequencies so needs to be low pass filtered to give useful power spectrum or audible bat calls.</li>
     <li>Rare species reported are often common species with slightly unusual frequencies</li>
-    <li>Isolated Alcathoes and Long eared calls are often feeding buzzes</li>
-    <li>Isolated Serotine calls are often social calls</li>
 </ul>
 
 <h3>Recordings</h3>
@@ -229,13 +229,12 @@ The min is automatically adjusted when the spectrogram moves.</p>
     <li>Use DearPyGui Heat-maps for display, which defaults to showing the value of each square - resulting in a white screen consisting of dense text. 
     <br/>Only zooming and annotation show above the heat-map, so everything else is invisible. 
     <br/>Hence the heatmap itself crudely used for the selection rectangle and annotation is used for the audio replay cursor and intervals.</li>
-    <li>Use PyTorch for processing, which is fast but is sensitive to the sampling rate, BatDetect2 does not use PyTorch for this (though it is used for machine learning).</li>
+    <li>Use PyTorch for processing, which is fast but is sensitive to the sampling rate, </li>
 </ul>
 
 
 <h2>Model Training</h2>
-<p>The BatDetect2 training has difficulty with wide calls like Noctules and Horseshoes, social calls, feeding buzzes are only just possible. 
-<br/>However this is not possible for the original default model.
+<p>The original BatDetect2 training had difficulty with wide calls like Noctules and Horseshoes, and social calls, feeding buzzes were impossible. </p>
 <ul>
     <li>The Gaussian heatmap has been altered to better fit wide calls, and extra pure noise and false call training data added.</li>
     <li>Augmentations randomly corrupt the training data to avoid over fitting of the model, some have been remove and more added to better fit Horseshoes.</li>
@@ -247,6 +246,7 @@ The min is automatically adjusted when the spectrogram moves.</p>
     </ul>
     <li>The model stops training when the loss value plateaus.</li>
     <li>The model is saved with an incrementing number.</li>
+    <li>Normal random models are further refined and also have an incrementing number.</li>
 </ul>
 
 <h3>Training Data</h3>
