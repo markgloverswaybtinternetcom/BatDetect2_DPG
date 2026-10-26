@@ -485,18 +485,17 @@ class MainWindow():
                     else: display.calls.Insert(self.AssignSpeciesID, self.AssignCallTypeID, labelMinT, labelMaxT, labelMinF, labelMaxF)
                     callsCsvPath = os.path.join(display.dir, "ann", f"{display.file}.csv")
                     summary = display.calls.toCSV(callsCsvPath)
-                    display.DisplaySpectogram(UpdateMin= False, sound = False)
-                    # alter SpecDisplay species line 
-                    display.SetClassifyLabel(summary) 
+                    # alter SpecDisplay species line  
                     if self.MultiFile and self.lastRow is not None and len(config["echoMeterDir"]) == 0:
                         if summary == "":
                             self.FilesDF = self.FilesDF.filter(polars.arange(0, self.FilesDF.height) != self.FileTableRow)  
-                            self.LoadBatDetectTable(self.FileTable, dir=self.ActiveDisplay.dir, loadBatDetect2=False, reset=False)                            
-                        else:
-                            dpg.configure_item(self.call_cell_ids[self.lastRow], label=summary) 
+                        else: 
                             self.FilesDF[self.FileTableRow, 'Bat Call'] = summary
                         dirResults_file = os.path.join(self.SpecDisplay1.dir, "BatDetect2 Results.csv")
-                        self.FilesDF.write_csv(dirResults_file)                    
+                        self.FilesDF.write_csv(dirResults_file) 
+                        self.LoadBatDetectTable(self.FileTable, dir=self.ActiveDisplay.dir, loadBatDetect2=False, reset=False)                            
+                    display.UpdateAnnotations()
+                    display.DisplaySpectogram(UpdateMin= False, sound = False)
                 self.LabelStartPlot = None   
 
     def Status(self, txt, error=False, theme=None):
@@ -921,6 +920,10 @@ class MainWindow():
             tRow = None
             nRow += 1
             nFile += 1
+        if not reset:
+            #restore selected row
+            dpg.highlight_table_row(self.FileTable, self.FileTableRow, color=[0,150,0])
+            
 
     def LoadGpsTable(self, table, dir_path):
         """Loads file table from EchoMeter GPS based recordings the per file species classification is unreliable"""

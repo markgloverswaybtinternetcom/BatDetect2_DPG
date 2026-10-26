@@ -127,8 +127,13 @@ class SpecDisplay():
                 self.dirFiles = dirList
             titleExtra = f"file {self.dirIndex +1} of {len(self.dirFiles)}"
         self.dir = dir; self.file = file
+        if self.classifyEnabled: 
+            self.UpdateAnnotations()
+        self.LoadFile(filepath, titleExtra, minT, timeExpand) 
+    
+    def UpdateAnnotations(self):
         if self.classifyEnabled:            
-            callsCsvPath = os.path.join(dir,"ann", file + ".csv")
+            callsCsvPath = os.path.join(self.dir,"ann", self.file + ".csv")
             if os.path.isfile(callsCsvPath) and self.SpeciesLanguage is not None:
                 summary = self.calls.fromCSV(callsCsvPath)
                 self.SetClassifyLabel(summary)                
@@ -142,8 +147,7 @@ class SpecDisplay():
             else:
                 if self.SpeciesLanguage is not None: dpg.set_value(self.ClassifyLabel, "No bat calls found")
                 dpg.configure_item(self.ClassifyLabel, color=(200, 0, 0, 255))
-        self.LoadFile(filepath, titleExtra, minT, timeExpand) 
-
+                
     def GenerateSpectrum(self):
         """Genenertes the coloured spectrum used in the spectrogram, DearPyGui does not allow access to standard spectrums"""
         colours = []
