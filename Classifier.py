@@ -400,7 +400,7 @@ class Classifier():
                 f.write("id,det_prob,start_time,end_time,high_freq,low_freq,class,class_prob\n")
         return summary
  
-    def process_file(self, audio_file: str, model: DetectionModel, device: torch.device=DEVICE) -> Union[RunResults, Any]:
+    def process_file(self, audio_file: str, model: DetectionModel, timeExpFact=1, device: torch.device=DEVICE) -> Union[RunResults, Any]:
         """Replaces function of same name in BatDetect2"""
         predictions = []; spec_feats = []
         try:
@@ -411,7 +411,6 @@ class Classifier():
         file_samp_rate = info.samplerate
         filename = os.path.basename(os.path.splitext(audio_file)[0])
         if filename.endswith("TE"): timeExpFact = 10
-        else: timeExpFact = 1
         orig_samp_rate = file_samp_rate * timeExpFact
         sampling_rate, audio_full = load_audio(audio_file, time_exp_fact=timeExpFact,  target_samp_rate=TARGET_SAMPLERATE_HZ)
         
@@ -433,13 +432,13 @@ class Classifier():
             duration=audio_full.shape[0] / float(sampling_rate), params=self.modelParams, predictions=predictions, nyquist_freq=orig_samp_rate / 2)
         return calls
 
-    def File(self, filepath, debug=False, annForEmpty=True, annDir="ann", speciesLanguage=None, printSummary=True):
+    def File(self, filepath, debug=False, annForEmpty=True, annDir="ann", speciesLanguage=None, printSummary=True, timeExpFact=1):
         """Classifies one file using BatDetect2"""
         if speciesLanguage is not None and speciesLanguage != self.speciesLanguage:
             self.latinToLangDict = self.speciesNames.set_index('Latin')[speciesLanguage].to_dict()
         dir = os.path.dirname(filepath)
         file = os.path.basename(filepath)
-        calls = self.process_file(filepath, self.model)
+        calls = self.process_file(filepath, self.model, timeExpFact=timeExpFact)
         op_dir = os.path.join(dir, annDir)
         if not os.path.isdir(op_dir): # make directory if it does not exist
             os.makedirs(op_dir)
