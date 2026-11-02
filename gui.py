@@ -858,7 +858,7 @@ class MainWindow():
                 self.FileMinTs[self.lastRow] = self.ActiveDisplay.minT
                 dpg.unhighlight_table_row(table, self.lastRow)
         except: print(colorama.Fore.RED + "TableRow_selected dpg bug" + colorama.Fore.RESET)
-        dpg.highlight_table_row(table, gRow, color=[0,150,0])
+        dpg.highlight_table_row(table, gRow, color=[0,150,0]) 
         file = df[dfRow, "Filename"] 
         self.lastRow = gRow
         self.LoadClassifiedFile(os.path.join(self.SpecDisplay1.dir,file), self.SpecDisplay1, minT=self.FileMinTs[dfRow])
@@ -903,7 +903,8 @@ class MainWindow():
                 col_name = df.columns[c]
                 a = row[c]
                 if col_name == "Filename": 
-                    if nCol == 0 and not os.path.exists(f"{dir}/{a}"): 
+                    if nCol == 0 and not os.path.exists(os.path.join(dir,a)): 
+                        print(colorama.Fore.RED + f"LoadBatDetectTable file does not exist {os.path.join(dir,a)}"  + colorama.Fore.RESET) 
                         nRow -= 1
                         break # ignore file that does not exist
                     tRow = dpg.add_table_row(parent=table, height=ROW_PXL * config["scale"])
@@ -920,6 +921,7 @@ class MainWindow():
             tRow = None
             nRow += 1
             nFile += 1
+        print(f"LoadBatDetectTable {nRow=} {nFile=}")
         if not reset:
             #restore selected row
             dpg.highlight_table_row(self.FileTable, self.FileTableRow, color=[0,150,0])
