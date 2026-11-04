@@ -14,7 +14,7 @@ REFINE_LEARNING_RATE = 0.0001
 BATCH_SIZE = 8
 NUM_WORKERS = 4
 MIN_EPOCHS = 300
-REFINE_MIN_EPOCHS = 1
+REFINE_MIN_EPOCHS = 0
 MAX_EPOCHS = 900
 REFINE_MAX_EPOCHS = 150
 PATIENCE = 120
@@ -773,6 +773,12 @@ def main():
         patience = PATIENCE
         if trainer.refine_mode:
             patience = args.patience
+        
+        if trainer.refine_mode:
+            f1_score = validate_model.validate_model(args.model, args.validation_data_dir , writeFile=False)
+            max_validate_f1_score = f1_score
+            max_validate_f1_epoch = -1
+            f1_history.append(f1_score) 
         # main train loop
         for epoch in range(0, MAX_EPOCHS + 1):
             det_loss_avg, size_loss_avg, class_loss_avg, consistency_loss_avg, learning_rate = trainer.train(epoch, train_loader)
@@ -807,12 +813,15 @@ def main():
                 print(colorama.Style.DIM + f"epoch= {epoch:>3}, {timestamp}, Total_Loss={train_loss:>9.3f}, detection={det_loss_avg:>9.3f}, box_size={size_loss_avg:>5.3f}, class={class_loss_avg:>6.3f}, consistency={consistency_loss_avg:>6.4f}, learning_rate= {learning_rate:.6f}" + colorama.Style.RESET_ALL)
             if max_validate_f1_epoch is not None and CONSISTENCY_LOSS_WEIGHT != 0.7:
                 if epoch - max_validate_f1_epoch >= patience:                    
-                    break        
-        if trainer.refine_mode:
-            model_file_name = f"model_{model_num}_refine{refine_run}_LR{REFINE_LEARNING_RATE}_P{patience}_E{max_validate_f1_epoch}.pth.tar"
+                    break
+        if  max_validate_f1_epoch > -1:
+            if trainer.refine_mode:
+                model_file_name = f"model_{model_num}_refine{refine_run}_LR{REFINE_LEARNING_RATE}_P{patience}_E{max_validate_f1_epoch}.pth.tar"
+            else:
+                model_file_name = f"model_{model_num}_E{max_validate_f1_epoch}.pth.tar"
+            model_path = os.path.join(model_dir, model_file_name)
+            validate_model.validate_model(model_path, args.validation_data_dir , writeFile=True)
         else:
-            model_file_name = f"model_{model_num}_E{max_validate_f1_epoch}.pth.tar"
-        model_path = os.path.join(model_dir, model_file_name)
-        validate_model.validate_model(model_path, args.validation_data_dir , writeFile=True)
+            print(colorama.Fore.RED + "No improvement" + colorama.Fore.RESET)
 if __name__ == "__main__":
     main()
