@@ -796,7 +796,6 @@ def main():
                         model_file_name = f"model_{model_num}_refine{refine_run}_LR{REFINE_LEARNING_RATE}_P{patience}_E{best_loss_epoch}.pth.tar"
                     else:
                         model_file_name = f"model_{model_num}_E{best_loss_epoch}.pth.tar"
-    
                     model_path = os.path.join(model_dir, model_file_name)
                     torch.save(op_state, model_path)
                     if len(f1_history) >= 1:
@@ -806,6 +805,8 @@ def main():
                     if f1_score > max_validate_f1_score:
                         max_validate_f1_score = f1_score
                         max_validate_f1_epoch = epoch
+                    else: 
+                        os.remove(model_path)
                     f1_history.append(f1_score)  
                 else:
                     print(f"epoch= {epoch:>3}, {timestamp}, Total_Loss={train_loss:>9.3f}, detection={det_loss_avg:>9.3f}, box_size={size_loss_avg:>5.3f}, class={class_loss_avg:>6.3f}, consistency={consistency_loss_avg:>6.4f}, learning_rate= {learning_rate:.6f}")                    
