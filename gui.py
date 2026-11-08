@@ -921,11 +921,13 @@ class MainWindow():
             tRow = None
             nRow += 1
             nFile += 1
-        print(f"LoadBatDetectTable {nRow=} {nFile=}")
+        print(f"LoadBatDetectTable {nRow=} {nFile=} {self.FileTableRow=}")
         if not reset:
             #restore selected row
-            dpg.highlight_table_row(self.FileTable, self.FileTableRow, color=[0,150,0])
-            
+            if self.FileTableRow >= nRow:
+                # last row deleted
+                self.FileTableRow = nRow -1
+            dpg.highlight_table_row(self.FileTable, self.FileTableRow, color=[0,150,0])  
 
     def LoadGpsTable(self, table, dir_path):
         """Loads file table from EchoMeter GPS based recordings the per file species classification is unreliable"""
