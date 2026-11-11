@@ -793,7 +793,7 @@ def main():
                     op_state = {"epoch": best_loss_epoch + 1, "state_dict": trainer.model.state_dict(), "params": model_params}
                     
                     if trainer.refine_mode:
-                        model_file_name = f"model_{model_num}_refine{refine_run}_LR{REFINE_LEARNING_RATE}_P{patience}_E{best_loss_epoch}.pth.tar"
+                        model_file_name = f"model_{model_num}_refine{refine_run}_E{best_loss_epoch}.pth.tar"
                     else:
                         model_file_name = f"model_{model_num}_E{best_loss_epoch}.pth.tar"
                     model_path = os.path.join(model_dir, model_file_name)
@@ -817,7 +817,7 @@ def main():
                     break
         if  max_validate_f1_epoch > -1:
             if trainer.refine_mode:
-                model_file_name = f"model_{model_num}_refine{refine_run}_LR{REFINE_LEARNING_RATE}_P{patience}_E{max_validate_f1_epoch}.pth.tar"
+                model_file_name = f"model_{model_num}_refine{refine_run}}_E{max_validate_f1_epoch}.pth.tar"
             else:
                 model_file_name = f"model_{model_num}_E{max_validate_f1_epoch}.pth.tar"
             model_path = os.path.join(model_dir, model_file_name)
