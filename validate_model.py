@@ -127,7 +127,7 @@ def write_per_model_class_csv(best_matches_all, model_all, reference_all, class_
         model_dir = os.path.dirname(model_file_path)
         out_path = os.path.join(model_dir, f"{model_name}_class_scores.csv")
         per_class.write_csv(out_path)
-        print("Wrote:", out_path)
+        print("Wrote per class CSV:", out_path)
     f1_score = summary.get_column("f1_score").sum(); 
     echolocation = echolocation_summary.get_column("f1_score").sum();
     social = social_summary.get_column("f1_score").sum(); 
@@ -276,7 +276,7 @@ def validate_model(model_file_path, validation_data_directory, last=None, max=No
         # Write per-file CSV
         out_path = os.path.join(os.path.dirname(model_file_path), f"{os.path.basename(model_file_path)}_per_file_scores.csv")
         file_summary_df.write_csv(out_path)
-        print("Wrote per-file CSV:", out_path)
+        print("Wrote per file CSV:", out_path)
     # Compute per-class CSV
     f1_score = write_per_model_class_csv(best_matches_all, model_all, reference_all, class_names, model_file_path, last, max, writeFile)
     return f1_score

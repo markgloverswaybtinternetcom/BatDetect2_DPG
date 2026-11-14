@@ -802,7 +802,7 @@ def main():
                         f1_score = validate_model.validate_model(model_path, args.validation_data_dir , last=f1_history[-1], max=max_validate_f1_score, writeFile=False)
                     else:
                         f1_score = validate_model.validate_model(model_path, args.validation_data_dir , writeFile=False)
-                    if f1_score > max_validate_f1_score:
+                    if f1_score >= max_validate_f1_score:
                         max_validate_f1_score = f1_score
                         max_validate_f1_epoch = epoch
                     else: 
@@ -817,11 +817,11 @@ def main():
                     break
         if  max_validate_f1_epoch > -1:
             if trainer.refine_mode:
-                model_file_name = f"model_{model_num}_refine{refine_run}}_E{max_validate_f1_epoch}.pth.tar"
+                model_file_name = f"model_{model_num}_refine{refine_run}_E{max_validate_f1_epoch}.pth.tar"
             else:
                 model_file_name = f"model_{model_num}_E{max_validate_f1_epoch}.pth.tar"
             model_path = os.path.join(model_dir, model_file_name)
-            validate_model.validate_model(model_path, args.validation_data_dir , writeFile=True)
+            validate_model.validate_model(model_path, args.validation_data_dir , last=f1_history[-1], max=max_validate_f1_score, writeFile=True)
         else:
             print(colorama.Fore.RED + "No improvement" + colorama.Fore.RESET)
 if __name__ == "__main__":
