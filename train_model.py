@@ -115,7 +115,7 @@ def next_refine_number(model_dir, model_num):
                 max_r = r
     return max_r + 1
 
-def load_set_of_anns(wav_path):
+def load_set_of_anns(wav_path, listCounts=True):
     audioFiles = glob.glob(os.path.join(wav_path, "**", "*.wav"), recursive=True)
     anns = []
     for path in audioFiles:
@@ -132,8 +132,9 @@ def load_set_of_anns(wav_path):
     class_names, class_cnts = numpy.unique(class_names_all, return_counts=True)
     class_inv_freq = (1.0 / (class_cnts.astype(numpy.float32) + 1e-8))
     str_len = numpy.max([len(cc) for cc in class_names]) + 5
-    for cc in range(len(class_names)):
-        print(f"{str(cc).ljust(5)}, {class_names[cc].ljust(str_len)}, {str(class_cnts[cc]).rjust(3)}")
+    if listCounts:
+        for cc in range(len(class_names)):
+            print(f"{str(cc).ljust(5)}, {class_names[cc].ljust(str_len)}, {str(class_cnts[cc]).rjust(3)}")
     return anns, class_names.tolist(), class_inv_freq
 
 def echo_aug(audio, sampling_rate):
@@ -758,7 +759,7 @@ def main():
     max_validate_f1_score = 0
     max_validate_f1_epoch = None
     with wakepy.keep.running():
-        (data_train, class_names, class_inv_freq) = load_set_of_anns(args.training_data_dir)
+        (data_train, class_names, class_inv_freq) = load_set_of_anns(args.training_data_dir, listCounts=refine_checkpoint is None)
         model_params = dict()
         model_params["class_names"] = class_names
         loss_file = os.path.join(model_dir, "loss.npy")
